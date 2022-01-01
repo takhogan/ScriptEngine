@@ -1,0 +1,10 @@
+{
+
+	"run-script" : "launchWAOScript",
+
+	"auto-delay" : "True",
+	"auto-delay-mean" : 0.5,
+	"auto-delay-max" : 1,
+	"auto-delay-min" : 0
+
+}
