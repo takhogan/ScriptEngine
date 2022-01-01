@@ -1,0 +1,92 @@
+# def refactor_action_rows(action_rows, link_displacements):
+#     def find_child_in_row(child_group, parent_group, link_row_index):
+#         for link_index in range(0, len(link_displacements[link_row_index])):
+#             link = link_displacements[link_row_index][link_index]
+#             if (link["srcGroup"] == parent_group) and (link["destGroup"] == child_group):
+#                 return [child_group, link["destRowIndex"], link["destActionIndex"]]
+#         return [None, None, None]
+#
+#     def find_child(find_args):
+#         [child_group, parent_group, parent_row_index] = find_args
+#         [child_group, child_row_index, child_action_index] = find_child_in_row(child_group, parent_group, parent_row_index)
+#         if child_row_index is None:
+#             if parent_row_index - 1 >= 0:
+#                 return find_child_in_row(child_group, parent_group, parent_row_index - 1)
+#             else:
+#                 return [None, None, None]
+#         else:
+#             return [child_group, child_row_index, child_action_index]
+#
+#     for action_row_index in range(0, len(action_rows)):
+#         action_row = action_rows[action_row_index]
+#         for action_index in range(0, len(action_row["actions"])):
+#             action = action_row["actions"][action_index]
+#             action_rows[action_row_index]["actions"][action_index]["childGroups"] = list(map(find_child, [[child_group, action["actionGroup"], action_row_index]
+#                                                      for child_group in action["childGroups"]]))
+#     return action_rows
+
+
+        elif action["actionName"] == "connectToServer":
+            if action["serverType"] == "adb":
+                print('starting emulator')
+                local = True
+
+                def adb(adb_args):
+                    return action["adbPath"] + adb_args
+
+                emulator_process = subprocess.Popen([action["emulatorPath"], '-avd', action["deviceName"]],
+                                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                # exit(0)
+                #
+                print('completed startup')
+                if not local:
+                    emulator_ip = None
+                    ip_search_string = '[0-9]*[.][0-9]*[.][0-9]*[.][0-9][:][0-9]*'
+                    timeout_counter = 0
+                    while True:
+                        emulator_process_out = emulator_process.stdout.readline()
+                        if emulator_process_out == '' and emulator_process.poll is not None:
+                            break
+                        elif emulator_ip is None:
+                            print(emulator_process_out)
+                            ip_match = re.search(ip_search_string, str(emulator_process_out))
+                            if ip_match is not None:
+                                emulator_ip = ip_match.group(0)
+                                break
+                        time.sleep(0.1)
+                        timeout_counter += 0.1
+                        if timeout_counter > 20:
+                            print('emulator startup timed out')
+                            return ['failure', action], state
+                    if emulator_ip is None:
+                        return ['failure', action]
+                    print('search completed ', emulator_ip)
+                    # Load the public and private keys
+
+                    adbkey = action["adbKeyPath"]
+                    if adbkey.split('.')[-1] == "pub":
+                        adbkey = '.'.join(adbkey.split('.')[:-1])
+                    with open(adbkey) as f:
+                        priv = f.read()
+                    with open(adbkey + '.pub') as f:
+                        pub = f.read()
+                    signer = PythonRSASigner(pub, priv)
+                    print('key signed')
+                    [emulator_ip, port] = emulator_ip.split(':')
+                else:
+                    pass
+                ## issue adb connect command
+                device_status_search_string = 'emulator-' + '[0-9]*' + '[ ]*offline'
+                # Connect
+                while True:
+                    print('here')
+                    devices_list = subprocess.run([action["adbPath"], "devices", "-l"], stdout=subprocess.PIPE)
+                    print(devices_list.stdout)
+                    if re.search(device_status_search_string, str(devices_list.stdout)) is None:
+                        print('device loaded')
+                        break
+                    time.sleep(1)
+                # remember to use sudo
+                # Send a shell command
+                print('connection succesful')
+                return ['success', action], state

@@ -1,0 +1,30 @@
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/extsharedgoogle-all/nodpi/app/GoogleExtShared/GoogleExtShared.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/backuprestore-all/nodpi/priv-app/GoogleRestore/GoogleRestore.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/googleonetimeinitializer-all/nodpi/priv-app/GoogleOneTimeInitializer/GoogleOneTimeInitializer.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/carriersetup-all/nodpi/priv-app/CarrierSetup/CarrierSetup.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/gmscore-x86_64/nodpi/priv-app/PrebuiltGmsCore/PrebuiltGmsCore.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/googlebackuptransport-all/nodpi/priv-app/GoogleBackupTransport/GoogleBackupTransport.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/datatransfertool-all/nodpi/priv-app/AndroidMigratePrebuilt/AndroidMigratePrebuilt.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/gsfcore-all/nodpi/priv-app/GoogleServicesFramework/GoogleServicesFramework.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/setupwizardtablet-x86_64/nodpi/priv-app/SetupWizard/SetupWizard.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/extservicesgoogle-all/nodpi/priv-app/GoogleExtServices/GoogleExtServices.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/googlefeedback-all/nodpi/priv-app/GoogleFeedback/GoogleFeedback.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/googlecontactssync-all/nodpi/app/GoogleContactsSyncAdapter/GoogleContactsSyncAdapter.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/configupdater-all/nodpi/priv-app/ConfigUpdater/ConfigUpdater.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/setupwizarddefault-x86_64/nodpi/priv-app/SetupWizard/SetupWizard.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/vending-x86_64/nodpi/priv-app/Phonesky/Phonesky.apk /system/priv-app/;
+./adb push /Users/Tak/PycharmProjects/ScriptComposer/open_gapps-x86_64-10.0-stock-20211218/Core/googlepartnersetup-all/nodpi/priv-app/GooglePartnerSetup/GooglePartnerSetup.apk /system/priv-app/;
+
+open_gapps-x86_64-9.0-stock-20211218
+
+/Users/Tak/Library/Android/sdk/platform-tools/adb
+
+unzip open_gapps-x86-9.0-stock-20211217.zip 'Core/*'
+rm Core/setup*
+lzip -d Core/*.lz
+for f in $(ls Core/*.tar); do
+  tar -x --strip-components 2 -f $f
+done
+
+
+
