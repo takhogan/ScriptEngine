@@ -71,7 +71,7 @@ def initScript(recording):
 
 
 if __name__=='__main__':
-    video_filename = 'data/phpadminclip.mp4'
+    video_filename = 'data/test3.mp4'
     # cv2.VideoCapture()
     initScript(cv2.VideoCapture(video_filename))
 
