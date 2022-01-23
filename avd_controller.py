@@ -29,6 +29,8 @@ class AVD:
 
         }
         # set device here
+        # print(self.adb_path)
+        # exit(0)
         shell_process = subprocess.Popen([self.adb_path, 'shell'],stdin=subprocess.PIPE)
         device_name = shell_process.communicate(b"getevent -pl 2>&1 | sed -n '/^add/{h}/ABS_MT_TOUCH/{x;s/[^/]*//p}'")
         self.sendevent_command = 'sendevent /dev/input/event1 {} {} {};'
@@ -219,13 +221,14 @@ class AVD:
             output = self.screenshot()
             screencap_im = Image.open(BytesIO(output.stdout))
             screencap_im = cv2.cvtColor(np.array(screencap_im), cv2.COLOR_RGB2BGR)
-            screencap_mask = cv2.imread(props['dir_path'] + '/' + action["actionData"]["mask"])
-            print(action['actionData']['img'])
-            print(props['dir_path'] + '/' + action["actionData"]["mask"])
+            screencap_mask = cv2.imread(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
+            # print(action['actionData']['img'])
+            print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
+            print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
             print(screencap_im.shape)
             print(screencap_mask.shape)
             screencap_masked = cv2.bitwise_and(screencap_im, screencap_mask)
-            screencap_compare = cv2.imread(props['dir_path'] + '/' + action["actionData"]["img"])
+            screencap_compare = cv2.imread(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
 
             ssim_coeff = ssim(screencap_masked, screencap_compare, multichannel=True)
             cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-masked.png', screencap_masked)
