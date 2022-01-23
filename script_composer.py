@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import threading
 import pandas as pd
 import timeit
 import json
@@ -17,11 +16,6 @@ import json
 
 '''
 
-
-class ResultThread(threading.Thread):
-    def __init__(self):
-        super().__init__()
-        self.result = []
 
 def take_diff(last_frame, curr_frame):
      np.square(last_frame - curr_frame).sum() / last_frame.size
@@ -42,11 +36,10 @@ def initScript(recording):
             print(img_index)
 
         success, img = recording.read()
-        if last_img is not None:
+        if last_img is not None and img is not None:
             diffs[img_index] = np.square(last_img - img).sum() / img.size
 
         last_img = img
-
 
     recording.release()
 
@@ -71,7 +64,7 @@ def initScript(recording):
 
 
 if __name__=='__main__':
-    video_filename = 'data/test3.mp4'
+    video_filename = 'data/2022-01-20 22-24-42.mkv'
     # cv2.VideoCapture()
     initScript(cv2.VideoCapture(video_filename))
 

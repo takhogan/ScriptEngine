@@ -7,6 +7,6 @@ from script_executor import ScriptExecutor
 
 
 if __name__=='__main__':
-    script_object = parse_zip('./scripts/New Script 1')
+    script_object = parse_zip('./scripts/ClickWAO')
     main_script = ScriptExecutor(script_object)
     main_script.run(log_level='INFO')

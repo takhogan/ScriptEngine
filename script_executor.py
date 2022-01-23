@@ -15,8 +15,8 @@ import os
 
 from avd_controller import AVD
 from osx_controller import OSX
-from adb_shell.adb_device import AdbDeviceTcp, AdbDeviceUsb
-from adb_shell.auth.sign_pythonrsa import PythonRSASigner
+# from adb_shell.adb_device import AdbDeviceTcp, AdbDeviceUsb
+# from adb_shell.auth.sign_pythonrsa import PythonRSASigner
 import subprocess
 
 
