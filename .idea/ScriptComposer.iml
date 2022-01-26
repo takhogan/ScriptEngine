@@ -15,6 +15,14 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/logs/scripts-2022-01-20 22-10-00" />
+      <excludeFolder url="file://$MODULE_DIR$/logs/scripts-2022-01-20 22-11-22" />
+      <excludeFolder url="file://$MODULE_DIR$/logs/scripts-2022-01-20 22-18-38" />
+      <excludeFolder url="file://$MODULE_DIR$/logs/scripts-2022-01-23 22-31-24" />
+      <excludeFolder url="file://$MODULE_DIR$/logs/scripts-2022-01-23 23-23-56" />
+      <excludeFolder url="file://$MODULE_DIR$/logs/scripts-2022-01-23 23-26-04" />
+      <excludeFolder url="file://$MODULE_DIR$/scripts/ClickWAO" />
+      <excludeFolder url="file://$MODULE_DIR$/scripts/QuickScript" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.9 (ScriptHelper)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -1,8 +1,9 @@
 # Default ignored files
 /shelf/
 /.idea/workspace.xml
-/figs/*
-/logs/*
-/data/*
-/venv/*
-/scripts/*
+/figs/
+/logs/
+/data/
+/venv/
+/scripts/
+/venv/
