@@ -31,8 +31,8 @@ class AVD:
         # set device here
         # print(self.adb_path)
         # exit(0)
-        shell_process = subprocess.Popen([self.adb_path, 'shell'],stdin=subprocess.PIPE)
-        device_name = shell_process.communicate(b"getevent -pl 2>&1 | sed -n '/^add/{h}/ABS_MT_TOUCH/{x;s/[^/]*//p}'")
+        # shell_process = subprocess.Popen([self.adb_path, 'shell'],stdin=subprocess.PIPE)
+        # device_name = shell_process.communicate(b"getevent -pl 2>&1 | sed -n '/^add/{h}/ABS_MT_TOUCH/{x;s/[^/]*//p}'")
         self.sendevent_command = 'sendevent /dev/input/event1 {} {} {};'
         self.commands = {
             "tracking_id_mousedown": self.sendevent_command.format(3, int('39', 16), 0),

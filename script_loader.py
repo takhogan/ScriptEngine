@@ -7,7 +7,7 @@ import os
 import glob
 import datetime
 from avd_controller import AVD
-from osx_controller import OSX
+from python_host_controller import python_host
 
 def parse_script_file(action_rows_file_obj, props_file_obj):
     with action_rows_file_obj as action_rows_file:
@@ -20,6 +20,7 @@ def parse_script_file(action_rows_file_obj, props_file_obj):
     }
 
 def parse_zip(script_file_path):
+    # is_backslash_system = script_file_path.count('/') > script_file_path.count('\\')
     dir_path = os.path.splitext(script_file_path)[0]
     if os.path.splitext(script_file_path)[1] == '.zip':
         script_path = os.path.splitext(os.path.basename(script_file_path))[0]
@@ -50,7 +51,7 @@ def parse_zip(script_file_path):
         props_file_obj = open(script_path + '/props.json', 'r')
         script_obj = parse_script_file(action_rows_file_obj, props_file_obj)
         script_obj['props']["script_path"] = script_file_path
-        script_obj['props']["script_name"] = script_path.split('/')[-2]
+        script_obj['props']["script_name"] = script_path.split('/')[-1]
         script_obj['include'] = {}
         for include_file_path in glob.glob(script_path + '/include/*/'):
             include_file_path = include_file_path[:-1]
@@ -58,14 +59,13 @@ def parse_zip(script_file_path):
             action_rows_file_obj = open(include_file_path + '/actions/actionRows.json', 'r')
             props_file_obj = open(include_file_path + '/props.json', 'r')
             include_script_obj = parse_script_file(action_rows_file_obj, props_file_obj)
-            include_script_obj['props']['script_name'] = include_script_name
+            include_script_obj['props']['script_name'] = include_script_name.split('/')[-1]
             include_script_obj['props']["dir_path"] = '/'.join(include_file_path.split('/')[:-1])
             script_obj['include'][include_script_name] = include_script_obj
     props = script_obj['props']
-    script_obj['props']['osx'] = OSX()
+    script_obj['props']['python_host'] = python_host()
     script_obj['props']['avd'] = AVD(props['adbPath'], props['emulatorPath'], props['deviceName'],
-                                     script_obj['props']['osx'])
-    print(dir_path)
+                                     script_obj['props']['python_host'])
     script_obj['props']["dir_path"] = dir_path
     script_obj['props']["start_time"] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
     return script_obj

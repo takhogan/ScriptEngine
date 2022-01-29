@@ -23,8 +23,12 @@
       <excludeFolder url="file://$MODULE_DIR$/logs/scripts-2022-01-23 23-26-04" />
       <excludeFolder url="file://$MODULE_DIR$/scripts/ClickWAO" />
       <excludeFolder url="file://$MODULE_DIR$/scripts/QuickScript" />
+      <excludeFolder url="file://$MODULE_DIR$/data" />
+      <excludeFolder url="file://$MODULE_DIR$/figs" />
+      <excludeFolder url="file://$MODULE_DIR$/logs" />
+      <excludeFolder url="file://$MODULE_DIR$/scripts" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.9 (ScriptHelper)" jdkType="Python SDK" />
+    <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PackageRequirementsSettings">

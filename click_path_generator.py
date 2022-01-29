@@ -1,8 +1,13 @@
+import sys
+
+sys.path.append(".")
+
 import random
 import numpy as np
 import math
 import matplotlib.pyplot as plt
 from scipy.stats import norm
+from script_engine_utils import dist
 
 '''
 2 types : 
@@ -20,8 +25,6 @@ fast drag
 
 
 
-def dist(x1, y1, x2, y2):
-    return math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2)
 
 class ClickPathGenerator:
     def __init__(self, x_increment, y_increment, x_max, y_max, deviation_degree, deviation_probability):
