@@ -3,21 +3,7 @@ import sys
 sys.path.append(".")
 from script_execution_state import ScriptExecutionState
 import time
-
-
-from io import BytesIO
-from PIL import Image
-import numpy as np
-import cv2
-from skimage.metrics import structural_similarity as ssim
-import datetime
 import os
-
-from avd_controller import AVD
-from osx_controller import OSX
-# from adb_shell.adb_device import AdbDeviceTcp, AdbDeviceUsb
-# from adb_shell.auth.sign_pythonrsa import PythonRSASigner
-import subprocess
 
 
 class ScriptExecutor:
@@ -27,8 +13,9 @@ class ScriptExecutor:
         self.actions = script_obj["actionRows"][0]["actions"]
         self.action_rows = script_obj["actionRows"]
         self.avd = self.props['avd']
-        self.osx = self.props['osx']
+        self.python_host = self.props['python_host']
         self.include_scripts = script_obj['include']
+        print(self.props['script_name'])
         self.log_folder = './logs/' + self.props['script_name'] + '-' + self.props['start_time']
         os.mkdir(self.log_folder)
         self.log_folder += '/'
@@ -44,40 +31,38 @@ class ScriptExecutor:
         print('parsing action : ', action["actionName"], ' children: ', list(map(lambda childGroupLink: self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]]["actionName"], action['childGroups'])))
         self.state["script_counter"] += 1
         if "targetSystem" in action["actionData"]:
-            if action["actionData"]["targetSystem"] == "android":
+            if action["actionData"]["targetSystem"] == "adb":
                 self.status, self.state = self.avd.handle_action(action, self.state, self.props, self.log_level, self.log_folder)
-            elif action["actionData"]["targetSystem"] == "mac":
-                self.status, self.state = self.osx.handle_action(action, self.state, self.props, self.log_level, self.log_folder)
+            elif action["actionData"]["targetSystem"] == "python":
+                self.status, self.state = self.python_host.handle_action(action, self.state, self.props, self.log_level, self.log_folder)
+            elif action["actionData"]["targetSystem"] == "none":
+                if action["actionName"] == 'scriptReference':
+                    ref_script = self.include_scripts[action["actionData"]["scriptName"]]
+                    ref_script["props"]["avd"] = self.avd
+                    ref_script["props"]["python_host"] = self.python_host
+                    ref_script["include"] = self.include_scripts
+                    ref_script["props"]["start_time"] = self.props["start_time"]
+                    ref_script_executor = ScriptExecutor(ref_script, self.log_level)
+                    ref_script_executor.run()
+                    if ref_script_executor.status == ScriptExecutionState.FINISHED:
+                        self.status = ScriptExecutionState.SUCCESS
+                    else:
+                        self.status = ScriptExecutionState.ERROR
+                elif action["actionName"] == "conditionalStatement":
+                    if eval(action["actionData"]["condition"], self.state):
+                        print('condition success!')
+                        self.status = ScriptExecutionState.SUCCESS
+                    else:
+                        print('condition failure!')
+                        self.status = ScriptExecutionState.FAILURE
+                else:
+                    self.status = ScriptExecutionState.ERROR
+                    print("action unimplemented ")
+                    print(action)
+                    exit(0)
             else:
                 self.status = ScriptExecutionState.ERROR
                 print("target system " + action["actionData"]["targetSystem"] + " unimplemented!")
-                exit(0)
-        else:
-            if action["actionName"] == 'scriptReference':
-                ref_script = self.include_scripts[action["actionData"]["scriptName"]]
-                ref_script["props"]["avd"] = self.avd
-                ref_script["props"]["osx"] = self.osx
-                ref_script["include"] = self.include_scripts
-                ref_script["props"]["start_time"] = self.props["start_time"]
-                ref_script_executor = ScriptExecutor(ref_script, self.log_level)
-                ref_script_executor.run()
-                if ref_script_executor.status == ScriptExecutionState.FINISHED:
-                    self.status = ScriptExecutionState.SUCCESS
-                else:
-                    self.status = ScriptExecutionState.ERROR
-            elif action["actionName"] == "conditionalStatement":
-                if eval(action["actionData"]["condition"], self.state):
-                    print('condition success!')
-                    self.status = ScriptExecutionState.SUCCESS
-                else:
-                    print('condition failure!')
-                    self.status = ScriptExecutionState.FAILURE
-            elif action["actionName"] == "sleepStatement":
-                time.sleep(int(action["actionData"]["sleepTime"]))
-                self.status = ScriptExecutionState.SUCCESS
-            else:
-                print("no target system: ")
-                print(action)
                 exit(0)
 
 
