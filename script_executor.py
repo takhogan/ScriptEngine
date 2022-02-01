@@ -34,7 +34,7 @@ class ScriptExecutor:
             if action["actionData"]["targetSystem"] == "adb":
                 self.status, self.state = self.avd.handle_action(action, self.state, self.props, self.log_level, self.log_folder)
             elif action["actionData"]["targetSystem"] == "python":
-                self.status, self.state = self.python_host.handle_action(action, self.state, self.props, self.log_level, self.log_folder)
+                self.status, self.state = self.python_host.handle_action(action, self.state, self.log_level, self.log_folder)
             elif action["actionData"]["targetSystem"] == "none":
                 if action["actionName"] == 'scriptReference':
                     ref_script = self.include_scripts[action["actionData"]["scriptName"]]

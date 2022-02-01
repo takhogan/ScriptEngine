@@ -63,7 +63,7 @@ def parse_zip(script_file_path):
             include_script_obj['props']["dir_path"] = '/'.join(include_file_path.split('/')[:-1])
             script_obj['include'][include_script_name] = include_script_obj
     props = script_obj['props']
-    script_obj['props']['python_host'] = python_host()
+    script_obj['props']['python_host'] = python_host(props)
     script_obj['props']['avd'] = AVD(props['adbPath'], props['emulatorPath'], props['deviceName'],
                                      script_obj['props']['python_host'])
     script_obj['props']["dir_path"] = dir_path
