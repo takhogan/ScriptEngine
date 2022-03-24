@@ -7,6 +7,6 @@ from script_executor import ScriptExecutor
 
 
 if __name__=='__main__':
-    script_object = parse_zip('./scripts/WarAndOrderIcon')
+    script_object = parse_zip('./scripts/SearchScriptBasic')
     main_script = ScriptExecutor(script_object)
     main_script.run(log_level='INFO')
