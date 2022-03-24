@@ -37,7 +37,7 @@ class ClickPathGenerator:
 
     @staticmethod
     def generate_delta_function(source_point_x, source_point_y, target_point_x, target_point_y):
-        init_angle = math.atan(abs(target_point_y - source_point_y) / abs(target_point_x - source_point_x) + 1e-6)
+        init_angle = math.atan(abs(target_point_y - source_point_y) / (abs(target_point_x - source_point_x) + 1e-6))
         point_dist_x = (target_point_x - source_point_x)
         point_dist_y = (target_point_y - source_point_y)
         point_dist = math.sqrt(point_dist_x ** 2 + point_dist_y ** 2)
@@ -49,7 +49,7 @@ class ClickPathGenerator:
 
     @staticmethod
     def map_delta_val(delta, increment, is_delta_x):
-        intermediate_point_odds = random.random()
+        intermediate_point_odds = 0 # random.random()
         floored_map_val_index = random.randint(0, 1)
         discretized_delta = int(delta / increment)
         # delta_acc = delta - discretized_delta
@@ -131,6 +131,8 @@ class ClickPathGenerator:
 
     @staticmethod
     def merge_refit_delta_path(delta_path, refit_path, plot=False):
+        signs = np.sign(delta_path)
+        delta_path = list(map(abs, delta_path))
         n_deltas = len(delta_path)
         lookahead_index = 2
         for delta_index in range(0, n_deltas - lookahead_index):
@@ -143,6 +145,7 @@ class ClickPathGenerator:
             # (y1 + L / 2 ... yn + L / 2 - c) = 0
             # L= 2(c - sum (y_n)1..n) / n
             # x_i = y_i + (c- sum (y_i)) / n
+        delta_path = delta_path * signs
         if plot:
             plt.plot(delta_path)
             plt.plot(refit_path)
@@ -190,8 +193,8 @@ class ClickPathGenerator:
         delta_delta_y = 0
         acc_delta_x = 0
         acc_delta_y = 0
-        delta_x_threshold = (self.x_increment / self.x_max) * 1.5
-        delta_y_threshold = (self.y_increment / self.y_max) * 1.5
+        delta_x_threshold = (self.x_increment / self.x_max)
+        delta_y_threshold = (self.y_increment / self.y_max)
         accelerated_path = 0.6
         # correction_chance = 1 / (1.6 - self.deviation_probability)
         # n_steps = 100
@@ -219,17 +222,18 @@ class ClickPathGenerator:
                 delta_delta_y += deviation_degree * (math.pi / 180) * deviation_seed
             gravity_x, gravity_y = ClickPathGenerator.generate_delta_function(source_point_x, source_point_y, target_point_x,
                                                                 target_point_y)
+
             last_source_point_x, last_source_point_y = source_point_x, source_point_y
-            delta_path_x = (delta_x(delta_delta_x, max(delta_speed, 1 / 200))) * 1 / math.log(steps + 2)
-            delta_path_y = (delta_y(delta_delta_y, max(delta_speed, 1 / 200))) * 1 / math.log(steps + 2)
+            delta_path_x = (delta_x(delta_delta_x, max(delta_speed, 1 / 8000))) * 1 / math.log(steps + 2)
+            delta_path_y = (delta_y(delta_delta_y, max(delta_speed, 1 / 8000))) * 1 / math.log(steps + 2)
 
             # d = (2 - 1 / n)
 
             source_point_x += delta_path_x
             source_point_y += delta_path_y
             target_source_dist = dist(source_point_x, source_point_y, target_point_x, target_point_y)
-            delta_gravity_x = (gravity_x(0, max(delta_speed, 1 / 200)) / (target_source_dist))
-            delta_gravity_y = (gravity_y(0, max(delta_speed, 1 / 200)) / (target_source_dist))
+            delta_gravity_x = (gravity_x(0, max(delta_speed, 1 / 8000)) / (target_source_dist))
+            delta_gravity_y = (gravity_y(0, max(delta_speed, 1 / 8000)) / (target_source_dist))
             # delta_gravity_x = (gravity_x(0, max(delta_speed, 1/200)) * (math.log(steps + 2)))
             # delta_gravity_y = (gravity_y(0, max(delta_speed, 1/200)) * (math.log(steps + 2)))
 
@@ -241,6 +245,8 @@ class ClickPathGenerator:
             curr_delta_y = delta_path_y + delta_gravity_y
             x_below_threshold = abs(curr_delta_x + acc_delta_x) < delta_x_threshold
             y_below_threshold = abs(curr_delta_y + acc_delta_y) < delta_y_threshold
+            # n_splits = 6
+
             if x_below_threshold and y_below_threshold:
                 acc_delta_x += curr_delta_x
                 acc_delta_y += curr_delta_y
@@ -248,7 +254,8 @@ class ClickPathGenerator:
                 acc_delta_x += curr_delta_x
                 pathlist_x.append(checkpoint_x)
                 pathlist_y.append(checkpoint_y + curr_delta_y + acc_delta_y)
-                deltalist_y.append(abs(curr_delta_y + acc_delta_y))
+
+                deltalist_y.append((curr_delta_y + acc_delta_y))
                 deltalist_x.append(0)
                 acc_delta_y = 0
                 checkpoint_y = source_point_y
@@ -258,7 +265,7 @@ class ClickPathGenerator:
                 checkpoint_x = source_point_x
                 acc_delta_y += curr_delta_y
                 pathlist_y.append(checkpoint_y)
-                deltalist_x.append(abs(curr_delta_x + acc_delta_x))
+                deltalist_x.append((curr_delta_x + acc_delta_x))
                 deltalist_y.append(0)
             else:
                 pathlist_x.append(checkpoint_x + curr_delta_x + acc_delta_x)
@@ -267,8 +274,8 @@ class ClickPathGenerator:
                 acc_delta_y = 0
                 checkpoint_x = source_point_x
                 checkpoint_y = source_point_y
-                deltalist_y.append(abs(curr_delta_y + acc_delta_y))
-                deltalist_x.append(abs(curr_delta_x + acc_delta_x))
+                deltalist_y.append((curr_delta_y + acc_delta_y))
+                deltalist_x.append((curr_delta_x + acc_delta_x))
 
             pointlist_x.append(source_point_x)
             pointlist_y.append(source_point_y)
@@ -278,11 +285,17 @@ class ClickPathGenerator:
         return deltalist_x, deltalist_y
 
     def generate_click_path(self, source_x,source_y,target_x,target_y):
-
+        print('source: ({}, {}), target: ({}, {})'.format(source_x, source_y, target_x, target_y))
         deltalist_x,deltalist_y = self.generate_raw_path(source_x,source_y,target_x,target_y, self.deviation_degree, self.deviation_probability)
         refitted_path_x,refitted_path_y = self.refit_delta_path(deltalist_x, self.x_max, self.x_increment),self.refit_delta_path(deltalist_y, self.y_max, self.y_increment)
         discretized_delta_x,discretized_delta_y = self.discretize_deltalist(refitted_path_x, self.x_max, self.x_increment, is_delta_x=True), self.discretize_deltalist(refitted_path_y, self.y_max, self.y_increment, is_delta_x=False)
-
+        # print(len(discretized_delta_x))
+        # print(sum(discretized_delta_x))
+        # print(len(discretized_delta_y))
+        # print(sum(discretized_delta_y))
+        # print(len(refitted_path_x))
+        # print(len(refitted_path_y))
+        # exit(0)
         # global last_val
         # last_val = 0
         #
@@ -304,5 +317,8 @@ class ClickPathGenerator:
         # exit(0)
         return discretized_delta_x, discretized_delta_y
 
-path_generator = ClickPathGenerator(121.5, 68.25, 32726, 32726, 45, 0.4)
-path_generator.generate_click_path(0.1,0.1,0.9,0.9)
+if __name__=='__main__':
+    path_generator = ClickPathGenerator(41, 71, 32726, 32726, 45, 0.4)
+    x, y = path_generator.generate_click_path(0.1,0.1,0.9,0.9)
+    plt.plot(y)
+    plt.show()
