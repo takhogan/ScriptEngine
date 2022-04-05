@@ -31,7 +31,8 @@ class SearchPatternHelper:
             spiral_width = truncnorm.rvs(0.9, 1, loc=0.95, scale=0.03)
 
             def spiral_func(displacement, a, direction):
-                delta_displacement = truncnorm.rvs(0.05, 1, loc=0.60, scale=0.30)
+                max_displacement = 0.8
+                delta_displacement = truncnorm.rvs(0.05, max_displacement, loc=max_displacement/2, scale=max_displacement/3)
                 new_theta = (math.sqrt(2) * math.sqrt(
                     2 * math.pi * (displacement + delta_displacement) - 1)) / math.sqrt(a)
                 new_r = direction * a * new_theta / (2 * math.pi)
@@ -46,7 +47,10 @@ class SearchPatternHelper:
                 'spiral_direction': random.randint(0, 1) * 2 - 1,
                 'pattern_type': search_pattern,
                 'draggable_area' : draggable_area,
-                'search_function': spiral_func
+                'search_function': spiral_func,
+                'stitcher': cv2.Stitcher_create(cv2.STITCHER_SCANS),
+                'stitch': None,
+                'stitch_mask' : None
             }
             return state
         elif search_pattern == 'grid':

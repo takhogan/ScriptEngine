@@ -26,7 +26,7 @@ class adb_screen_recorder:
         if mode == 'screencapture':
             pass
         elif mode == 'screenshot':
-            out_writer = cv2.VideoWriter("output.mp4", cv2.VideoWriter_fourcc(*'mp42'), 4.0, (self.width, self.height))
+            out_writer = cv2.VideoWriter("data/output.mp4", cv2.VideoWriter_fourcc(*'mp42'), 4.0, (self.width, self.height))
             print('recording...')
             video_writer_active = True
             while video_writer_active:
