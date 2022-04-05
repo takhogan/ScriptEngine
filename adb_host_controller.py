@@ -1,3 +1,4 @@
+import base64
 import subprocess
 from PIL import Image
 from io import BytesIO
@@ -76,6 +77,9 @@ class adb_host:
 
     def screenshot(self):
         return Image.open(BytesIO(subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True, capture_output=True).stdout))
+
+    def save_screenshot(self, save_name):
+        pass
 
     def click(self, x, y, important=False):
         # 1st point always the og x,y
@@ -346,13 +350,6 @@ class adb_host:
             frac_source_y = (source_x / self.width)
             frac_target_x = ((self.height - target_y) / self.height)
             frac_target_y = (target_x / self.width)
-            if (frac_source_x < 0 or frac_source_y < 0 or frac_target_x < 0 or frac_target_y < 0):
-                print(self.width, self.height)
-                print(source_x, source_y)
-                print(target_x, target_y)
-                exit(0)
-            else:
-                return
             # print('({},{}),({},{})'.format(frac_source_x, frac_source_y, frac_target_x, frac_target_y))
             delta_x, delta_y = self.click_path_generator.generate_click_path(frac_source_x, frac_source_y,
                                                                              frac_target_x, frac_target_y)
@@ -531,7 +528,15 @@ class adb_host:
             raw_source_pt, raw_target_pt, displacement, state = self.search_pattern_helper.execute_pattern(search_pattern_id, state)
             fitted_patterns = self.search_pattern_helper.fit_pattern_to_frame(self.width, self.height, search_pattern_obj["draggable_area"], [(raw_source_pt, raw_target_pt)])
 
-            cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/' + str(search_pattern_obj["step_index"]) + '-' + str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-init.png', np.array(self.screenshot()))
+            # print(search_pattern_obj["draggable_area"].shape)
+            # print(cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_BGR2RGB).shape)
+            # exit(0)
+            pre_img_unmasked = cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_BGR2RGB)
+            pre_img = cv2.bitwise_and(pre_img_unmasked, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2RGB))
+            cv2.imwrite(
+                log_folder + 'search_patterns/' + search_pattern_id + '/' + str(search_pattern_obj["step_index"]) +
+                '-' + str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-init.png',
+                pre_img)
             for fitted_pattern in fitted_patterns:
                 (fitted_source_pt, fitted_target_pt) = fitted_pattern
                 if self.width > self.height:
@@ -543,10 +548,21 @@ class adb_host:
                                     fitted_target_pt[0] * search_unit_scale,
                                     fitted_target_pt[1] * search_unit_scale)
                 time.sleep(0.25)
+            post_img_unmasked = cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_BGR2RGB)
+            post_img = cv2.bitwise_and(post_img_unmasked, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2RGB))
             cv2.imwrite(
                 log_folder + 'search_patterns/' + search_pattern_id + '/' + str(search_pattern_obj["step_index"]) + '-' +
-                str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-complete.png', np.array(self.screenshot()))
-
+                str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-complete.png',
+                post_img)
+            err_code, result_im = search_pattern_obj["stitcher"].stitch([pre_img, post_img], [search_pattern_obj["draggable_area"], search_pattern_obj["draggable_area"]])
+            if err_code == cv2.STITCHER_OK:
+                search_pattern_obj["stitch"] = result_im
+                cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/' + str(search_pattern_obj["step_index"]) + '-pano.png', result_im)
+            elif err_code == cv2.STITCHER_ERR_NEED_MORE_IMGS:
+                print('need more imgs')
+            else:
+                print('special error! ' + err_code)
+            state["search_patterns"][search_pattern_id] = search_pattern_obj
             return ScriptExecutionState.SUCCESS, state
         elif action["actionName"] == "searchPatternEndAction":
             del state[action["actionData"]["patternID"]]
@@ -557,25 +573,53 @@ class adb_host:
 
 
 if __name__ == '__main__':
-    avd = adb_host({
-    "videoDims": None,
-    "windowBounds": None,
-    "emulatorPath": "/Users/Tak/Library/Android/sdk/emulator/emulator",
-    "adbPath": "adb",
-    "deviceName": "Pixel_2_API_30",
-    "targetSystem": "adb",
-    "scriptName": "SearchScriptBasic",
-    "width": 540,
-    "height": 960,
-    "scriptMode": "train"
-    }, '', '127.0.0.1:5555')
-    avd.init_system()
-    for i in range(0, 10):
-        avd.click_and_drag(100, 100, 400, 400)
+    # avd = adb_host({
+    # "videoDims": None,
+    # "windowBounds": None,
+    # "emulatorPath": "/Users/Tak/Library/Android/sdk/emulator/emulator",
+    # "adbPath": "adb",
+    # "deviceName": "Pixel_2_API_30",
+    # "targetSystem": "adb",
+    # "scriptName": "SearchScriptBasic",
+    # "width": 540,
+    # "height": 960,
+    # "scriptMode": "train"
+    # }, '', '127.0.0.1:5555')
+
+    # stitch = cv2.Stitcher_create(cv2.STITCHER_SCANS)
+    img_paths = [
+        'logs/SearchScriptBasic-2022-03-26 18-27-45/search_patterns/searchPattern-1/0--0.20961525570739795-0.27478139545528263-search-step-complete.png',
+        'logs/SearchScriptBasic-2022-03-26 18-27-45/search_patterns/searchPattern-1/0--0.20961525570739795-0.27478139545528263-search-step-init.png'
+    ]
+    # img_1 = cv2.imread(img_paths[0])
+    # img_2 = cv2.imread(img_paths[1])
+    # draggable_area = np.uint8(cv2.cvtColor(cv2.imread('scripts/SearchScriptBasic/actions/0-row/0-searchPatternStartAction/assets/draggableArea.png'), cv2.COLOR_BGR2GRAY))
+    # img_as_string = base64.b64encode(cv2.imencode('.png', img_1)[1].tobytes())
+    # print(img_as_string)
+    # print('--------------------')
+    # img_as_string = img_as_string.decode('ascii')
+    # estimate_transform_result = stitch.estimateTransform([img_1, img_2], [draggable_area, draggable_area])
+    # shell_process = subprocess.call(['.\\lib\\image_stitch_calculator.exe'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # print(shell_process)
+    # print(shell_process.communicate("testklklkllk\n"))
+
+    result = subprocess.run([".\\lib\\image_stitch_calculator.exe"] + img_paths, capture_output=True, shell=False)
+    print(result)
+    # print(bytes.decode(result, 'utf-8'))
+
+    # print(estimate_transform_result)
+    # print(dir(stitch))
+    # print(stitch.estimateTransform())
+    # print(stitch.resultMask())
+    # print(stitch.workScale())
     exit(0)
-    # print(avd.screenshot())
-    cv2.imshow('capture', np.array(Image.open(BytesIO(avd.screenshot().stdout))))
-    cv2.waitKey(0)
+    # avd.init_system()
+    # for i in range(0, 10):
+    #     avd.click_and_drag(100, 100, 400, 400)
+    # exit(0)
+    # # print(avd.screenshot())
+    # cv2.imshow('capture', np.array(Image.open(BytesIO(avd.screenshot().stdout))))
+    # cv2.waitKey(0)
     # avd.click(752, 1935)
     # avd.click_and_drag(50, 50, 752, 1935)
     #.returncode = 1 (if err)
