@@ -10,6 +10,7 @@ import time
 import sys
 from scipy.stats import truncnorm
 import os
+import glob
 
 sys.path.append(".")
 from script_execution_state import ScriptExecutionState
@@ -33,6 +34,7 @@ class adb_host:
         self.xmax = 32726
         self.ymax = 32726
         self.click_path_generator = ClickPathGenerator(41.0, 71.0, self.xmax, self.ymax, 45, 0.4)
+        self.image_stitch_calculator_path = 'build/ImageStitchCalculator.exe'
         self.event_counter = 1
         #TODO CORRECT ABOVE
         self.distances_dist = {
@@ -531,11 +533,14 @@ class adb_host:
             # print(search_pattern_obj["draggable_area"].shape)
             # print(cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_BGR2RGB).shape)
             # exit(0)
+            def apply_draggable_area_mask(img):
+                return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2RGB))
             pre_img_unmasked = cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_BGR2RGB)
-            pre_img = cv2.bitwise_and(pre_img_unmasked, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2RGB))
+            pre_img = apply_draggable_area_mask(pre_img_unmasked)
+            pre_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + str(search_pattern_obj["step_index"]) +\
+                '-' + str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-init.png'
             cv2.imwrite(
-                log_folder + 'search_patterns/' + search_pattern_id + '/' + str(search_pattern_obj["step_index"]) +
-                '-' + str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-init.png',
+                pre_img_path,
                 pre_img)
             for fitted_pattern in fitted_patterns:
                 (fitted_source_pt, fitted_target_pt) = fitted_pattern
@@ -543,25 +548,58 @@ class adb_host:
                     search_unit_scale = self.height
                 else:
                     search_unit_scale = self.width
-                self.click_and_drag(fitted_source_pt[0] * search_unit_scale,
-                                    fitted_source_pt[1] * search_unit_scale,
-                                    fitted_target_pt[0] * search_unit_scale,
-                                    fitted_target_pt[1] * search_unit_scale)
+                src_x = fitted_source_pt[0] * search_unit_scale
+                src_y = fitted_source_pt[1] * search_unit_scale
+                tgt_x = fitted_target_pt[0] * search_unit_scale
+                tgt_y = fitted_target_pt[1] * search_unit_scale
+                print('desired move: (', tgt_x - src_x,',', tgt_y - src_y, ')')
+                self.click_and_drag(src_x, src_y, tgt_x, tgt_y)
                 time.sleep(0.25)
             post_img_unmasked = cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_BGR2RGB)
-            post_img = cv2.bitwise_and(post_img_unmasked, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2RGB))
+            post_img = apply_draggable_area_mask(post_img_unmasked)
+            post_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + str(search_pattern_obj["step_index"]) + '-' +\
+                str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-complete.png'
             cv2.imwrite(
-                log_folder + 'search_patterns/' + search_pattern_id + '/' + str(search_pattern_obj["step_index"]) + '-' +
-                str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-complete.png',
+                post_img_path,
                 post_img)
-            err_code, result_im = search_pattern_obj["stitcher"].stitch([pre_img, post_img], [search_pattern_obj["draggable_area"], search_pattern_obj["draggable_area"]])
-            if err_code == cv2.STITCHER_OK:
-                search_pattern_obj["stitch"] = result_im
-                cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/' + str(search_pattern_obj["step_index"]) + '-pano.png', result_im)
-            elif err_code == cv2.STITCHER_ERR_NEED_MORE_IMGS:
-                print('need more imgs')
-            else:
-                print('special error! ' + err_code)
+            stitch_attempts = 0
+            stitch_imgs = [pre_img, post_img]
+            stitching_complete = False
+            while not stitching_complete:
+                err_code, result_im = search_pattern_obj["stitcher"].stitch(stitch_imgs, [search_pattern_obj["draggable_area"]] * len(stitch_imgs))
+                draggable_area_path = search_pattern_obj["draggable_area_path"]
+                if err_code == cv2.STITCHER_OK:
+                    search_pattern_obj["stitch"] = result_im
+                    cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/' + str(search_pattern_obj["step_index"]) + '-pano.png', result_im)
+                    print(subprocess.run([self.image_stitch_calculator_path,
+                                          pre_img_path, post_img_path, '-m',
+                                          draggable_area_path, draggable_area_path],
+                                          capture_output=True,shell=False).stdout)
+                    break
+                elif err_code == cv2.STITCHER_ERR_NEED_MORE_IMGS:
+                    if stitch_attempts > 1:
+                        print('need more imgs')
+                        # should attempt to exit and if can exit
+                        # should mark as dead img / disconnected
+                        # if it can't be matched it should not be counted actually bc otherwise it is too complicated
+                        break
+                    stop_index = max(0, search_pattern_obj["step_index"] - 1)
+                    start_index = max(0, int(search_pattern_obj["step_index"]) - 4)
+                    stitch_imgs = glob.glob(log_folder + 'search_patterns/' + search_pattern_id + '/[{}-{}]'.format(start_index, stop_index) + '*-complete.png') +\
+                                  glob.glob(log_folder + 'search_patterns/' + search_pattern_id + '/[{}-{}]'.format(start_index, stop_index) + '*-init.png')
+                    stitch_imgs = [pre_img, post_img] + list(map(lambda img_path: apply_draggable_area_mask(cv2.imread(img_path, cv2.IMREAD_UNCHANGED)), stitch_imgs)) if stop_index > 0 else []
+                    stitch_attempts += 1
+                else:
+                    print('special error! ' + err_code)
+                    break
+                # def generate_greater_pano(start_index, stop_index):
+                #     greater_pano = glob.glob(log_folder + 'search_patterns/' + search_pattern_id + '/[{}-{}]'.format(start_index, stop_index) + '*-complete.png') +\
+                #                    glob.glob(log_folder + 'search_patterns/' + search_pattern_id + '/[{}-{}]'.format(start_index, stop_index) + '*-init.png')
+                #     print(subprocess.run([self.image_stitch_calculator_path] +\
+                #                          greater_pano + ['-m'] +\
+                #                          [draggable_area_path] * len(greater_pano),
+                #                          capture_output=True, shell=False))
+
             state["search_patterns"][search_pattern_id] = search_pattern_obj
             return ScriptExecutionState.SUCCESS, state
         elif action["actionName"] == "searchPatternEndAction":
@@ -587,10 +625,10 @@ if __name__ == '__main__':
     # }, '', '127.0.0.1:5555')
 
     # stitch = cv2.Stitcher_create(cv2.STITCHER_SCANS)
-    img_paths = [
-        'logs/SearchScriptBasic-2022-03-26 18-27-45/search_patterns/searchPattern-1/0--0.20961525570739795-0.27478139545528263-search-step-complete.png',
-        'logs/SearchScriptBasic-2022-03-26 18-27-45/search_patterns/searchPattern-1/0--0.20961525570739795-0.27478139545528263-search-step-init.png'
-    ]
+    # img_paths = [
+    #     'logs/SearchScriptBasic-2022-03-26 18-27-45/search_patterns/searchPattern-1/0--0.20961525570739795-0.27478139545528263-search-step-complete.png',
+    #     'logs/SearchScriptBasic-2022-03-26 18-27-45/search_patterns/searchPattern-1/0--0.20961525570739795-0.27478139545528263-search-step-init.png'
+    # ]
     # img_1 = cv2.imread(img_paths[0])
     # img_2 = cv2.imread(img_paths[1])
     # draggable_area = np.uint8(cv2.cvtColor(cv2.imread('scripts/SearchScriptBasic/actions/0-row/0-searchPatternStartAction/assets/draggableArea.png'), cv2.COLOR_BGR2GRAY))
@@ -603,8 +641,8 @@ if __name__ == '__main__':
     # print(shell_process)
     # print(shell_process.communicate("testklklkllk\n"))
 
-    result = subprocess.run([".\\lib\\image_stitch_calculator.exe"] + img_paths, capture_output=True, shell=False)
-    print(result)
+    # result = (subprocess.run(['build/ImageStitchCalculator.exe', './logs/SearchScriptBasic-2022-04-06 19-22-52/search_patterns/searchPattern-1/0-0.1012990034020171--0.2805589630362008-search-step-init.png', './logs/SearchScriptBasic-2022-04-06 19-22-52/search_patterns/searchPattern-1/0-0.1012990034020171--0.2805589630362008-search-step-complete.png', '-m', './scripts/SearchScriptBasic/actions/0-row/0-searchPatternStartAction/assets/draggableArea.png', './scripts/SearchScriptBasic/actions/0-row/0-searchPatternStartAction/assets/draggableArea.png'], capture_output=True, shell=False)).stdout
+    # print(result)
     # print(bytes.decode(result, 'utf-8'))
 
     # print(estimate_transform_result)

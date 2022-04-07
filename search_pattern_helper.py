@@ -25,7 +25,8 @@ class SearchPatternHelper:
         search_pattern = np.random.choice(pattern_action["actionData"]["searchPatterns"],
                          p=pattern_action["actionData"]["searchPatternProbabilities"])
         search_pattern = 'spiral'
-        draggable_area = np.uint8(cv2.cvtColor(cv2.imread(dir_path + '/' + pattern_action["actionData"]["draggableArea"]), cv2.COLOR_BGR2GRAY))
+        draggable_area_path = dir_path + '/' + pattern_action["actionData"]["draggableArea"]
+        draggable_area = np.uint8(cv2.imread(draggable_area_path, cv2.IMREAD_GRAYSCALE))
         os.mkdir(log_folder + '/search_patterns/' + pattern_action["actionData"]["searchPatternID"])
         if search_pattern == 'spiral':
             spiral_width = truncnorm.rvs(0.9, 1, loc=0.95, scale=0.03)
@@ -47,6 +48,7 @@ class SearchPatternHelper:
                 'spiral_direction': random.randint(0, 1) * 2 - 1,
                 'pattern_type': search_pattern,
                 'draggable_area' : draggable_area,
+                'draggable_area_path' : draggable_area_path,
                 'search_function': spiral_func,
                 'stitcher': cv2.Stitcher_create(cv2.STITCHER_SCANS),
                 'stitch': None,
