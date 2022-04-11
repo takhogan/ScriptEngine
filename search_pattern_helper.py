@@ -28,6 +28,7 @@ class SearchPatternHelper:
         draggable_area_path = dir_path + '/' + pattern_action["actionData"]["draggableArea"]
         draggable_area = np.uint8(cv2.imread(draggable_area_path, cv2.IMREAD_GRAYSCALE))
         os.mkdir(log_folder + '/search_patterns/' + pattern_action["actionData"]["searchPatternID"])
+        os.mkdir(log_folder + '/search_patterns/' + pattern_action["actionData"]["searchPatternID"] + '/errors')
         if search_pattern == 'spiral':
             spiral_width = truncnorm.rvs(0.9, 1, loc=0.95, scale=0.03)
 
@@ -52,7 +53,10 @@ class SearchPatternHelper:
                 'search_function': spiral_func,
                 'stitcher': cv2.Stitcher_create(cv2.STITCHER_SCANS),
                 'stitch': None,
-                'stitch_mask' : None
+                'stitch_mask' : None,
+                'stitcher_status' : None,
+                'actual_current_point': (0, 0),
+                'area_map': {}
             }
             return state
         elif search_pattern == 'grid':
@@ -151,3 +155,4 @@ class SearchPatternHelper:
                 fitted_patterns.append((new_source_pt, new_target_pt))
             #also your coordinates are in ratio form but prob should be actual coordinates
         return fitted_patterns
+
