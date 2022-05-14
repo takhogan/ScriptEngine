@@ -13,6 +13,7 @@ import glob
 from PIL import Image
 from skimage.metrics import structural_similarity as ssim
 from image_matcher import ImageMatcher
+from script_engine_utils import is_null
 
 import matplotlib.pyplot as plt
 import time
@@ -20,6 +21,7 @@ from script_execution_state import ScriptExecutionState
 
 from scipy.stats import truncnorm
 
+from click_action_helper import ClickActionHelper
 
 class python_host:
     def __init__(self, props):
@@ -28,6 +30,8 @@ class python_host:
         self.height = host_dimensions.height
         self.props = props
         self.image_matcher = ImageMatcher()
+        if is_null(self.props['width']) or is_null(self.props['height']):
+            self.props['height'],self.props['width'],_ = np.array(pyautogui.screenshot()).shape
 
     def run_script(self, action, state):
         print('run_script: ', action)
@@ -40,27 +44,19 @@ class python_host:
             proc = subprocess.Popen(action["actionData"]["shellScript"], cwd="/", shell=True)
             return state
 
-    def handle_action(self, action, state, log_level, log_folder):
+    def handle_action(self, action, state, context, log_level, log_folder):
         # print(action["actionName"])
         time.sleep(1)
         # print('inside host', self.width, self.height)
-        logs_path = log_folder + str(state['script_counter']) + '-' + action["actionName"] + '-'
+        logs_path = log_folder + str(context['script_counter']) + '-' + action["actionName"] + '-'
         if action["actionName"] == "shellScript":
-            return ScriptExecutionState.SUCCESS, self.run_script(action, state)
+            return ScriptExecutionState.SUCCESS, self.run_script(action, state), context
         elif action["actionName"] == "sleepStatement":
-            time.sleep(int(eval(action["actionData"]["sleepTime"], state)))
-            return ScriptExecutionState.SUCCESS, state
+            time.sleep(int(eval(action["actionData"]["inputExpression"], state)))
+            return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "clickAction":
-            point_choice = random.choice(action["actionData"]["pointList"]) if action["actionData"]["pointList"] else (None,None)
-            if action["actionData"]["inputExpression"] is not None and len(action["actionData"]["inputExpression"]) > 0:
-                input_points = eval(action["actionData"]["inputExpression"], state)
-                if len(input_points) > 0:
-                    # potentially for loop here
-                    input_points = input_points[0]
-                    if input_points["input_type"] == "rectangle":
-                        width_coord = random.random() * input_points["width"]
-                        height_coord = random.random() * input_points['height']
-                        point_choice = (input_points["point"][0] + width_coord, input_points["point"][1] + height_coord)
+            var_name = action["actionData"]["inputExpression"]
+            point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context)
             point_choice = (point_choice[0] * self.width / self.props['width'],point_choice[1] * self.height / self.props['height'])
             print(point_choice)
             delays = []
@@ -79,23 +75,26 @@ class python_host:
 
             with open(logs_path + 'click_coordinate.txt', 'w') as log_file:
                 log_file.write(str(point_choice) + '\n')
-            return ScriptExecutionState.SUCCESS, state
+            return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "keyboardAction":
-            is_escaped_char = False
-            escaped_char = ''
-            for char_index,expression_char in enumerate(action["actionName"]["actionData"]["keyboardExpression"]):
-                if is_escaped_char:
-                    if expression_char == '}':
-                        is_escaped_char = False
-                        pyautogui.press(escaped_char)
-                        escaped_char = ''
+            if action["actionData"]["isHotKey"] == 'isHotKey':
+                pyautogui.hotkey(*action["actionData"]["keyboardExpression"].split(","))
+            else:
+                is_escaped_char = False
+                escaped_char = ''
+                for char_index,expression_char in enumerate(action["actionName"]["actionData"]["keyboardExpression"]):
+                    if is_escaped_char:
+                        if expression_char == '}':
+                            is_escaped_char = False
+                            pyautogui.press(escaped_char)
+                            escaped_char = ''
+                        else:
+                            escaped_char += expression_char
+                    elif expression_char == '{':
+                        is_escaped_char = True
                     else:
-                        escaped_char += expression_char
-                elif expression_char == '{':
-                    escaped_char = True
-                else:
-                    pyautogui.press(expression_char)
-            return ScriptExecutionState.SUCCESS, state
+                        pyautogui.press(expression_char)
+            return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "detectScene":
             print('taking screenshot')
             screencap_im = pyautogui.screenshot()
@@ -113,18 +112,18 @@ class python_host:
             cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-masked.png', screencap_masked)
             cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-compare.png', screencap_compare)
             if ssim_coeff > 0.7:
-                return ScriptExecutionState.SUCCESS, state
+                return ScriptExecutionState.SUCCESS, state, context
             else:
-                return ScriptExecutionState.FAILURE, state
+                return ScriptExecutionState.FAILURE, state, context
         elif action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
-            screencap_im_rgb = pyautogui.screenshot()
+            screencap_im_rgb = np.array(pyautogui.screenshot())
             # print('imshape: ', np.array(screencap_im_rgb).shape, ' width: ', self.props['width'], ' height: ', self.props['height'])
-            if self.props['width'] is None or self.props['height'] is None:
+            if is_null(self.props['width']) or is_null(self.props['height']):
                 screencap_im = screencap_im_rgb
             else:
-                screencap_im = cv2.resize(np.array(screencap_im_rgb), (self.props['width'], self.props['height']), interpolation=cv2.INTER_LINEAR)
+                screencap_im = cv2.resize(screencap_im_rgb, (self.props['width'], self.props['height']), interpolation=cv2.INTER_LINEAR)
             screencap_mask = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
             # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
             # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
@@ -138,10 +137,10 @@ class python_host:
             matches = self.image_matcher.template_match(screencap_im, screencap_mask, screencap_search_bgr, action['actionData']['detectorName'], logs_path, self.props["scriptMode"])
             if len(matches) > 0:
                 print(matches)
-                state[action['actionData']['outputVarName']] = matches
-                return ScriptExecutionState.SUCCESS, state
+                state[action['actionData']['outputVarName']] = matches[:action["actionData"]["maxMatches"]]
+                return ScriptExecutionState.SUCCESS, state, context
             else:
-                return ScriptExecutionState.FAILURE, state
+                return ScriptExecutionState.FAILURE, state, context
 
         elif action["actionName"] == "randomVariable":
             if action["actionData"]["distType"] == 'normal':
@@ -155,12 +154,14 @@ class python_host:
             else:
                 print('random variable unimplemented: ' + action["actionData"]["distType"])
                 exit(0)
-            return ScriptExecutionState.SUCCESS, state
+            return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
-                log_image = pyautogui.screenshot()
+                # print(np.array(pyautogui.screenshot()).shape)
+                # exit(0)
+                log_image = cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_BGRA2RGB)
                 cv2.imwrite(logs_path + '-logImage.png', log_image)
-                return ScriptExecutionState.SUCCESS, state
+                return ScriptExecutionState.SUCCESS, state, context
             else:
                 print('log type unimplemented ' + action["actionData"]["logType"])
                 exit(0)

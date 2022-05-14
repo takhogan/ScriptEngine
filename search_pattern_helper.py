@@ -10,7 +10,7 @@ class SearchPatternHelper:
     def __init__(self):
         pass
 
-    def generate_pattern(self, pattern_action, state, log_folder, dir_path):
+    def generate_pattern(self, pattern_action, context, log_folder, dir_path):
         # input_object = eval(patternAction["actionData"]["inputExpression"], state)[0]
         # if input_object["input_type"] == "rectangle":
         #     width_coord = random.random() * input_object["width"]
@@ -40,7 +40,7 @@ class SearchPatternHelper:
                 new_r = direction * a * new_theta / (2 * math.pi)
                 return new_r * math.cos(new_theta), new_r * math.sin(new_theta), displacement + delta_displacement
 
-            state["search_patterns"][pattern_action["actionData"]["searchPatternID"]] = {
+            context["search_patterns"][pattern_action["actionData"]["searchPatternID"]] = {
                 'last_point': origin_point,
                 'current_point': origin_point,
                 'step_index': -1,
@@ -58,7 +58,7 @@ class SearchPatternHelper:
                 'actual_current_point': (0, 0),
                 'area_map': {}
             }
-            return state
+            return context
         elif search_pattern == 'grid':
             # pick an angle from 0 to 90, do a grid search, randomize movement length
             # need to figure out when you've hit the edge, set a threshold for change in image, don't do it with pure pixel values, use keypoint displacement or something, use stitching!
@@ -72,8 +72,8 @@ class SearchPatternHelper:
 
         # patternAction["actionData"]["gridMode"]
 
-    def execute_pattern(self, patternID, state):
-        pattern_obj = state["search_patterns"][patternID]
+    def execute_pattern(self, patternID, context):
+        pattern_obj = context["search_patterns"][patternID]
         if pattern_obj["pattern_type"] == 'spiral':
             new_pos_x, new_pos_y, new_displacment = pattern_obj["search_function"](
                 pattern_obj["displacement"],
@@ -84,8 +84,8 @@ class SearchPatternHelper:
             pattern_obj["current_point"] = (new_pos_x, new_pos_y)
             pattern_obj["displacement"] = new_displacment
             pattern_obj["step_index"] += 1
-            state["search_patterns"][patternID] = pattern_obj
-            return pattern_obj["last_point"], (new_pos_x, new_pos_y), new_displacment, state
+            context["search_patterns"][patternID] = pattern_obj
+            return pattern_obj["last_point"], (new_pos_x, new_pos_y), new_displacment, context
         elif pattern_obj["pattern_type"] == 'grid':
             pass
         else:
