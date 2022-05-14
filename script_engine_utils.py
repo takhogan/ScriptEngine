@@ -1,5 +1,13 @@
 
 import math
+import numpy as np
+
+def masked_mse(target_im, compare_im, mask_size):
+    return 1 - np.sum(np.square(np.subtract(target_im, compare_im))) / mask_size
+
+
+def is_null(item):
+    return item is None or item == 'None' or item == 'null' or item == 'undefined'
 
 
 def dist(x1, y1, x2, y2):

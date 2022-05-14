@@ -9,11 +9,12 @@ class ImageMatcher:
 
     @staticmethod
     def template_match(screencap_im, screencap_mask, screencap_search, detector_name, logs_path, script_mode, threshold=0.96, use_color=True, use_mask=True,):
+        screencap_mask = np.uint8(cv2.cvtColor(screencap_mask.copy(), cv2.COLOR_BGR2GRAY))
 
         # print(screencap_search.shape)
         if detector_name == "pixelDifference":
             matches, match_result, result_im = ImageMatcher.produce_template_matches(screencap_im.copy(),
-                                                                                  screencap_search, screencap_mask,
+                                                                                  screencap_search, screencap_mask.copy(),
                                                                                   logs_path, threshold=threshold, use_color=use_color, use_mask=use_mask)
         elif detector_name == "logisticClassifier":
             print("logistic detector unimplemented ")
@@ -23,10 +24,6 @@ class ImageMatcher:
         else:
             print("detector unimplemented! ")
             exit(0)
-        # min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(match_result)
-        # If the method is TM_SQDIFF or TM_SQDIFF_NORMED, take minimum
-        # if method in [cv.TM_SQDIFF, cv.TM_SQDIFF_NORMED]:
-        # print(screencap_search.shape)
 
         h, w = screencap_search.shape[0:2]
         # plt.imshow(match_result, cmap='gray')
@@ -45,9 +42,11 @@ class ImageMatcher:
         #     print('train_threshold: ', threshold)
         #     cv2.imwrite(logs_path + 'matching_overlay_train.png', cv2.cvtColor(train_result_im, cv2.COLOR_BGR2RGB))
         #     cv2.imwrite(logs_path + 'match_result_train.png', train_match_result * 255)
+
         return [{
-                'input_type': 'rectangle',
+                'input_type': 'shape',
                 'point': match,
+                'shape': screencap_mask,
                 'height': h,
                 'width': w,
                 'score': score
@@ -64,7 +63,6 @@ class ImageMatcher:
         # print(.shape)
         # exit(0)
         # print('match threshold: ', threshold)
-        screencap_mask = np.uint8(cv2.cvtColor(screencap_mask.copy(),cv2.COLOR_BGR2GRAY))
         # exit(0)
         # cv2.imshow('screencap_im', screencap_im)
         # cv2.waitKey(0)

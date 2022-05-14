@@ -4,6 +4,7 @@ import subprocess
 
 import shutil
 from PIL import Image
+from PIL import UnidentifiedImageError
 from io import BytesIO
 import cv2
 import numpy as np
@@ -12,16 +13,18 @@ import random
 import time
 import sys
 from scipy.stats import truncnorm
-from script_engine_utils import get_glob_digit_regex_string
+from script_engine_utils import get_glob_digit_regex_string, is_null, masked_mse
 from os import path
 import os
 import glob
+import itertools
 
 sys.path.append(".")
 from script_execution_state import ScriptExecutionState
 from click_path_generator import ClickPathGenerator
 from image_matcher import ImageMatcher
 from search_pattern_helper import SearchPatternHelper
+from click_action_helper import ClickActionHelper
 
 class adb_host:
     def __init__(self, props, host_os, adb_ip):
@@ -66,21 +69,40 @@ class adb_host:
 
     def init_system(self):
         if self.width is None or self.height is None:
-            devices_output = bytes.decode(
-                subprocess.run(self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True).stdout, 'utf-8')
+            get_device_list = lambda: subprocess.run(self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True)
+            devices_output = bytes.decode(get_device_list().stdout, 'utf-8')
+            if not 'started' in devices_output:
+                devices_output = bytes.decode(get_device_list().stdout, 'utf-8')
+            run_kill_command = lambda: subprocess.run(self.adb_path + ' kill-server', cwd="/", shell=True)
+            if 'offline' in devices_output:
+                run_kill_command()
+                get_device_list()
+            if 'emulator' in devices_output and '127.0.0.1:5555' in devices_output:
+                run_kill_command()
+                get_device_list()
             emualator_active = (
-                    'emulator' in
-                    bytes.decode(subprocess.run(
-                        self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True).stdout, 'utf-8')) \
-                if not 'started' in devices_output else 'emulator' in devices_output
+                'emulator' in devices_output or
+                '127.0.0.1:5555' in devices_output
+            )
+            run_connect_command = lambda: subprocess.run(self.adb_path + ' connect ' + self.adb_ip, cwd="/", shell=True)
             if not emualator_active:
                 print('connecting to')
-                subprocess.run(self.adb_path + ' connect ' + self.adb_ip, cwd="/", shell=True)
-            source_im = np.array(Image.open(BytesIO(
-                subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True, capture_output=True).stdout)))
+                run_connect_command()
+
+
+            get_im_command = subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True, capture_output=True)
+            bytes_im = BytesIO(get_im_command.stdout)
+            try:
+                source_im = np.array(Image.open(bytes_im))
+            except UnidentifiedImageError:
+                print('get_im_command: ', get_im_command)
+                exit(1)
             self.width = source_im.shape[1]
             self.height = source_im.shape[0]
-            print(self.width, self.height)
+        if is_null(self.props['width']):
+            self.props['width'] = self.width
+        if is_null(self.props['height']):
+            self.props['height'] = self.height
 
     def screenshot(self):
         return Image.open(BytesIO(subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True, capture_output=True).stdout))
@@ -402,41 +424,46 @@ class adb_host:
         print((''.join(command_string)).encode('utf-8'))
         self.event_counter += 1
 
-    def handle_action(self, action, state, props, log_level, log_folder):
-        logs_path = log_folder + str(state['script_counter']) + '-'
+    def handle_action(self, action, state, context, log_level, log_folder):
+        logs_path = log_folder + str(context['script_counter']) + '-'
         time.sleep(0.25)
         if action["actionName"] == "declareScene":
-            print('taking screenshot')
             output = self.screenshot()
             screencap_im = output
             screencap_im = cv2.cvtColor(np.array(screencap_im), cv2.COLOR_RGB2BGR)
-            screencap_mask = cv2.imread(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
+            screencap_mask = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
+            screencap_mask_single_channel = cv2.cvtColor(screencap_mask.copy(), cv2.COLOR_BGR2GRAY)
+            mask_size = np.count_nonzero(screencap_mask_single_channel)
             # print(action['actionData']['img'])
-            print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
-            print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
-            print(screencap_im.shape)
-            print(screencap_mask.shape)
+            # print(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
+            # print(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
+            # print(screencap_im.shape)
+            # print(screencap_mask.shape)
             screencap_masked = cv2.bitwise_and(screencap_im, screencap_mask)
-            screencap_compare = cv2.imread(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
+            screencap_compare = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
 
-            ssim_coeff = ssim(screencap_masked, screencap_compare, multichannel=True)
+            ssim_coeff = masked_mse(screencap_masked, screencap_compare, mask_size * 3 * 255)
             cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-masked.png', screencap_masked)
             cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-compare.png', screencap_compare)
-            if ssim_coeff > 0.8:
-                return ScriptExecutionState.SUCCESS, state
+            if ssim_coeff > action["actionData"]["threshold"]:
+                return ScriptExecutionState.SUCCESS, state, context
             else:
-                return ScriptExecutionState.FAILURE, state
+                return ScriptExecutionState.FAILURE, state, context
 
         elif action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
             screencap_im_rgb = self.screenshot()
             # print('imshape: ', np.array(screencap_im_rgb).shape, ' width: ', self.props['width'], ' height: ', self.props['height'])
-            if self.props['width'] is None or self.props['height'] is None:
-                screencap_im = screencap_im_rgb
+            if is_null(self.props['width']) or is_null(self.props['height']):
+                screencap_im = np.array(screencap_im_rgb)
             else:
                 screencap_im = cv2.resize(np.array(screencap_im_rgb), (self.props['width'], self.props['height']),
                                           interpolation=cv2.INTER_LINEAR)
+            # print(screencap_im.shape)
+            # print((screencap_im_rgb))
+            # print(self.props['width'], self.props['height'])
+            # exit(0)
             screencap_im = cv2.cvtColor(screencap_im.copy(), cv2.COLOR_BGRA2BGR)
             screencap_mask = cv2.imread(
                 self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
@@ -455,25 +482,17 @@ class adb_host:
                 cv2.imwrite(logs_path + 'search_img.png', screencap_search)
             matches = self.image_matcher.template_match(screencap_im, screencap_mask, screencap_search_bgr,
                                                         action['actionData']['detectorName'], logs_path, self.props["scriptMode"],threshold=action["actionData"]["threshold"])
+            # exit(0)
             if len(matches) > 0:
                 print(matches)
-                state[action['actionData']['outputVarName']] = matches
-                return ScriptExecutionState.SUCCESS, state
+                state[action['actionData']['outputVarName']] = matches[:action["actionData"]["maxMatches"]]
+                return ScriptExecutionState.SUCCESS, state, context
             else:
-                return ScriptExecutionState.FAILURE, state
+                return ScriptExecutionState.FAILURE, state, context
 
         elif action["actionName"] == "clickAction":
-            point_choice = random.choice(action["actionData"]["pointList"]) if action["actionData"]["pointList"] else (
-            None, None)
-            if action["actionData"]["inputExpression"] is not None and len(action["actionData"]["inputExpression"]) > 0:
-                input_points = eval(action["actionData"]["inputExpression"], state)
-                if len(input_points) > 0:
-                    # potentially for loop here
-                    input_points = input_points[0]
-                    if input_points["input_type"] == "rectangle":
-                        width_coord = random.random() * input_points["width"]
-                        height_coord = random.random() * input_points['height']
-                        point_choice = (input_points["point"][0] + width_coord, input_points["point"][1] + height_coord)
+            var_name = action["actionData"]["inputExpression"]
+            point_choice,state,context = ClickActionHelper.get_point_choice(action, var_name, state, context)
             point_choice = (
             point_choice[0] * self.width / self.props['width'], point_choice[1] * self.height / self.props['height'])
             print(point_choice)
@@ -492,48 +511,49 @@ class adb_host:
                 self.click(point_choice[0], point_choice[1])
                 time.sleep(delays[click_count])
 
-            return ScriptExecutionState.SUCCESS, state
+            return ScriptExecutionState.SUCCESS, state, context
 
         elif action["actionName"] == "shellScript":
             if self.host_os is not None:
-                return ScriptExecutionState.SUCCESS, self.host_os.run_script(action, state)
+                state = self.host_os.run_script(action, state)
+                return ScriptExecutionState.SUCCESS, state, context
 
         elif action["actionName"] == "conditionalStatement":
             if eval(action["actionData"]["condition"], state):
                 print('condition success!')
-                return ScriptExecutionState.SUCCESS, state
+                return ScriptExecutionState.SUCCESS, state, context
             else:
                 print('condition failure!')
-                return ScriptExecutionState.FAILURE, state
+                return ScriptExecutionState.FAILURE, state, context
         elif action["actionName"] == "sleepStatement":
             time.sleep(float(eval(action["actionData"]["sleepTime"], state)))
-            return ScriptExecutionState.SUCCESS, state
+            return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "dragLocationSource":
             source_point = random.choice(action["actionData"]["pointList"])
             print(action["actionData"]["inputExpression"])
             if not action["actionData"]["inputExpression"] == "null" and action["actionData"]["inputExpression"] is not None:
                 source_point = eval(action["actionData"]["inputExpression"], state)
-            state["dragLocationSource"] = source_point
-            return ScriptExecutionState.SUCCESS, state
+            context["dragLocationSource"] = source_point
+            return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "dragLocationTarget":
-            source_point = state["dragLocationSource"]
+            source_point = context["dragLocationSource"]
             target_point = random.choice(action["actionData"]["pointList"])
             if not action["actionData"]["inputExpression"] == "null" and action["actionData"]["inputExpression"] is not None:
                 target_point = eval(action["actionData"]["inputExpression"], state)
             self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
-            del state["dragLocationSource"]
+            del context["dragLocationSource"]
             # print(source_point)
             # print(target_point)
-            return ScriptExecutionState.SUCCESS, state
+            return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "searchPatternStartAction":
-            state = self.search_pattern_helper.generate_pattern(action, state, log_folder, self.props['dir_path'])
+            context = self.search_pattern_helper.generate_pattern(action, context, log_folder, self.props['dir_path'])
             # print(state)
-            return ScriptExecutionState.SUCCESS, state
+            return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "searchPatternContinueAction":
             search_pattern_id = action["actionData"]["searchPatternID"]
-            search_pattern_obj = state["search_patterns"][search_pattern_id]
+            raw_source_pt, raw_target_pt, displacement, context = self.search_pattern_helper.execute_pattern(search_pattern_id, context)
+            search_pattern_obj = context["search_patterns"][search_pattern_id]
             step_index = search_pattern_obj["step_index"]
-            raw_source_pt, raw_target_pt, displacement, state = self.search_pattern_helper.execute_pattern(search_pattern_id, state)
             fitted_patterns = self.search_pattern_helper.fit_pattern_to_frame(self.width, self.height, search_pattern_obj["draggable_area"], [(raw_source_pt, raw_target_pt)])
 
             # print(search_pattern_obj["draggable_area"].shape)
@@ -541,12 +561,14 @@ class adb_host:
             # exit(0)
             def apply_draggable_area_mask(img):
                 return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2RGB))
+
             def create_and_save_screencap(self_ref, savename):
                 img_unmasked = cv2.cvtColor(np.array(self_ref.screenshot()), cv2.COLOR_BGR2RGB)
                 img_masked = apply_draggable_area_mask(img_unmasked)
                 cv2.imwrite(
                     savename,
-                    img_masked)
+                    img_masked
+                )
                 return img_masked
 
             def read_and_apply_mask(img_path):
@@ -554,7 +576,7 @@ class adb_host:
 
             log_folder + 'search_patterns/' + search_pattern_id + '/{}-*complete.png'.format(step_index - 1)
             def get_longest_path(search_string):
-                search_result = glob.glob(search_string)
+                search_result = remove_forward_slashes(glob.glob(search_string))
                 if len(search_result) > 1:
                     search_path_lens = list(map(len, search_result))
                     max_search_path_len = max(search_path_lens)
@@ -562,6 +584,7 @@ class adb_host:
                 else:
                     max_search_path = search_result[0]
                 return max_search_path
+
             def record_movement(search_pattern_obj, x_displacement, y_displacement):
                 curr_x,curr_y = search_pattern_obj["actual_current_point"]
                 base_displacement_is_x = x_displacement > y_displacement
@@ -604,7 +627,8 @@ class adb_host:
                                 search_pattern_obj["area_map"][
                                     location
                                 ]["val"] - 60, 60)
-
+            def remove_forward_slashes(slash_list):
+                return list(map(lambda slash_path: slash_path.replace('\\', '/'), list(slash_list)))
             if search_pattern_obj["stitcher_status"] != "STITCHER_OK" and step_index > 0:
                 prev_post_img_path = get_longest_path(log_folder + 'search_patterns/' + search_pattern_id + '/{}-*complete.png'.format(step_index - 1))
                 prev_post_img_path_split = prev_post_img_path.split('/')
@@ -613,9 +637,9 @@ class adb_host:
                 pre_img = read_and_apply_mask(pre_img_path)
             else:
                 pre_img_name = str(step_index) + \
-                    '-' + str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-init.png'
+                    '-' + str(raw_source_pt[0]) + '-' + str(raw_source_pt[1]) + '-search-step-init.png'
                 pre_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + pre_img_name
-                print('pre_path', pre_img_name)
+                print('pre_path', pre_img_name, ':', raw_source_pt, ':', step_index)
                 pre_img = create_and_save_screencap(
                     self, pre_img_path
                 )
@@ -636,7 +660,7 @@ class adb_host:
             post_img_name = str(step_index) + '-' +\
                 str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-complete.png'
             post_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + post_img_name
-            print('post_img_path', post_img_path)
+            print('post_img_path', post_img_path, ':', raw_target_pt, ':', step_index)
             post_img = create_and_save_screencap(
                 self, post_img_path
             )
@@ -665,7 +689,7 @@ class adb_host:
                         raw_target_pt[1]) + '-retaken-search-step-complete.png'
                     retaken_post_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + retaken_post_img_name
                     if stitch_attempts > 1:
-                        print('need more imgs')
+                        print('need more imgs: ', stitch_imgs)
                         search_pattern_obj["step_index"] -= 1
                         shutil.move(pre_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + pre_img_name)
                         shutil.move(post_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + post_img_name)
@@ -678,20 +702,25 @@ class adb_host:
                     stop_index = max(0, step_index - 1)
                     start_index = max(0, step_index - 4)
                     glob_patterns = get_glob_digit_regex_string(start_index, stop_index)
-                    stitch_imgs = [
-                        glob.glob(
-                            log_folder + 'search_patterns/' + search_pattern_id + '/{}'.format(
-                                glob_pattern) + '*-complete.png'
-                        ) + glob.glob(
-                            log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
-                                glob_pattern
-                            ) + '*-init.png'
-                        ) for glob_pattern in glob_patterns
-                    ]
+                    print('glob_patterns', glob_patterns)
+                    stitch_imgs = remove_forward_slashes(
+                        itertools.chain.from_iterable(
+                            (glob.glob(
+                                log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
+                                    glob_pattern) + '*-complete.png'
+                            ) + glob.glob(
+                                log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
+                                    glob_pattern
+                                ) + '*-init.png'
+                            )) for glob_pattern in glob_patterns
+                        )
+                    )
+                    print('stitch_ims ', stitch_imgs)
                     if step_index > 0:
                         prev_post_img_path = get_longest_path(log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(stop_index) + '*-complete.png')
+                        print('prev_post_img_path', prev_post_img_path)
                         stitch_imgs.remove(prev_post_img_path)
-                        new_step_imgs = [read_and_apply_mask(prev_post_img_path), retaken_post_img]
+                        new_step_imgs = [pre_img, read_and_apply_mask(prev_post_img_path), retaken_post_img]
                     else:
                         new_step_imgs = [pre_img, retaken_post_img]
                     stitch_imgs = new_step_imgs + (list(map(read_and_apply_mask, stitch_imgs)) if stop_index > 0 else [])
@@ -709,27 +738,38 @@ class adb_host:
                     print('special error! ' + err_code)
                     break
 
-            state["search_patterns"][search_pattern_id] = search_pattern_obj
-            return ScriptExecutionState.SUCCESS, state
+            context["search_patterns"][search_pattern_id] = search_pattern_obj
+            return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "searchPatternEndAction":
-            search_pattern_id = action["actionData"]["patternID"]
-            step_index = state[search_pattern_id]["step_index"]
-            search_pattern_obj = state[search_pattern_id]
+            search_pattern_id = action["actionData"]["searchPatternID"]
+            if context["parent_action"] is not None and \
+                context["parent_action"]["actionName"] == "searchPatternContinueAction" and \
+                context["parent_action"]["actionData"]["searchPatternID"] == search_pattern_id and \
+                not context["search_patterns"][search_pattern_id]["stitcher_status"] == "stitching_finished":
+                # TODO haven't decided what the stiching_finished status should be yet (ie should always just return)
+                return ScriptExecutionState.RETURN, state, context
+
+            step_index = context["search_patterns"][search_pattern_id]["step_index"]
+            search_pattern_obj = context["search_patterns"][search_pattern_id]
             def apply_draggable_area_mask(img):
                 return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2RGB))
             def read_and_apply_mask(img_path):
                 return apply_draggable_area_mask(cv2.imread(img_path, cv2.IMREAD_UNCHANGED))
             def generate_greater_pano(start_index, stop_index):
                 glob_patterns = get_glob_digit_regex_string(start_index, stop_index)
-                greater_pano_paths = [glob.glob(
-                    log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
-                        glob_pattern
-                    ) + '*-complete.png'
-                ) + glob.glob(
-                    log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
-                        glob_pattern
-                    ) + '*-init.png'
-                ) for glob_pattern in glob_patterns]
+                greater_pano_paths = remove_forward_slashes(
+                    itertools.chain.from_iterable(
+                        glob.glob(
+                            log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
+                                glob_pattern
+                            ) + '*-complete.png'
+                        ) + glob.glob(
+                            log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
+                                glob_pattern
+                            ) + '*-init.png'
+                        ) for glob_pattern in glob_patterns
+                    )
+                )
                 greater_pano_imgs = list(map(read_and_apply_mask, greater_pano_paths))
                 err_code, result_im = search_pattern_obj["stitcher"].stitch(greater_pano_imgs, [search_pattern_obj["draggable_area"]] * len(stitch_imgs))
                 if err_code == cv2.STITCHER_OK:
@@ -744,8 +784,18 @@ class adb_host:
                     print('failed to greater pano: ', err_code)
             generate_greater_pano(0, step_index)
 
-            del state[action["actionData"]["patternID"]]
-            return ScriptExecutionState.SUCCESS, state
+            del context["search_patterns"][action["actionData"]["searchPatternID"]]
+            return ScriptExecutionState.SUCCESS, state, context
+        elif action["actionName"] == "logAction":
+            if action["actionData"]["logType"] == "logImage":
+                # print(np.array(pyautogui.screenshot()).shape)
+                # exit(0)
+                log_image = cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_BGRA2RGB)
+                cv2.imwrite(logs_path + '-logImage.png', log_image)
+                return ScriptExecutionState.SUCCESS, state, context
+            else:
+                print('log type unimplemented ' + action["actionData"]["logType"])
+                exit(0)
         else:
             print("action uninplemented on adb " + action["actionName"])
             exit(0)
