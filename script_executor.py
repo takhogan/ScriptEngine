@@ -232,6 +232,13 @@ class ScriptExecutor:
             self.context["parent_action"] = None
             self.status = ScriptExecutionState.RETURN
 
+    # keeps going until it runs into an object handler action
+    # if there are detectObjects in the first row it will consider this the object handler
+    # if there are not, it will continue through the script until it runs into an action labeled as object handler
+    # run as normal if object handler returns a match, before identifying object handler if it fails anywhere it exits and returns
+    def run_object_handler(self):
+        pass
+
 
     def run_one(self, log_level=None):
         if log_level is not None:
