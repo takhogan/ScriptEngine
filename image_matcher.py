@@ -42,7 +42,9 @@ class ImageMatcher:
         #     print('train_threshold: ', threshold)
         #     cv2.imwrite(logs_path + 'matching_overlay_train.png', cv2.cvtColor(train_result_im, cv2.COLOR_BGR2RGB))
         #     cv2.imwrite(logs_path + 'match_result_train.png', train_match_result * 255)
-
+        print('pre sort matches: ', matches)
+        matches.sort(reverse=True, key=lambda match: match[1])
+        print('post sort matches: ', matches)
         return [{
                 'input_type': 'shape',
                 'point': match,
@@ -82,7 +84,9 @@ class ImageMatcher:
         # match_result = cv2.matchTemplate(screencap_im, screencap_search, cv2.TM_CCOEFF_NORMED)
         dist_threshold = (w + h) * 0.1
         # print(dist_threshold)
+        # print(np.where(match_result >= threshold))
         loc = np.where((np.inf > match_result) & (match_result >= threshold))
+        # print('loc : ', loc)
         matches = []
         match_imgs = []
         match_img_index = 1
@@ -114,7 +118,7 @@ class ImageMatcher:
                     # change name to fit image format
                     cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(match_result[pt[1], pt[0]]) + '-img.png', cv2.cvtColor(match_img, cv2.COLOR_BGR2RGB))
                 match_img_index += 1
-
+        print('n matches : ', len(matches), ' best match : ', np.max(match_result[np.where(np.inf > match_result)]))
         for pt in zip(*loc[::-1]):
             cv2.rectangle(screencap_im, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2)
         return matches, match_result, screencap_im

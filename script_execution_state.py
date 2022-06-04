@@ -7,4 +7,5 @@ class ScriptExecutionState(Enum):
     FINISHED = auto(),
     SUCCESS = auto(),
     FAILURE = auto(),
-    RETURN = auto()
+    RETURN = auto(),
+    OUT_OF_ATTEMPTS = auto()
