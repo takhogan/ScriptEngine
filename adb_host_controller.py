@@ -25,6 +25,7 @@ from click_path_generator import ClickPathGenerator
 from image_matcher import ImageMatcher
 from search_pattern_helper import SearchPatternHelper
 from click_action_helper import ClickActionHelper
+from detect_scene_helper import DetectSceneHelper
 
 class adb_host:
     def __init__(self, props, host_os, adb_ip):
@@ -105,7 +106,15 @@ class adb_host:
             self.props['height'] = self.height
 
     def screenshot(self):
-        return Image.open(BytesIO(subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True, capture_output=True).stdout))
+        get_im_command = subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True,
+                                        capture_output=True)
+        bytes_im = BytesIO(get_im_command.stdout)
+        try:
+            source_im = Image.open(bytes_im)
+        except UnidentifiedImageError:
+            print('get_im_command: ', get_im_command)
+            exit(1)
+        return source_im
 
     def save_screenshot(self, save_name):
         pass
@@ -428,24 +437,10 @@ class adb_host:
         logs_path = log_folder + str(context['script_counter']) + '-'
         time.sleep(0.25)
         if action["actionName"] == "declareScene":
-            output = self.screenshot()
-            screencap_im = output
-            screencap_im = cv2.cvtColor(np.array(screencap_im), cv2.COLOR_RGB2BGR)
-            screencap_mask = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
-            screencap_mask_single_channel = cv2.cvtColor(screencap_mask.copy(), cv2.COLOR_BGR2GRAY)
-            mask_size = np.count_nonzero(screencap_mask_single_channel)
-            # print(action['actionData']['img'])
-            # print(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
-            # print(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
-            # print(screencap_im.shape)
-            # print(screencap_mask.shape)
-            screencap_masked = cv2.bitwise_and(screencap_im, screencap_mask)
-            screencap_compare = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
-
-            ssim_coeff = masked_mse(screencap_masked, screencap_compare, mask_size * 3 * 255)
-            cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-masked.png', screencap_masked)
-            cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-compare.png', screencap_compare)
+            screencap_im = cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_RGB2BGR)
+            matches,ssim_coeff = DetectSceneHelper.get_match(action, screencap_im, self.props["dir_path"], logs_path)
             if ssim_coeff > action["actionData"]["threshold"]:
+                state[action["actionData"]["outputVarName"]] = matches
                 return ScriptExecutionState.SUCCESS, state, context
             else:
                 return ScriptExecutionState.FAILURE, state, context
@@ -484,7 +479,7 @@ class adb_host:
                                                         action['actionData']['detectorName'], logs_path, self.props["scriptMode"],threshold=action["actionData"]["threshold"])
             # exit(0)
             if len(matches) > 0:
-                print(matches)
+                # print(matches)
                 state[action['actionData']['outputVarName']] = matches[:action["actionData"]["maxMatches"]]
                 return ScriptExecutionState.SUCCESS, state, context
             else:
@@ -724,6 +719,7 @@ class adb_host:
                     else:
                         new_step_imgs = [pre_img, retaken_post_img]
                     stitch_imgs = new_step_imgs + (list(map(read_and_apply_mask, stitch_imgs)) if stop_index > 0 else [])
+                    print('post stitch_ims: ', stitch_imgs)
                     stitch_attempts += 1
                 else:
                     search_pattern_obj["stitcher_status"] = "STITCHER_ERR"

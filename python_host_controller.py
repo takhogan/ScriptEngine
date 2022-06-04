@@ -18,10 +18,9 @@ from script_engine_utils import is_null
 import matplotlib.pyplot as plt
 import time
 from script_execution_state import ScriptExecutionState
-
 from scipy.stats import truncnorm
-
 from click_action_helper import ClickActionHelper
+from detect_scene_helper import DetectSceneHelper
 
 class python_host:
     def __init__(self, props):
@@ -99,19 +98,9 @@ class python_host:
             print('taking screenshot')
             screencap_im = pyautogui.screenshot()
             screencap_im = cv2.cvtColor(np.array(screencap_im), cv2.COLOR_RGB2BGR)
-            screencap_mask = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
-            # print(action['actionData']['img'])
-            print(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
-            print(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
-            print(screencap_im.shape)
-            print(screencap_mask.shape)
-            screencap_masked = cv2.bitwise_and(screencap_im, screencap_mask)
-            screencap_compare = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
-
-            ssim_coeff = ssim(screencap_masked, screencap_compare, multichannel=True)
-            cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-masked.png', screencap_masked)
-            cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-compare.png', screencap_compare)
-            if ssim_coeff > 0.7:
+            matches,ssim_coeff = DetectSceneHelper.get_match(action, screencap_im, self.props["dir_path"], logs_path)
+            if ssim_coeff > action["actionData"]["threshold"]:
+                state[action["actionData"]["outputVarName"]] = matches
                 return ScriptExecutionState.SUCCESS, state, context
             else:
                 return ScriptExecutionState.FAILURE, state, context
@@ -134,9 +123,9 @@ class python_host:
             screencap_search_bgr = cv2.cvtColor(screencap_search.copy(), cv2.COLOR_RGB2BGR)
             if self.props["scriptMode"] == "train":
                 cv2.imwrite(logs_path + 'search_img.png', screencap_search)
-            matches = self.image_matcher.template_match(screencap_im, screencap_mask, screencap_search_bgr, action['actionData']['detectorName'], logs_path, self.props["scriptMode"])
+            matches = self.image_matcher.template_match(screencap_im, screencap_mask, screencap_search_bgr, action['actionData']['detectorName'], logs_path, self.props["scriptMode"],threshold=action["actionData"]["threshold"])
             if len(matches) > 0:
-                print(matches)
+
                 state[action['actionData']['outputVarName']] = matches[:action["actionData"]["maxMatches"]]
                 return ScriptExecutionState.SUCCESS, state, context
             else:
