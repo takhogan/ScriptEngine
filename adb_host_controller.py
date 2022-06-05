@@ -1,4 +1,5 @@
 import base64
+import datetime
 import math
 import subprocess
 
@@ -792,6 +793,10 @@ class adb_host:
             else:
                 print('log type unimplemented ' + action["actionData"]["logType"])
                 exit(0)
+        elif action["actionName"] == "timeAction":
+            state[action["actionData"]["outputVarName"]] = datetime.datetime.now()
+            # self.state[action["actionData"]["outputVarName"]] = expression
+            return ScriptExecutionState.SUCCESS, state, context
         else:
             print("action uninplemented on adb " + action["actionName"])
             exit(0)
