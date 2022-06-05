@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import datetime
 
 import pandas as pd
 
@@ -154,6 +155,10 @@ class python_host:
             else:
                 print('log type unimplemented ' + action["actionData"]["logType"])
                 exit(0)
+        elif action["actionName"] == "timeAction":
+            state[action["actionData"]["outputVarName"]] = datetime.datetime.now()
+            # self.state[action["actionData"]["outputVarName"]] = expression
+            return ScriptExecutionState.SUCCESS, state, context
         else:
             print('unimplemented method! ' + action["actionName"])
             exit(0)

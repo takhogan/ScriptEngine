@@ -40,7 +40,8 @@ class ScriptExecutor:
             'search_patterns': {},
             'replay_stack' : [],
             'action_attempts' : [0] * len(script_obj["actionRows"][0]["actions"]),
-            'out_of_attempts' : False
+            'out_of_attempts' : False,
+            'object_handler_encountered' : False
         }
         if context is not None:
             self.context.update(context)
@@ -55,6 +56,9 @@ class ScriptExecutor:
               ' attempts: ', self.context["action_attempts"],
               ' outOfAttempts: ', self.context["out_of_attempts"])
         self.context["script_counter"] += 1
+        if "searchAreaObjectHandler" in self.context["script_attributes"] and action["actionName"] == 'detectObject':
+            self.context["object_handler_encountered"] = True
+
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
                 self.adb_host.init_system()
@@ -85,6 +89,7 @@ class ScriptExecutor:
                     print('is_error_handler: ', is_error_handler, ', ',
                           'is_object_handler: ', is_object_handler, ', ',
                           'is_new_script: ', is_new_script)
+                    # creates script engine object
                     if is_new_script:
                         ref_script = self.include_scripts[action["actionData"]["scriptName"]]
                         ref_script["props"]["start_time"] = self.props["start_time"]
@@ -112,6 +117,9 @@ class ScriptExecutor:
                             )
                     else:
                         ref_script_executor = action["actionData"]["initializedScript"]
+
+                    if 'searchAreaObjectHandler' in child_context["script_attributes"]:
+                        ref_script_executor.context["object_handler_encountered"] = False
 
                     if is_error_handler:
                         if self.context["search_patterns"][
@@ -191,7 +199,7 @@ class ScriptExecutor:
 
             if len(out_of_attempt_actions) > 0:
                 self.context['parent_action'] = action
-                self.context['child_actions'] - None
+                self.context['child_actions'] = None
                 self.actions = out_of_attempt_actions
                 self.status = ScriptExecutionState.OUT_OF_ATTEMPTS
                 return
@@ -225,6 +233,8 @@ class ScriptExecutor:
                 self.context['child_actions'] = None
                 self.status = ScriptExecutionState.ERROR
                 return
+        if self.context["object_handler_encountered"]:
+            is_return = True
         if is_return:
             self.actions = [self.context["parent_action"]]
             self.context["action_attempts"] = [0]
@@ -246,7 +256,7 @@ class ScriptExecutor:
         self.status = ScriptExecutionState.STARTING
         self.execute_actions()
         if self.status == ScriptExecutionState.STARTING:
-            while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR:
+            while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR and self.status != ScriptExecutionState.RETURN:
                 self.execute_actions()
                 # print(self.status, ' status ')
                 if len(self.actions) == 0:
