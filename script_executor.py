@@ -56,8 +56,6 @@ class ScriptExecutor:
               ' attempts: ', self.context["action_attempts"],
               ' outOfAttempts: ', self.context["out_of_attempts"])
         self.context["script_counter"] += 1
-        if "searchAreaObjectHandler" in self.context["script_attributes"] and action["actionName"] == 'detectObject':
-            self.context["object_handler_encountered"] = True
 
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
@@ -129,7 +127,10 @@ class ScriptExecutor:
                         else:
                             ref_script_executor.status = ScriptExecutionState.FINISHED
                     else:
-                        ref_script_executor.run_one()
+                        if self.context["run_type"] == "run":
+                            ref_script_executor.run_one()
+                        elif self.context["run_type"] == "run_one":
+                            ref_script_executor.run_to_failure()
 
                     if is_object_handler:
                         self.status = ScriptExecutionState.RETURN
@@ -141,6 +142,8 @@ class ScriptExecutor:
                     else:
                         if ref_script_executor.status == ScriptExecutionState.FINISHED:
                             self.status = ScriptExecutionState.SUCCESS
+                        elif ref_script_executor.status == ScriptExecutionState.FINISHED_FAILURE:
+                            self.status = ScriptExecutionState.FAILURE
                         elif ref_script_executor.status == ScriptExecutionState.FAILURE:
                             self.status = ScriptExecutionState.FAILURE
                         else:
@@ -204,6 +207,11 @@ class ScriptExecutor:
                 self.status = ScriptExecutionState.OUT_OF_ATTEMPTS
                 return
 
+            if "searchAreaObjectHandler" in self.context["script_attributes"] and \
+                    action["actionName"] == 'detectObject' and \
+                    "searchAreaObjectHandler" in action["actionData"]["detectorAttributes"]:
+                self.context["object_handler_encountered"] = True
+
             # print('action: ', action)
             self.actions[action_index] = self.handle_action(action)
             self.context["action_attempts"][action_index] += 1
@@ -223,6 +231,8 @@ class ScriptExecutor:
                 return
             elif self.status == ScriptExecutionState.FAILURE:
                 self.context['child_actions'] = None
+                # if self.context["object_handler_encountered"]:
+                #     self.status = ScriptExecutionState.FINISHED_FAILURE
                 continue
             elif self.status == ScriptExecutionState.RETURN:
                 self.context["child_actions"] = None
@@ -233,8 +243,6 @@ class ScriptExecutor:
                 self.context['child_actions'] = None
                 self.status = ScriptExecutionState.ERROR
                 return
-        if self.context["object_handler_encountered"]:
-            is_return = True
         if is_return:
             self.actions = [self.context["parent_action"]]
             self.context["action_attempts"] = [0]
@@ -242,21 +250,27 @@ class ScriptExecutor:
             self.context["parent_action"] = None
             self.status = ScriptExecutionState.RETURN
 
-    # keeps going until it runs into an object handler action
-    # if there are detectObjects in the first row it will consider this the object handler
-    # if there are not, it will continue through the script until it runs into an action labeled as object handler
-    # run as normal if object handler returns a match, before identifying object handler if it fails anywhere it exits and returns
-    def run_object_handler(self):
-        pass
-
+    def run_to_failure(self, log_level=None):
+        self.context["run_type"] = "run_to_failure"
+        if log_level is not None:
+            self.log_level = log_level
+        self.status = ScriptExecutionState.STARTING
+        while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR and self.status != ScriptExecutionState.FAILURE:
+            self.execute_actions()
+            # print(self.status, ' status ')
+            if len(self.actions) == 0:
+                self.status = ScriptExecutionState.FINISHED
+                break
 
     def run_one(self, log_level=None):
+        self.context["run_type"] = "run_one"
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
         self.execute_actions()
         if self.status == ScriptExecutionState.STARTING:
-            while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR and self.status != ScriptExecutionState.RETURN:
+            self.context["run_type"] = "run"
+            while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR and self.status != ScriptExecutionState.FINISHED_FAILURE:
                 self.execute_actions()
                 # print(self.status, ' status ')
                 if len(self.actions) == 0:
@@ -272,6 +286,7 @@ class ScriptExecutor:
     # json will be manually editable
 
     def run(self, log_level=None):
+        self.context["run_type"] = "run"
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING

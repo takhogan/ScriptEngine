@@ -8,4 +8,5 @@ class ScriptExecutionState(Enum):
     SUCCESS = auto(),
     FAILURE = auto(),
     RETURN = auto(),
-    OUT_OF_ATTEMPTS = auto()
+    OUT_OF_ATTEMPTS = auto(),
+    FINISHED_FAILURE = auto(),
