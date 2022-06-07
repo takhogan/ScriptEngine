@@ -118,7 +118,7 @@ class ImageMatcher:
                     # change name to fit image format
                     cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(match_result[pt[1], pt[0]]) + '-img.png', cv2.cvtColor(match_img, cv2.COLOR_BGR2RGB))
                 match_img_index += 1
-        print('n matches : ', len(matches), ' best match : ', np.max(match_result[np.where(np.inf > match_result)]))
+        print('n matches : ', len(matches), ' best match : ', np.max(match_result[np.where(np.inf > match_result)]) if len(matches) > 0 else 'none')
         for pt in zip(*loc[::-1]):
             cv2.rectangle(screencap_im, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2)
         return matches, match_result, screencap_im

@@ -124,7 +124,15 @@ class python_host:
             screencap_search_bgr = cv2.cvtColor(screencap_search.copy(), cv2.COLOR_RGB2BGR)
             if self.props["scriptMode"] == "train":
                 cv2.imwrite(logs_path + 'search_img.png', screencap_search)
-            matches = self.image_matcher.template_match(screencap_im, screencap_mask, screencap_search_bgr, action['actionData']['detectorName'], logs_path, self.props["scriptMode"],threshold=action["actionData"]["threshold"])
+            matches = self.image_matcher.template_match(
+                screencap_im,
+                screencap_mask,
+                screencap_search_bgr,
+                action['actionData']['detectorName'],
+                logs_path,
+                self.props["scriptMode"],
+                threshold=float(action["actionData"]["threshold"])
+            )
             if len(matches) > 0:
 
                 state[action['actionData']['outputVarName']] = matches[:action["actionData"]["maxMatches"]]
