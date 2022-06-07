@@ -476,8 +476,15 @@ class adb_host:
                 cv2.imwrite(logs_path + 'search_img.png', screencap_search)
             if self.props["scriptMode"] == "train":
                 cv2.imwrite(logs_path + 'search_img.png', screencap_search)
-            matches = self.image_matcher.template_match(screencap_im, screencap_mask, screencap_search_bgr,
-                                                        action['actionData']['detectorName'], logs_path, self.props["scriptMode"],threshold=action["actionData"]["threshold"])
+            matches = self.image_matcher.template_match(
+                screencap_im,
+                screencap_mask,
+                screencap_search_bgr,
+                action['actionData']['detectorName'],
+                logs_path,
+                self.props["scriptMode"],
+                threshold=float(action["actionData"]["threshold"])
+            )
             # exit(0)
             if len(matches) > 0:
                 # print(matches)
@@ -720,7 +727,7 @@ class adb_host:
                     else:
                         new_step_imgs = [pre_img, retaken_post_img]
                     stitch_imgs = new_step_imgs + (list(map(read_and_apply_mask, stitch_imgs)) if stop_index > 0 else [])
-                    print('post stitch_ims: ', stitch_imgs)
+                    # print('post stitch_ims: ', stitch_imgs)
                     stitch_attempts += 1
                 else:
                     search_pattern_obj["stitcher_status"] = "STITCHER_ERR"
