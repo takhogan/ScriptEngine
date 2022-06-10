@@ -125,7 +125,6 @@ class ScreenRecorder:
             self.recording_thread.end_recording()
             self.recording_thread.join()
             self.recording_started = False
-            print('recording finished')
 
 class RecordingThread(threading.Thread):
     def __init__(self, recording_mode):
@@ -136,7 +135,7 @@ class RecordingThread(threading.Thread):
 
     def run(self):
         recording_codec = 'mp42'
-        out_writer = cv2.VideoWriter("../data/output.mp4", cv2.VideoWriter_fourcc(*recording_codec), 8.0,
+        out_writer = cv2.VideoWriter("./data/output.mp4", cv2.VideoWriter_fourcc(*recording_codec), 8.0,
                                      (self.width, self.height))
         print('recording...')
         while self.record:
