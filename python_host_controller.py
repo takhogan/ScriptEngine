@@ -82,7 +82,7 @@ class python_host:
             else:
                 is_escaped_char = False
                 escaped_char = ''
-                for char_index,expression_char in enumerate(action["actionName"]["actionData"]["keyboardExpression"]):
+                for char_index,expression_char in enumerate(action["actionData"]["keyboardExpression"]):
                     if is_escaped_char:
                         if expression_char == '}':
                             is_escaped_char = False
