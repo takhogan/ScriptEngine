@@ -8,14 +8,21 @@ class ImageMatcher:
         pass
 
     @staticmethod
-    def template_match(screencap_im, screencap_mask, screencap_search, detector_name, logs_path, script_mode, threshold=0.96, use_color=True, use_mask=True,):
-        screencap_mask = np.uint8(cv2.cvtColor(screencap_mask.copy(), cv2.COLOR_BGR2GRAY))
-
+    def template_match(screencap_im_bgr, screencap_mask_bgr, screencap_search_bgr,
+                       detector_name, logs_path, script_mode,match_point,
+                       threshold=0.96, use_color=True, use_mask=True):
+        screencap_mask_gray = np.uint8(cv2.cvtColor(screencap_mask_bgr.copy(), cv2.COLOR_BGR2GRAY))
         # print(screencap_search.shape)
         if detector_name == "pixelDifference":
-            matches, match_result, result_im = ImageMatcher.produce_template_matches(screencap_im.copy(),
-                                                                                  screencap_search, screencap_mask.copy(),
-                                                                                  logs_path, threshold=threshold, use_color=use_color, use_mask=use_mask)
+            matches, match_result, result_im_bgr = ImageMatcher.produce_template_matches(
+                screencap_im_bgr.copy(),
+                screencap_search_bgr.copy(),
+                screencap_mask_gray.copy(),
+                logs_path,
+                threshold=threshold,
+                use_color=use_color,
+                use_mask=use_mask
+            )
         elif detector_name == "logisticClassifier":
             print("logistic detector unimplemented ")
             exit(0)
@@ -25,10 +32,10 @@ class ImageMatcher:
             print("detector unimplemented! ")
             exit(0)
 
-        h, w = screencap_search.shape[0:2]
+        h, w = screencap_search_bgr.shape[0:2]
         # plt.imshow(match_result, cmap='gray')
         # plt.title('Matching Result'), plt.xticks([]), plt.yticks([])
-        cv2.imwrite(logs_path + 'matching_overlay.png', cv2.cvtColor(result_im, cv2.COLOR_BGR2RGB))
+        cv2.imwrite(logs_path + 'matching_overlay.png', result_im_bgr)
         cv2.imwrite(logs_path + 'match_result.png', match_result * 255)
         # if self.props["scriptMode"] == "train":
         #     threshold = 0.94
@@ -47,18 +54,20 @@ class ImageMatcher:
         # print('post sort matches: ', matches)
         return [{
                 'input_type': 'shape',
-                'point': match,
-                'shape': screencap_mask,
+                'point': (match[0] + match_point[0], match[1] + match_point[1]) if match_point is not None else match,
+                'shape': screencap_mask_gray,
+                'matched_area': match_area,
                 'height': h,
                 'width': w,
                 'score': score
-        } for match, score in matches]
+        } for match, score, match_area in matches]
 
 
     @staticmethod
-    def produce_template_matches(screencap_im, screencap_search, screencap_mask, logs_path, threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
+    def produce_template_matches(screencap_im_bgr, screencap_search_bgr, screencap_mask_gray,
+                                 logs_path, threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
         # https://docs.opencv.org/3.4/de/da9/tutorial_template_matching.html
-        h, w = screencap_search.shape[0:2]
+        h, w = screencap_search_bgr.shape[0:2]
         # print(screencap_search.shape)
         # print(screencap_mask.shape)
         # exit(0)
@@ -73,10 +82,10 @@ class ImageMatcher:
         # cv2.imshow('screencap_mask', screencap_mask)
         # cv2.waitKey(0)
         match_result = cv2.matchTemplate(
-            cv2.cvtColor(screencap_im.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im.copy(),
-            cv2.cvtColor(screencap_search.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search.copy(),
+            cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr.copy(),
+            cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr.copy(),
             cv2.TM_CCOEFF_NORMED,result=None,
-            mask=screencap_mask if use_mask else None)
+            mask=screencap_mask_gray if use_mask else None)
         # match_result = 1 - match_result
 
         # cv2.normalize(match_result, match_result, 0, 1, cv2.NORM_MINMAX, -1)
@@ -88,12 +97,12 @@ class ImageMatcher:
         loc = np.where((np.inf > match_result) & (match_result >= threshold))
         # print('loc : ', loc)
         matches = []
-        match_imgs = []
         match_img_index = 1
 
         for pt in zip(*loc[::-1]):
             redundant = False
             match_score = match_result[pt[1], pt[0]]
+            match_img_bgr = screencap_im_bgr[pt[1]:pt[1] + h, pt[0]:pt[0] + w].copy()
             if match_score == np.inf:
                 print(pt)
                 continue
@@ -104,24 +113,23 @@ class ImageMatcher:
                 # print('dist ', match_dist)
                 if match_dist < dist_threshold:
                     if match_score > match[1]:
-                        matches[match_index] = (pt, match_score)
+                        matches[match_index] = (pt, match_score, match_img_bgr)
                     redundant = True
                     break
             if redundant:
                 continue
             else:
-                matches.append((pt, match_score))
                 # print('{:f}'.format(match_result[pt[1], pt[0]]))
-                match_img = screencap_im[pt[1]:pt[1] + h, pt[0]:pt[0] + w].copy()
-                match_imgs.append(match_img)
+                matches.append((pt, match_score, match_img_bgr))
                 if script_mode == "train":
                     # change name to fit image format
-                    cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(match_result[pt[1], pt[0]]) + '-img.png', cv2.cvtColor(match_img, cv2.COLOR_BGR2RGB))
+                    cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(match_result[pt[1], pt[0]]) + '-img.png', match_img_bgr)
                 match_img_index += 1
         print('n matches : ', len(matches), ' best match : ', np.max(match_result[np.where(np.inf > match_result)]) if (match_result[np.where(np.inf > match_result)]).size > 0 else 'none')
+        result_im_bgr = screencap_im_bgr
         for pt in zip(*loc[::-1]):
-            cv2.rectangle(screencap_im, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2)
-        return matches, match_result, screencap_im
+            cv2.rectangle(result_im_bgr, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2)
+        return matches, match_result, result_im_bgr
 
     # def produce_logistic_matches(self, screencap_im, screencap_search, screencap_mask, logs_path, assets_folder, threshold=0.7):
     #     # https://towardsdatascience.com/logistic-regression-using-python-sklearn-numpy-mnist-handwriting-recognition-matplotlib-a6b31e2b166a

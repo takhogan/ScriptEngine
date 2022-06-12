@@ -52,7 +52,7 @@ class ScriptExecutor:
     def handle_action(self, action):
         print(self.props["script_name"], ' ', action["actionData"]["targetSystem"],
               ' action : ', action["actionName"],
-              ' children: ', list(map(lambda action: action["actionGroup"], self.get_children(action)[0])),
+              ' children: ', list(map(lambda action: action["actionGroup"], self.get_children(action))),
               ' attempts: ', self.context["action_attempts"],
               ' outOfAttempts: ', self.context["out_of_attempts"])
         self.context["script_counter"] += 1
@@ -176,34 +176,46 @@ class ScriptExecutor:
             exit(0)
         return action
 
-    def get_children(self, action):
+    def get_out_of_attempts_handlers(self, action):
+        if action is None:
+            return []
         out_of_attempts_actions = []
-        child_actions = []
         self.context["out_of_attempts"] = False
-        def get_child_action(childGroupLink, child_actions, out_of_attempts_actions):
+        for childGroupLink in action["childGroups"]:
             if childGroupLink["type"] == "outOfAttemptsHandler":
                 if self.context["action_attempts"][self.context["action_index"]] > childGroupLink["typePayload"]:
                     self.context["out_of_attempts"] = True
-                    out_of_attempts_actions.append(self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]])
-            else:
-                child_actions.append(self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]])
+                    out_of_attempts_actions.append(
+                        self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]]
+                    )
+        return out_of_attempts_actions
+
+    def get_children(self, action):
+        # print('get_children ', action)
+        child_actions = []
+
         for childGroupLink in action["childGroups"]:
-            get_child_action(childGroupLink, child_actions, out_of_attempts_actions)
-        return child_actions,out_of_attempts_actions
+            if not childGroupLink["type"] == "outOfAttemptsHandler":
+                child_actions.append(self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]])
+        return child_actions
 
     def execute_actions(self):
         n_actions = len(self.actions)
         is_return = False
+        # print('execute_actions : ', self.actions)
         for action_index in range(0, n_actions):
             self.context["action_index"] = action_index
             action = self.actions[action_index]
-            child_actions,out_of_attempt_actions = self.get_children(action)
-            self.context['child_actions'] = child_actions
 
-            if len(out_of_attempt_actions) > 0:
+            child_actions = self.get_children(action)
+            self.context['child_actions'] = child_actions
+            out_of_attempts_actions = self.get_out_of_attempts_handlers(self.context['parent_action'])
+
+            # print('out_of_attempt_actions : ', out_of_attempts_actions)
+            if len(out_of_attempts_actions) > 0:
                 self.context['parent_action'] = action
                 self.context['child_actions'] = None
-                self.actions = out_of_attempt_actions
+                self.actions = out_of_attempts_actions
                 self.status = ScriptExecutionState.OUT_OF_ATTEMPTS
                 return
 
@@ -212,8 +224,9 @@ class ScriptExecutor:
                     "searchAreaObjectHandler" in action["actionData"]["detectorAttributes"]:
                 self.context["object_handler_encountered"] = True
 
-            # print('action: ', action)
+            # print('pre handle: ', action)
             self.actions[action_index] = self.handle_action(action)
+            # print('post handle : ', action)
             self.context["action_attempts"][action_index] += 1
             if self.status == ScriptExecutionState.FINISHED:
                 self.context['parent_action'] = action

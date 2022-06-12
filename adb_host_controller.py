@@ -529,7 +529,7 @@ class adb_host:
                 print('condition failure!')
                 return ScriptExecutionState.FAILURE, state, context
         elif action["actionName"] == "sleepStatement":
-            time.sleep(float(eval(action["actionData"]["sleepTime"], state)))
+            time.sleep(float(eval(str(action["actionData"]["inputExpression"]), state)))
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "dragLocationSource":
             source_point = random.choice(action["actionData"]["pointList"])

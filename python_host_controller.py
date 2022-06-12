@@ -22,6 +22,7 @@ from script_execution_state import ScriptExecutionState
 from scipy.stats import truncnorm
 from click_action_helper import ClickActionHelper
 from detect_scene_helper import DetectSceneHelper
+from detect_object_helper import DetectObjectHelper
 
 class python_host:
     def __init__(self, props):
@@ -31,10 +32,10 @@ class python_host:
         self.props = props
         self.image_matcher = ImageMatcher()
         if is_null(self.props['width']) or is_null(self.props['height']):
-            self.props['height'],self.props['width'],_ = np.array(pyautogui.screenshot()).shape
+            self.props['height'],self.props['width'],_ = pyautogui.screenshot().shape
 
     def run_script(self, action, state):
-        print('run_script: ', action)
+        # print('run_script: ', action)
         if action["actionData"]["awaitScript"]:
             outputs = subprocess.run(action["actionData"]["shellScript"], cwd="/", shell=True, capture_output=True)
             state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
@@ -44,6 +45,10 @@ class python_host:
             proc = subprocess.Popen(action["actionData"]["shellScript"], cwd="/", shell=True)
             return state
 
+    def screenshot(self):
+        return cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR)
+
+
     def handle_action(self, action, state, context, log_level, log_folder):
         # print(action["actionName"])
         time.sleep(1)
@@ -52,7 +57,7 @@ class python_host:
         if action["actionName"] == "shellScript":
             return ScriptExecutionState.SUCCESS, self.run_script(action, state), context
         elif action["actionName"] == "sleepStatement":
-            time.sleep(int(eval(action["actionData"]["inputExpression"], state)))
+            time.sleep(float(eval(str(action["actionData"]["inputExpression"]), state)))
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "clickAction":
             var_name = action["actionData"]["inputExpression"]
@@ -72,9 +77,8 @@ class python_host:
                 pyautogui.click(point_choice)
                 time.sleep(delays[click_count])
 
+                ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
 
-            with open(logs_path + 'click_coordinate.txt', 'w') as log_file:
-                log_file.write(str(point_choice) + '\n')
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "keyboardAction":
             if action["actionData"]["isHotKey"] == 'isHotKey':
@@ -96,9 +100,7 @@ class python_host:
                         pyautogui.press(expression_char)
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "detectScene":
-            print('taking screenshot')
-            screencap_im = pyautogui.screenshot()
-            screencap_im = cv2.cvtColor(np.array(screencap_im), cv2.COLOR_RGB2BGR)
+            screencap_im = self.screenshot()
             matches,ssim_coeff = DetectSceneHelper.get_match(action, screencap_im, self.props["dir_path"], logs_path)
             if ssim_coeff > action["actionData"]["threshold"]:
                 state[action["actionData"]["outputVarName"]] = matches
@@ -108,29 +110,36 @@ class python_host:
         elif action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
-            screencap_im_rgb = np.array(pyautogui.screenshot())
+            screencap_im_bgr,match_point = DetectObjectHelper.get_detect_area(action, state)
+            if screencap_im_bgr is None:
+                screencap_im_bgr = self.screenshot()
+
+            # print('props dims: ', (self.props['height'],  self.props['width']), ' im dims: ', screencap_im_bgr.shape)
+            # exit(0)
             # print('imshape: ', np.array(screencap_im_rgb).shape, ' width: ', self.props['width'], ' height: ', self.props['height'])
-            if is_null(self.props['width']) or is_null(self.props['height']):
-                screencap_im = screencap_im_rgb
-            else:
-                screencap_im = cv2.resize(screencap_im_rgb, (self.props['width'], self.props['height']), interpolation=cv2.INTER_LINEAR)
-            screencap_mask = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
+            # if is_null(self.props['width']) or is_null(self.props['height']):
+            #     pass
+            # else:
+            #     screencap_im_bgr = cv2.resize(screencap_im_bgr, (self.props['width'], self.props['height']), interpolation=cv2.INTER_LINEAR)
+            screencap_mask_bgr = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
             # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
             # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
             # print(screencap_im.shape)
             # print(screencap_mask.shape)
 
-            screencap_search = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
-            screencap_search_bgr = cv2.cvtColor(screencap_search.copy(), cv2.COLOR_RGB2BGR)
+            screencap_search_bgr = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
+
+            # screencap_search_bgr = cv2.cvtColor(screencap_search.copy(), cv2.COLOR_RGB2BGR)
             if self.props["scriptMode"] == "train":
-                cv2.imwrite(logs_path + 'search_img.png', screencap_search)
+                cv2.imwrite(logs_path + 'search_img.png', screencap_search_bgr)
             matches = self.image_matcher.template_match(
-                screencap_im,
-                screencap_mask,
+                screencap_im_bgr,
+                screencap_mask_bgr,
                 screencap_search_bgr,
                 action['actionData']['detectorName'],
                 logs_path,
                 self.props["scriptMode"],
+                match_point,
                 threshold=float(action["actionData"]["threshold"])
             )
             if len(matches) > 0:
@@ -157,7 +166,7 @@ class python_host:
             if action["actionData"]["logType"] == "logImage":
                 # print(np.array(pyautogui.screenshot()).shape)
                 # exit(0)
-                log_image = cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_BGRA2RGB)
+                log_image = self.screenshot()
                 cv2.imwrite(logs_path + '-logImage.png', log_image)
                 return ScriptExecutionState.SUCCESS, state, context
             else:
