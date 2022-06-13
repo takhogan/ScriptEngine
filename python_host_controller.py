@@ -32,7 +32,7 @@ class python_host:
         self.props = props
         self.image_matcher = ImageMatcher()
         if is_null(self.props['width']) or is_null(self.props['height']):
-            self.props['height'],self.props['width'],_ = pyautogui.screenshot().shape
+            self.props['height'],self.props['width'],_ = np.array(pyautogui.screenshot()).shape
 
     def run_script(self, action, state):
         # print('run_script: ', action)
@@ -77,7 +77,7 @@ class python_host:
                 pyautogui.click(point_choice)
                 time.sleep(delays[click_count])
 
-                ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
+            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
 
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "keyboardAction":

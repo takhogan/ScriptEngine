@@ -27,6 +27,7 @@ from image_matcher import ImageMatcher
 from search_pattern_helper import SearchPatternHelper
 from click_action_helper import ClickActionHelper
 from detect_scene_helper import DetectSceneHelper
+from detect_object_helper import DetectObjectHelper
 
 class adb_host:
     def __init__(self, props, host_os, adb_ip):
@@ -115,7 +116,7 @@ class adb_host:
         except UnidentifiedImageError:
             print('get_im_command: ', get_im_command)
             exit(1)
-        return source_im
+        return cv2.cvtColor(np.array(source_im), cv2.COLOR_RGB2BGR)
 
     def save_screenshot(self, save_name):
         pass
@@ -438,8 +439,8 @@ class adb_host:
         logs_path = log_folder + str(context['script_counter']) + '-'
         time.sleep(0.25)
         if action["actionName"] == "declareScene":
-            screencap_im = cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_RGB2BGR)
-            matches,ssim_coeff = DetectSceneHelper.get_match(action, screencap_im, self.props["dir_path"], logs_path)
+            screencap_im_bgr = self.screenshot()
+            matches,ssim_coeff = DetectSceneHelper.get_match(action, screencap_im_bgr, self.props["dir_path"], logs_path)
             if ssim_coeff > action["actionData"]["threshold"]:
                 state[action["actionData"]["outputVarName"]] = matches
                 return ScriptExecutionState.SUCCESS, state, context
@@ -449,40 +450,38 @@ class adb_host:
         elif action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
-            screencap_im_rgb = self.screenshot()
-            # print('imshape: ', np.array(screencap_im_rgb).shape, ' width: ', self.props['width'], ' height: ', self.props['height'])
-            if is_null(self.props['width']) or is_null(self.props['height']):
-                screencap_im = np.array(screencap_im_rgb)
-            else:
-                screencap_im = cv2.resize(np.array(screencap_im_rgb), (self.props['width'], self.props['height']),
-                                          interpolation=cv2.INTER_LINEAR)
+            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
+            if screencap_im_bgr is None:
+                screencap_im_bgr = self.screenshot()
+            print('imshape: ', np.array(screencap_im_bgr).shape, ' width: ', self.props['width'], ' height: ', self.props['height'])
+            # if is_null(self.props['width']) or is_null(self.props['height']):
+            #     screencap_im = np.array(screencap_im_bgr)
+            # else:
+            #     screencap_im = cv2.resize(np.array(screencap_im_bgr), (self.props['width'], self.props['height']),
+            #                               interpolation=cv2.INTER_LINEAR)
             # print(screencap_im.shape)
             # print((screencap_im_rgb))
             # print(self.props['width'], self.props['height'])
             # exit(0)
-            screencap_im = cv2.cvtColor(screencap_im.copy(), cv2.COLOR_BGRA2BGR)
-            screencap_mask = cv2.imread(
-                self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
+            # screencap_im = cv2.cvtColor(screencap_im.copy(), cv2.COLOR_BGRA2BGR)
+            screencap_mask_bgr = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
             # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
             # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
             # print(screencap_im.shape)
             # print(screencap_mask.shape)
             # exit(0)
 
-            screencap_search = cv2.imread(
-                self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
-            screencap_search_bgr = cv2.cvtColor(screencap_search.copy(), cv2.COLOR_RGB2BGR)
+            screencap_search_bgr = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
             if self.props["scriptMode"] == "train":
-                cv2.imwrite(logs_path + 'search_img.png', screencap_search)
-            if self.props["scriptMode"] == "train":
-                cv2.imwrite(logs_path + 'search_img.png', screencap_search)
+                cv2.imwrite(logs_path + 'search_img.png', screencap_search_bgr)
             matches = self.image_matcher.template_match(
-                screencap_im,
-                screencap_mask,
+                screencap_im_bgr,
+                screencap_mask_bgr,
                 screencap_search_bgr,
                 action['actionData']['detectorName'],
                 logs_path,
                 self.props["scriptMode"],
+                match_point,
                 threshold=float(action["actionData"]["threshold"])
             )
             # exit(0)
@@ -514,6 +513,7 @@ class adb_host:
                 self.click(point_choice[0], point_choice[1])
                 time.sleep(delays[click_count])
 
+            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
             return ScriptExecutionState.SUCCESS, state, context
 
         elif action["actionName"] == "shellScript":
@@ -563,19 +563,19 @@ class adb_host:
             # print(cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_BGR2RGB).shape)
             # exit(0)
             def apply_draggable_area_mask(img):
-                return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2RGB))
+                return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2BGR))
 
             def create_and_save_screencap(self_ref, savename):
-                img_unmasked = cv2.cvtColor(np.array(self_ref.screenshot()), cv2.COLOR_BGR2RGB)
-                img_masked = apply_draggable_area_mask(img_unmasked)
+                img_unmasked_bgr = self.screenshot()
+                img_masked_bgr = apply_draggable_area_mask(img_unmasked_bgr)
                 cv2.imwrite(
                     savename,
-                    img_masked
+                    img_masked_bgr
                 )
-                return img_masked
+                return img_masked_bgr
 
             def read_and_apply_mask(img_path):
-                return apply_draggable_area_mask(cv2.imread(img_path, cv2.IMREAD_UNCHANGED))
+                return apply_draggable_area_mask(cv2.imread(img_path))
 
             log_folder + 'search_patterns/' + search_pattern_id + '/{}-*complete.png'.format(step_index - 1)
             def get_longest_path(search_string):
@@ -756,9 +756,9 @@ class adb_host:
             step_index = context["search_patterns"][search_pattern_id]["step_index"]
             search_pattern_obj = context["search_patterns"][search_pattern_id]
             def apply_draggable_area_mask(img):
-                return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2RGB))
+                return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2BGR))
             def read_and_apply_mask(img_path):
-                return apply_draggable_area_mask(cv2.imread(img_path, cv2.IMREAD_UNCHANGED))
+                return apply_draggable_area_mask(cv2.imread(img_path))
             def generate_greater_pano(start_index, stop_index):
                 glob_patterns = get_glob_digit_regex_string(start_index, stop_index)
                 greater_pano_paths = remove_forward_slashes(
@@ -794,7 +794,7 @@ class adb_host:
             if action["actionData"]["logType"] == "logImage":
                 # print(np.array(pyautogui.screenshot()).shape)
                 # exit(0)
-                log_image = cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_BGRA2RGB)
+                log_image = self.screenshot()
                 cv2.imwrite(logs_path + '-logImage.png', log_image)
                 return ScriptExecutionState.SUCCESS, state, context
             else:
