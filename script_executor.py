@@ -1,4 +1,5 @@
 import copy
+import json
 import sys
 
 sys.path.append(".")
@@ -161,6 +162,19 @@ class ScriptExecutor:
                     expression = eval(action["actionData"]["inputExpression"], self.state)
                     self.state[action["actionData"]["outputVarName"]] = expression
                     self.status = ScriptExecutionState.SUCCESS
+                elif action["actionName"] == "jsonFileAction":
+                    if action["actionData"]["mode"] == "read":
+                        with open(self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"], "r") as read_file:
+                            self.state[action["actionData"]["varName"]] = json.load(read_file)
+                        self.status = ScriptExecutionState.SUCCESS
+                    elif action["actionData"]["mode"] == "write":
+                        with open(self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"], 'w') as write_file:
+                            json.dump(self.state[action["actionData"]["varName"]], write_file)
+                        self.status = ScriptExecutionState.SUCCESS
+                    else:
+                        print('invalid mode: ', action)
+                        self.status = ScriptExecutionState.ERROR
+
                 else:
                     self.status = ScriptExecutionState.ERROR
                     print("action unimplemented ")
