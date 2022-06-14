@@ -142,12 +142,12 @@ class RecordingThread(threading.Thread):
             time.sleep(0.1)
             if self.recording_mode == 'adb':
                 input_im = np.array(Image.open(BytesIO(
-                    subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True,
+                    subprocess.run('adb exec-out screencap -p', cwd="/", shell=True,
                                    capture_output=True).stdout)))
             elif self.recording_mode == 'pc':
                 input_im = np.array(pyautogui.screenshot())
-            input_im_rgb = cv2.cvtColor(input_im, cv2.COLOR_BGR2RGB)
-            out_writer.write(input_im_rgb)
+            input_im_bgr = cv2.cvtColor(input_im, cv2.COLOR_RGB2BGR)
+            out_writer.write(input_im_bgr)
         print('recording complete.')
         out_writer.release()
         cv2.destroyAllWindows()
