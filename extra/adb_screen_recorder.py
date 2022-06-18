@@ -2,7 +2,7 @@ import cv2
 import subprocess
 
 import pyautogui
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from io import BytesIO
 import time
 import numpy as np
@@ -131,7 +131,17 @@ class RecordingThread(threading.Thread):
         threading.Thread.__init__(self)
         self.recording_mode = recording_mode
         self.record = True
-        self.height,self.width,_ = np.array(pyautogui.screenshot()).shape
+        if self.recording_mode == 'adb':
+            get_im_command = subprocess.run('adb exec-out screencap -p', cwd="/", shell=True, capture_output=True)
+            bytes_im = BytesIO(get_im_command.stdout)
+            try:
+                source_im = Image.open(bytes_im)
+            except UnidentifiedImageError:
+                print('get_im_command: ', get_im_command)
+                exit(1)
+            self.height,self.width,_ = np.array(source_im).shape
+        elif self.recording_mode == 'pc':
+            self.height,self.width,_ = np.array(pyautogui.screenshot()).shape
 
     def run(self):
         recording_codec = 'mp42'

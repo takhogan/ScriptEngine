@@ -29,6 +29,7 @@ class ScriptExecutor:
         self.state = {
 
         }
+        # print('state (1) : ', state, self.state)
         if state is not None:
             self.state.update(state)
 
@@ -48,6 +49,15 @@ class ScriptExecutor:
             self.context.update(context)
 
         self.status = ScriptExecutionState.FINISHED
+
+    def rewind(self, input_vars):
+        # print('input_vars : ', input_vars)
+        # print('state (1.5) ', self.state)
+        self.actions = self.action_rows[0]["actions"]
+        self.status = ScriptExecutionState.FINISHED
+        self.state.update(input_vars)
+        # print('state (2) : ', self.state)
+        time.sleep(0.5)
 
 
     def handle_action(self, action):
@@ -88,6 +98,15 @@ class ScriptExecutor:
                     print('is_error_handler: ', is_error_handler, ', ',
                           'is_object_handler: ', is_object_handler, ', ',
                           'is_new_script: ', is_new_script)
+
+                    parsed_input_vars = list(filter(lambda input_vars: input_vars != '', action["actionData"]["inputVars"].split(",")))
+                    # print(' state (2.5) ', self.state)
+                    # print(' parsed_input_vars : ', parsed_input_vars)
+                    input_vars = {
+                        input_var_key : self.state[input_var_key] for input_var_key in parsed_input_vars
+                    }
+                    # print(' state (3) : ', self.state)
+                    input_vars = None if len(input_vars) == 0 else input_vars
                     # creates script engine object
                     if is_new_script:
                         ref_script = self.include_scripts[action["actionData"]["scriptName"]]
@@ -95,26 +114,34 @@ class ScriptExecutor:
                         ref_script["include"] = self.include_scripts
                         script_ref_start_time = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
                         script_ref_log_folder = self.log_folder + action["actionData"]["scriptName"] + '-' + script_ref_start_time
+
                         if is_error_handler or is_object_handler:
+                            search_area_handler_state = {
+                                "target_search_pattern" : self.context["search_patterns"][
+                                    self.context["parent_action"]["actionData"]["searchPatternID"]
+                                ]
+                            }
+                            if input_vars is not None:
+                                input_vars.update(search_area_handler_state)
+                            else:
+                                input_vars = search_area_handler_state
                             ref_script_executor = ScriptExecutor(
                                 ref_script,
                                 self.log_level,
-                                script_ref_log_folder,
-                                child_context,
-                                {
-                                    "target_search_pattern" : self.context["search_patterns"][
-                                        self.context["parent_action"]["actionData"]["searchPatternID"]
-                                    ]
-                                }
+                                log_folder=script_ref_log_folder,
+                                context=child_context,
+                                state=input_vars
                             )
                         else:
                             ref_script_executor = ScriptExecutor(
                                 ref_script,
                                 self.log_level,
-                                script_ref_log_folder,
-                                child_context
+                                log_folder=script_ref_log_folder,
+                                context=child_context,
+                                state=input_vars
                             )
                     else:
+                        action["actionData"]["initializedScript"].rewind(input_vars)
                         ref_script_executor = action["actionData"]["initializedScript"]
 
                     if 'searchAreaObjectHandler' in child_context["script_attributes"]:
@@ -152,15 +179,26 @@ class ScriptExecutor:
                     action["actionData"]["initializedScript"] = ref_script_executor
                     print(action["actionData"]["scriptName"] + " returning with status " + ref_script_executor.status.name + "/" + self.status.name)
                 elif action["actionName"] == "conditionalStatement":
-                    if eval(action["actionData"]["condition"], self.state):
+                    print('condition : ', action["actionData"]["condition"])
+                    if eval('(' + action["actionData"]["condition"] + ')', self.state.copy()):
                         print('condition success!')
                         self.status = ScriptExecutionState.SUCCESS
                     else:
                         print('condition failure!')
                         self.status = ScriptExecutionState.FAILURE
+                    # print(' state (7) : ', self.state)
                 elif action["actionName"] == "variableAssignment":
-                    expression = eval(action["actionData"]["inputExpression"], self.state)
+                    # print('input Parser : ', action["actionData"]["inputParser"])
+                    print('inputExpression : ', action["actionData"]["inputExpression"])
+                    # print(' state (4) ', self.state)
+                    if action["actionData"]["inputParser"] == 'eval':
+                        expression = eval(action["actionData"]["inputExpression"], self.state.copy())
+                    elif action["actionData"]["inputParser"] == "jsonload":
+                        expression = json.loads(action["actionData"]["inputExpression"])
+                    # print(' state (5) ', self.state)
+                    # print(' expression : ', expression, ', ', type(expression))
                     self.state[action["actionData"]["outputVarName"]] = expression
+                    # print(' state (6) : ', self.state)
                     self.status = ScriptExecutionState.SUCCESS
                 elif action["actionName"] == "jsonFileAction":
                     if action["actionData"]["mode"] == "read":
@@ -188,6 +226,7 @@ class ScriptExecutor:
             self.status = ScriptExecutionState.ERROR
             print("script formatting error, targetSystem not present!")
             exit(0)
+        # print('state (6) : ', self.state)
         return action
 
     def get_out_of_attempts_handlers(self, action):
