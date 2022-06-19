@@ -453,7 +453,7 @@ class adb_host:
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
             if screencap_im_bgr is None:
                 screencap_im_bgr = self.screenshot()
-            print('imshape: ', np.array(screencap_im_bgr).shape, ' width: ', self.props['width'], ' height: ', self.props['height'])
+            # print('imshape: ', np.array(screencap_im_bgr).shape, ' width: ', self.props['width'], ' height: ', self.props['height'])
             # if is_null(self.props['width']) or is_null(self.props['height']):
             #     screencap_im = np.array(screencap_im_bgr)
             # else:
@@ -692,7 +692,7 @@ class adb_host:
                         raw_target_pt[1]) + '-retaken-search-step-complete.png'
                     retaken_post_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + retaken_post_img_name
                     if stitch_attempts > 1:
-                        print('need more imgs: ', stitch_imgs)
+                        print('need more imgs: ', len(stitch_imgs))
                         search_pattern_obj["step_index"] -= 1
                         shutil.move(pre_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + pre_img_name)
                         shutil.move(post_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + post_img_name)

@@ -45,19 +45,22 @@ class ScriptExecutor:
             'out_of_attempts' : False,
             'object_handler_encountered' : False
         }
+        print('update context : ', context["action_attempts"] if (context is not None and "action_attempts" in context) else 'none')
         if context is not None:
             self.context.update(context)
-
+        print('context (1) : ', self.context["action_attempts"])
         self.status = ScriptExecutionState.FINISHED
 
     def rewind(self, input_vars):
+        print('rewind context : ', self.context["action_attempts"])
         # print('input_vars : ', input_vars)
         # print('state (1.5) ', self.state)
         self.actions = self.action_rows[0]["actions"]
         self.status = ScriptExecutionState.FINISHED
-        self.state.update(input_vars)
+        self.context["action_attempts"] = [0] * len(self.actions)
+        if input_vars is not None:
+            self.state.update(input_vars)
         # print('state (2) : ', self.state)
-        time.sleep(0.5)
 
 
     def handle_action(self, action):
@@ -67,6 +70,7 @@ class ScriptExecutor:
               ' attempts: ', self.context["action_attempts"],
               ' outOfAttempts: ', self.context["out_of_attempts"])
         self.context["script_counter"] += 1
+        print(' context (2) : ', self.context["action_attempts"])
 
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
@@ -151,6 +155,9 @@ class ScriptExecutor:
                         if self.context["search_patterns"][
                             self.context["parent_action"]["actionData"]["searchPatternID"]
                         ]["stitcher_status"] != "STITCHER_OK":
+                            print('stiching failed, calling error handler ', self.context["search_patterns"][
+                                self.context["parent_action"]["actionData"]["searchPatternID"]
+                            ]["stitcher_status"])
                             ref_script_executor.run_one()
                         else:
                             ref_script_executor.status = ScriptExecutionState.FINISHED
@@ -227,6 +234,7 @@ class ScriptExecutor:
             print("script formatting error, targetSystem not present!")
             exit(0)
         # print('state (6) : ', self.state)
+        print(' context (3) : ', self.context["action_attempts"])
         return action
 
     def get_out_of_attempts_handlers(self, action):

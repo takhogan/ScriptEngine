@@ -37,6 +37,7 @@ class SearchPatternHelper:
                 delta_displacement = truncnorm.rvs(0.05, max_displacement, loc=max_displacement/2, scale=max_displacement/3)
                 new_theta = (math.sqrt(2) * math.sqrt(
                     2 * math.pi * (displacement + delta_displacement) - 1)) / math.sqrt(a)
+                print('new_theta ', new_theta)
                 new_r = direction * a * new_theta / (2 * math.pi)
                 return new_r * math.cos(new_theta), new_r * math.sin(new_theta), displacement + delta_displacement
 
@@ -99,7 +100,7 @@ class SearchPatternHelper:
         x_min = min(source_pt[0], target_pt[0])
         y_min = min(source_pt[1], target_pt[1])
         source_pt_fit = (source_pt[0] - x_min, source_pt[1] - y_min)
-        target_pt_fit = (target_pt[0] - x_min, source_pt[1] - y_min)
+        target_pt_fit = (target_pt[0] - x_min, target_pt[1] - y_min)
         x_diff = abs(source_pt[0] - target_pt[0])
         y_diff = abs(source_pt[1] - target_pt[1])
 
