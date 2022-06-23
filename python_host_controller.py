@@ -80,6 +80,11 @@ class python_host:
             ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
 
             return ScriptExecutionState.SUCCESS, state, context
+        elif action["actionName"] == "mouseScrollAction":
+            var_name = action["actionData"]["inputExpression"]
+            point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context)
+            pyautogui.scroll(action["actionData"]["scrollDistance"])
+            return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "keyboardAction":
             if action["actionData"]["isHotKey"] == 'isHotKey':
                 pyautogui.hotkey(*action["actionData"]["keyboardExpression"].split(","))
