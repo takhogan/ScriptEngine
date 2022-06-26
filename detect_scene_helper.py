@@ -10,8 +10,8 @@ class DetectSceneHelper:
 
     @staticmethod
     def get_match(sceneAction, screencap_im, dir_path, logs_path):
-        screencap_mask = cv2.imread(dir_path+ '/' + sceneAction["actionData"]["positiveExamples"][0]["mask"])
-        screencap_mask_single_channel = cv2.cvtColor(screencap_mask.copy(), cv2.COLOR_BGR2GRAY)
+        screencap_mask = sceneAction["actionData"]["positiveExamples"][0]["mask"]
+        screencap_mask_single_channel = sceneAction["actionData"]["positiveExamples"][0]["mask_single_channel"]
         mask_size = np.count_nonzero(screencap_mask_single_channel)
         # print(action['actionData']['img'])
         # print(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
@@ -19,9 +19,7 @@ class DetectSceneHelper:
         # print(screencap_im.shape)
         # print(screencap_mask.shape)
         screencap_masked = cv2.bitwise_and(screencap_im, screencap_mask)
-        screencap_compare = cv2.imread(
-            dir_path + '/' + sceneAction["actionData"]["positiveExamples"][0]["img"]
-        )
+        screencap_compare = sceneAction["actionData"]["positiveExamples"][0]["img"]
         ssim_coeff = masked_mse(screencap_masked, screencap_compare, mask_size * 3 * 255)
         cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-masked.png', screencap_masked)
         cv2.imwrite(logs_path + 'sim-score-' + str(ssim_coeff) + '-screencap-compare.png', screencap_compare)
@@ -36,8 +34,8 @@ class DetectSceneHelper:
         return [{
             'input_type': 'shape',
             'point': [0, 0],
-            'shape': screencap_mask_single_channel,
-            'height': screencap_mask_single_channel.shape[0],
-            'width': screencap_mask_single_channel[1],
+            'shape': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
+            'height': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].shape[0],
+            'width': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].shape[1],
             'score': ssim_coeff
         }], ssim_coeff

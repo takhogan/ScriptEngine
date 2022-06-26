@@ -8,16 +8,17 @@ class ImageMatcher:
         pass
 
     @staticmethod
-    def template_match(screencap_im_bgr, screencap_mask_bgr, screencap_search_bgr,
+    def template_match(screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr,
                        detector_name, logs_path, script_mode,match_point,
                        threshold=0.96, use_color=True, use_mask=True):
-        screencap_mask_gray = np.uint8(cv2.cvtColor(screencap_mask_bgr.copy(), cv2.COLOR_BGR2GRAY))
         # print(screencap_search.shape)
         if detector_name == "pixelDifference":
             matches, match_result, result_im_bgr = ImageMatcher.produce_template_matches(
                 screencap_im_bgr.copy(),
                 screencap_search_bgr.copy(),
-                screencap_mask_gray.copy(),
+                screencap_mask_gray,
+                screencap_outputmask_bgr,
+                screencap_outputmask_gray,
                 logs_path,
                 threshold=threshold,
                 use_color=use_color,
@@ -64,7 +65,7 @@ class ImageMatcher:
 
 
     @staticmethod
-    def produce_template_matches(screencap_im_bgr, screencap_search_bgr, screencap_mask_gray,
+    def produce_template_matches(screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr, screencap_outputmask_gray,
                                  logs_path, threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
         # https://docs.opencv.org/3.4/de/da9/tutorial_template_matching.html
         h, w = screencap_search_bgr.shape[0:2]
@@ -82,8 +83,8 @@ class ImageMatcher:
         # cv2.imshow('screencap_mask', screencap_mask)
         # cv2.waitKey(0)
         match_result = cv2.matchTemplate(
-            cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr.copy(),
-            cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr.copy(),
+            cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr,
+            cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
             cv2.TM_CCOEFF_NORMED,result=None,
             mask=screencap_mask_gray if use_mask else None)
         # match_result = 1 - match_result
@@ -102,7 +103,7 @@ class ImageMatcher:
         for pt in zip(*loc[::-1]):
             redundant = False
             match_score = match_result[pt[1], pt[0]]
-            match_img_bgr = screencap_im_bgr[pt[1]:pt[1] + h, pt[0]:pt[0] + w].copy()
+            match_img_bgr = cv2.bitwise_and(screencap_im_bgr[pt[1]:pt[1] + h, pt[0]:pt[0] + w].copy(), screencap_outputmask_bgr)
             if match_score == np.inf:
                 print(pt)
                 continue
