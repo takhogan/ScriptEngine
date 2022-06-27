@@ -126,21 +126,22 @@ class python_host:
             #     pass
             # else:
             #     screencap_im_bgr = cv2.resize(screencap_im_bgr, (self.props['width'], self.props['height']), interpolation=cv2.INTER_LINEAR)
-            screencap_mask_bgr = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
             # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
             # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
             # print(screencap_im.shape)
             # print(screencap_mask.shape)
 
-            screencap_search_bgr = cv2.imread(self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
+            screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
 
             # screencap_search_bgr = cv2.cvtColor(screencap_search.copy(), cv2.COLOR_RGB2BGR)
             if self.props["scriptMode"] == "train":
                 cv2.imwrite(logs_path + 'search_img.png', screencap_search_bgr)
             matches = self.image_matcher.template_match(
                 screencap_im_bgr,
-                screencap_mask_bgr,
                 screencap_search_bgr,
+                action["actionData"]["positiveExamples"][0]["mask_single_channel"],
+                action["actionData"]["positiveExamples"][0]["outputMask"],
+                action["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
                 action['actionData']['detectorName'],
                 logs_path,
                 self.props["scriptMode"],

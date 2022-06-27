@@ -2,13 +2,17 @@ import copy
 import json
 import sys
 
+import cv2
+
 sys.path.append(".")
 from script_execution_state import ScriptExecutionState
 from python_host_controller import python_host
 from adb_host_controller import adb_host
+from detect_object_helper import DetectObjectHelper
 import time
 import os
 import datetime
+import pytesseract
 
 
 class ScriptExecutor:
@@ -219,7 +223,12 @@ class ScriptExecutor:
                     else:
                         print('invalid mode: ', action)
                         self.status = ScriptExecutionState.ERROR
-
+                elif action["actionName"] == "imageToTextAction":
+                    if action["actionData"]["conversionEngine"] == "tesseractOCR":
+                        search_im, match_pt = DetectObjectHelper.get_detect_area(action, self.state)
+                        cv2.imshow('search_im', search_im)
+                        cv2.waitKey(0)
+                        # pytesseract.image_to_string()
                 else:
                     self.status = ScriptExecutionState.ERROR
                     print("action unimplemented ")

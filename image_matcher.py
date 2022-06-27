@@ -8,7 +8,7 @@ class ImageMatcher:
         pass
 
     @staticmethod
-    def template_match(screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr,
+    def template_match(screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr, screencap_outputmask_gray,
                        detector_name, logs_path, script_mode,match_point,
                        threshold=0.96, use_color=True, use_mask=True):
         # print(screencap_search.shape)
@@ -18,7 +18,6 @@ class ImageMatcher:
                 screencap_search_bgr.copy(),
                 screencap_mask_gray,
                 screencap_outputmask_bgr,
-                screencap_outputmask_gray,
                 logs_path,
                 threshold=threshold,
                 use_color=use_color,
@@ -33,7 +32,7 @@ class ImageMatcher:
             print("detector unimplemented! ")
             exit(0)
 
-        h, w = screencap_search_bgr.shape[0:2]
+        h, w = screencap_outputmask_gray.shape[0:2]
         # plt.imshow(match_result, cmap='gray')
         # plt.title('Matching Result'), plt.xticks([]), plt.yticks([])
         cv2.imwrite(logs_path + 'matching_overlay.png', result_im_bgr)
@@ -56,7 +55,7 @@ class ImageMatcher:
         return [{
                 'input_type': 'shape',
                 'point': (match[0] + match_point[0], match[1] + match_point[1]) if match_point is not None else match,
-                'shape': screencap_mask_gray,
+                'shape': screencap_outputmask_gray,
                 'matched_area': match_area,
                 'height': h,
                 'width': w,
@@ -65,7 +64,7 @@ class ImageMatcher:
 
 
     @staticmethod
-    def produce_template_matches(screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr, screencap_outputmask_gray,
+    def produce_template_matches(screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr,
                                  logs_path, threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
         # https://docs.opencv.org/3.4/de/da9/tutorial_template_matching.html
         h, w = screencap_search_bgr.shape[0:2]
