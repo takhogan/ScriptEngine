@@ -459,17 +459,6 @@ class adb_host:
             # else:
             #     screencap_im = cv2.resize(np.array(screencap_im_bgr), (self.props['width'], self.props['height']),
             #                               interpolation=cv2.INTER_LINEAR)
-            # print(screencap_im.shape)
-            # print((screencap_im_rgb))
-            # print(self.props['width'], self.props['height'])
-            # exit(0)
-            # screencap_im = cv2.cvtColor(screencap_im.copy(), cv2.COLOR_BGRA2BGR)
-            screencap_mask_bgr = action["actionData"]["positiveExamples"][0]["mask"]
-            # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
-            # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
-            # print(screencap_im.shape)
-            # print(screencap_mask.shape)
-            # exit(0)
 
             screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
             if self.props["scriptMode"] == "train":
@@ -479,6 +468,7 @@ class adb_host:
                 screencap_search_bgr,
                 action["actionData"]["positiveExamples"][0]["mask_single_channel"],
                 action["actionData"]["positiveExamples"][0]["outputMask"],
+                action["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
                 action['actionData']['detectorName'],
                 logs_path,
                 self.props["scriptMode"],
