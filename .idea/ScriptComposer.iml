@@ -27,8 +27,9 @@
       <excludeFolder url="file://$MODULE_DIR$/figs" />
       <excludeFolder url="file://$MODULE_DIR$/logs" />
       <excludeFolder url="file://$MODULE_DIR$/scripts" />
+      <excludeFolder url="file://$MODULE_DIR$/venv310" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="Python 3.10 (ScriptEngine)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PackageRequirementsSettings">
