@@ -23,6 +23,7 @@ from scipy.stats import truncnorm
 from click_action_helper import ClickActionHelper
 from detect_scene_helper import DetectSceneHelper
 from detect_object_helper import DetectObjectHelper
+from rv_helper import RandomVariableHelper
 
 class python_host:
     def __init__(self, props):
@@ -86,23 +87,53 @@ class python_host:
             pyautogui.scroll(action["actionData"]["scrollDistance"])
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "keyboardAction":
-            if action["actionData"]["isHotKey"] == 'isHotKey':
-                pyautogui.hotkey(*action["actionData"]["keyboardExpression"].split(","))
-            else:
-                is_escaped_char = False
-                escaped_char = ''
-                for char_index,expression_char in enumerate(action["actionData"]["keyboardExpression"]):
-                    if is_escaped_char:
-                        if expression_char == '}':
-                            is_escaped_char = False
-                            pyautogui.press(escaped_char)
-                            escaped_char = ''
+            if action["actionData"]["keyboardActionType"] == "keyPress":
+                if action["actionData"]["isHotKey"] == 'isHotKey':
+                    pyautogui.hotkey(*action["actionData"]["keyboardExpression"].split(","))
+                else:
+                    is_escaped_char = False
+                    escaped_char = ''
+                    for char_index,expression_char in enumerate(action["actionData"]["keyboardExpression"]):
+                        if is_escaped_char:
+                            if expression_char == '}':
+                                is_escaped_char = False
+                                pyautogui.press(escaped_char)
+                                escaped_char = ''
+                            else:
+                                escaped_char += expression_char
+                        elif expression_char == '{':
+                            is_escaped_char = True
                         else:
-                            escaped_char += expression_char
-                    elif expression_char == '{':
-                        is_escaped_char = True
-                    else:
-                        pyautogui.press(expression_char)
+                            pyautogui.press(expression_char)
+            elif action["actionData"]["keyboardActionType"] == "keyPressAndHold":
+                if action["actionData"]["isHotKey"] == 'isHotKey':
+                    hotKeyKeys = action["actionData"]["keyboardExpression"].split(",")
+                    for hotKeyKey in hotKeyKeys:
+                        pyautogui.keyDown(hotKeyKey)
+                    time.sleep(RandomVariableHelper.get_rv_val(action))
+                    for hotKeyKey in reversed(hotKeyKeys):
+                        pyautogui.keyUp(hotKeyKey)
+                else:
+                    is_escaped_char = False
+                    escaped_char = ''
+                    keyPressKeys = []
+                    for char_index,expression_char in enumerate(action["actionData"]["keyboardExpression"]):
+                        if is_escaped_char:
+                            if expression_char == '}':
+                                is_escaped_char = False
+                                keyPressKeys.append(escaped_char)
+                                escaped_char = ''
+                            else:
+                                escaped_char += expression_char
+                        elif expression_char == '{':
+                            is_escaped_char = True
+                        else:
+                            keyPressKeys.append(expression_char)
+                    for keyPressKey in keyPressKeys:
+                        pyautogui.keyDown(keyPressKey)
+                    time.sleep(RandomVariableHelper.get_rv_val(action))
+                    for keyPressKey in keyPressKeys:
+                        pyautogui.keyUp(keyPressKey)
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "detectScene":
             screencap_im = self.screenshot()
@@ -156,17 +187,8 @@ class python_host:
                 return ScriptExecutionState.FAILURE, state, context
 
         elif action["actionName"] == "randomVariable":
-            if action["actionData"]["distType"] == 'normal':
-                mean = action["actionData"]["mean"]
-                stddev = action["actionData"]["stddev"]
-                mins = (action["actionData"]["min"] - mean) / stddev
-                maxes = (action["actionData"]["max"] - mean) / stddev
-                delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)
-                print(delays)
-                state[action["actionData"]["outputVarName"]] = delays
-            else:
-                print('random variable unimplemented: ' + action["actionData"]["distType"])
-                exit(0)
+            delays = RandomVariableHelper.get_rv_val(action)
+            state[action["actionData"]["outputVarName"]] = delays
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
