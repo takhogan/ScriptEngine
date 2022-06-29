@@ -228,7 +228,9 @@ class ScriptExecutor:
                         search_im, match_pt = DetectObjectHelper.get_detect_area(action, self.state)
                         cv2.imshow('search_im', search_im)
                         cv2.waitKey(0)
-                        # pytesseract.image_to_string()
+
+                        print(pytesseract.image_to_string(search_im))
+                        exit(0)
                 else:
                     self.status = ScriptExecutionState.ERROR
                     print("action unimplemented ")
