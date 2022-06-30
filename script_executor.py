@@ -49,14 +49,14 @@ class ScriptExecutor:
             'out_of_attempts' : False,
             'object_handler_encountered' : False
         }
-        print('update context : ', context["action_attempts"] if (context is not None and "action_attempts" in context) else 'none')
+        # print('update context : ', context["action_attempts"] if (context is not None and "action_attempts" in context) else 'none')
         if context is not None:
             self.context.update(context)
-        print('context (1) : ', self.context["action_attempts"])
+        # print('context (1) : ', self.context["action_attempts"])
         self.status = ScriptExecutionState.FINISHED
 
     def rewind(self, input_vars):
-        print('rewind context : ', self.context["action_attempts"])
+        # print('rewind context : ', self.context["action_attempts"])
         # print('input_vars : ', input_vars)
         # print('state (1.5) ', self.state)
         self.actions = self.action_rows[0]["actions"]
@@ -74,7 +74,7 @@ class ScriptExecutor:
               ' attempts: ', self.context["action_attempts"],
               ' outOfAttempts: ', self.context["out_of_attempts"])
         self.context["script_counter"] += 1
-        print(' context (2) : ', self.context["action_attempts"])
+        # print(' context (2) : ', self.context["action_attempts"])
 
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
@@ -208,7 +208,13 @@ class ScriptExecutor:
                         expression = json.loads(action["actionData"]["inputExpression"])
                     # print(' state (5) ', self.state)
                     # print(' expression : ', expression, ', ', type(expression))
-                    self.state[action["actionData"]["outputVarName"]] = expression
+                    if '[' in action["actionData"]["outputVarName"] and ']' in action["actionData"]["outputVarName"]:
+                        target_obj_split = action["actionData"]["outputVarName"].split('[')
+                        target_obj = target_obj_split[0]
+                        target_obj_attr = target_obj_split[1].split(']')[0]
+                        self.state[target_obj][eval(target_obj_attr, self.state.copy())] = expression
+                    else:
+                        self.state[action["actionData"]["outputVarName"]] = expression
                     # print(' state (6) : ', self.state)
                     self.status = ScriptExecutionState.SUCCESS
                 elif action["actionName"] == "jsonFileAction":
@@ -217,6 +223,7 @@ class ScriptExecutor:
                             self.state[action["actionData"]["varName"]] = json.load(read_file)
                         self.status = ScriptExecutionState.SUCCESS
                     elif action["actionData"]["mode"] == "write":
+                        print('writing file: ', self.state[action["actionData"]["varName"]])
                         with open(self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"], 'w') as write_file:
                             json.dump(self.state[action["actionData"]["varName"]], write_file)
                         self.status = ScriptExecutionState.SUCCESS
@@ -226,11 +233,17 @@ class ScriptExecutor:
                 elif action["actionName"] == "imageToTextAction":
                     if action["actionData"]["conversionEngine"] == "tesseractOCR":
                         search_im, match_pt = DetectObjectHelper.get_detect_area(action, self.state)
-                        cv2.imshow('search_im', search_im)
-                        cv2.waitKey(0)
 
-                        print(pytesseract.image_to_string(search_im))
-                        exit(0)
+
+                        output_text = pytesseract.image_to_string(
+                            search_im,
+                            config='-c ' + (
+                                ('tessedit_char_whitelist=' + action["actionData"]["characterWhiteList"]) if len(action["actionData"]["characterWhiteList"]) > 0 else ''
+                            )
+                        )
+                        print(output_text)
+                        self.state[action["actionData"]["outputVarName"]] = output_text
+                        self.status = ScriptExecutionState.SUCCESS
                 else:
                     self.status = ScriptExecutionState.ERROR
                     print("action unimplemented ")
@@ -245,7 +258,7 @@ class ScriptExecutor:
             print("script formatting error, targetSystem not present!")
             exit(0)
         # print('state (6) : ', self.state)
-        print(' context (3) : ', self.context["action_attempts"])
+        # print(' context (3) : ', self.context["action_attempts"])
         return action
 
     def get_out_of_attempts_handlers(self, action):
