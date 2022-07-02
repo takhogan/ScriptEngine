@@ -44,6 +44,9 @@ class ScriptExecutor:
             'child_actions': None,
             'script_attributes': set(),
             'script_counter': 0,
+            'run_depth' : 0,
+            'branching_behavior' : 'firstMatch',
+            'run_type' : 'run',
             'search_patterns': {},
             'action_attempts' : [0] * len(script_obj["actionRows"][0]["actions"]),
             'out_of_attempts' : False,
@@ -75,7 +78,7 @@ class ScriptExecutor:
 
     def handle_action(self, action):
         print(self.props["script_name"], ' ', action["actionData"]["targetSystem"],
-              ' action : ', action["actionName"],
+              ' action : ', action["actionName"] + '-' + str(action["actionGroup"]),
               ' children: ', list(map(lambda action: action["actionGroup"], self.get_children(action))),
               ' attempts: ', self.context["action_attempts"],
               ' outOfAttempts: ', self.context["out_of_attempts"])
@@ -94,7 +97,9 @@ class ScriptExecutor:
                     if is_new_script:
                         # print('self.context: ', self.context)
                         child_context = {
-                            'script_attributes': self.context["script_attributes"].copy()
+                            "script_attributes" : self.context["script_attributes"].copy(),
+                            "run_type" : action["actionData"]["runMode"],
+                            "branching_behavior" : action["actionData"]["branchingBehavior"]
                         }
                         # print("source: ", action["actionData"]["scriptAttributes"], " target: ", child_context["script_attributes"])
                         child_context["script_attributes"].update(action["actionData"]["scriptAttributes"])
@@ -165,17 +170,22 @@ class ScriptExecutor:
                         if self.context["search_patterns"][
                             self.context["parent_action"]["actionData"]["searchPatternID"]
                         ]["stitcher_status"] != "STITCHER_OK":
-                            print('stiching failed, calling error handler ', self.context["search_patterns"][
-                                self.context["parent_action"]["actionData"]["searchPatternID"]
-                            ]["stitcher_status"])
-                            ref_script_executor.run_one()
+                            pass
                         else:
-                            ref_script_executor.status = ScriptExecutionState.FINISHED
-                    else:
-                        if self.context["run_type"] == "run":
-                            ref_script_executor.run_one()
-                        elif self.context["run_type"] == "run_one":
-                            ref_script_executor.run_to_failure()
+                            ref_script_executor.status = ScriptExecutionState.RETURN
+                            return
+
+                    # print('runMode: ', action["actionData"]["runMode"])
+                    if action["actionData"]["runMode"] == "run":
+                        ref_script_executor.run()
+                    elif action["actionData"]["runMode"] == "runOne":
+                        ref_script_executor.run_one()
+                    elif action["actionData"]["runMode"] == "runToFailure":
+                        ref_script_executor.run_to_failure()
+
+                    parsed_output_vars = list(filter(lambda input_vars: input_vars != '', action["actionData"]["outputVars"].split(",")))
+                    for output_var in parsed_output_vars:
+                        self.state[output_var] = ref_script_executor.state[output_var]
 
                     if is_object_handler:
                         self.status = ScriptExecutionState.RETURN
@@ -268,8 +278,17 @@ class ScriptExecutor:
         return action
 
     def get_out_of_attempts_handler(self, action):
-        out_of_attempts_link = list(filter(lambda childGroupLink: childGroupLink == "outOfAttemptsHandler", action["childGroups"]))[0]
-        return self.action_rows[out_of_attempts_link["destRowIndex"]]["actions"][out_of_attempts_link["destActionIndex"]],out_of_attempts_link
+        if action is None:
+            return None,None
+        # print(action["childGroups"])
+        # print(list(filter(lambda childGroupLink: childGroupLink["type"] == "outOfAttemptsHandler", action["childGroups"])))
+        out_of_attempts_link = list(filter(lambda childGroupLink: childGroupLink["type"] == "outOfAttemptsHandler", action["childGroups"]))
+        # print('link : ', out_of_attempts_link)
+        if len(out_of_attempts_link) > 0:
+            out_of_attempts_link = out_of_attempts_link[0]
+            return self.action_rows[out_of_attempts_link["destRowIndex"]]["actions"][out_of_attempts_link["destActionIndex"]],out_of_attempts_link
+        else:
+            return None,None
 
 
     def get_children(self, action):
@@ -345,19 +364,31 @@ class ScriptExecutor:
             self.status = ScriptExecutionState.FINISHED
 
     def handle_out_of_attempts_check(self):
-        if self.context["out_of_attempts_action"] is None:
-            out_of_attempts_handler,out_of_attempts_link = self.get_out_of_attempts_handler(self.context['parent_action'])
+        out_of_attempts_handler,out_of_attempts_link = self.get_out_of_attempts_handler(self.context['parent_action'])
+        # print('handler : ', out_of_attempts_handler)
+        if out_of_attempts_handler is not None:
             self.context["out_of_attempts_action"] = {
                 "action" : out_of_attempts_handler,
                 "link" : out_of_attempts_link
             }
-        if self.context["action_attempts"][0] > self.context["out_of_attempts_action"]["link"]["type_payload"]:
+        else:
+            self.context["out_of_attempts"] = False
+            return
+        if self.context["action_attempts"][0] > self.context["out_of_attempts_action"]["link"]["typePayload"]:
             self.actions = [self.context["out_of_attempts_action"]["action"]]
             self.context["action_attempts"] = [0]
             self.context["action_index"] = 0
             self.context["out_of_attempts"] = True
         else:
             self.context["out_of_attempts"] = False
+
+    def should_continue_on_failure(self):
+        if self.context["run_type"] == "runOne" and self.context["run_depth"] == 1:
+            return False
+        elif self.context["run_type"] == "runToFailure":
+            return False
+        else:
+            return True
 
     def handle_branch(self):
         self.handle_out_of_attempts_check()
@@ -381,7 +412,10 @@ class ScriptExecutor:
         elif self.status == ScriptExecutionState.FAILURE:
             # if self.context["object_handler_encountered"]:
             #     self.status = ScriptExecutionState.FINISHED_FAILURE
-            self.handle_branch()
+            if self.should_continue_on_failure():
+                self.handle_branch()
+            else:
+                return
         elif self.status == ScriptExecutionState.RETURN:
             self.status = ScriptExecutionState.RETURN
             return
@@ -399,6 +433,7 @@ class ScriptExecutor:
         # if 'attemptAllBranches' in self.context["script_attributes"]:
         branches = [[action, self.state.copy(), self.context.copy()] for action in self.actions]
         # self.context['run']
+        self.context["run_depth"] += 1
         for branch in branches:
             new_context = branch[2]
             new_context["action_attempts"] = [0]
@@ -414,26 +449,31 @@ class ScriptExecutor:
         # run queue will be a list of actions and the associated params that should persist
 
     def run_to_failure(self, log_level=None):
-        self.context["run_type"] = "run_to_failure"
+        print("runMode: runToFailure ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
-        while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR and self.status != ScriptExecutionState.FAILURE:
-            self.execute_actions()
-            # print(self.status, ' status ')
-            self.check_if_done()
+        if self.context["branching_behavior"] == "firstMatch":
+            while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR and self.status != ScriptExecutionState.FAILURE:
+                self.execute_actions()
+                # print(self.status, ' status ')
+                self.check_if_done()
+        elif self.context["branching_behavior"] == "attemptAllBranches":
+            self.run_all_branches(log_level)
+
+
 
     def run_one(self, log_level=None):
-        self.context["run_type"] = "run_one"
+        print("runMode: runOne ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
-        if 'attemptAllBranches' in self.context["scriptAttributes"]:
-            # self.run_all_branches()
-        else:
+        if self.context["branching_behavior"] == "firstMatch":
             self.execute_actions()
             if self.status == ScriptExecutionState.STARTING:
                 self.run(log_level)
+        elif self.context["branching_behavior"] == "attemptAllBranches":
+            self.run_all_branches(log_level)
 
 
 
@@ -441,16 +481,18 @@ class ScriptExecutor:
     # json will be manually editable
 
     def run(self, log_level=None):
-        self.context["run_type"] = "run"
+        print("runMode: run ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
-        if 'attemptAllBranches' in self.context["scriptAttributes"]:
-            self.run_all_branches()
-        else:
+        if self.context["branching_behavior"] == "firstMatch":
             while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR:
                 self.execute_actions()
                 self.check_if_done()
+        elif self.context["branching_behavior"] == "attemptAllBranches":
+            self.run_all_branches(log_level)
+
+
 
 
 

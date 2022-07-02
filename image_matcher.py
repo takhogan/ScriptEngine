@@ -81,6 +81,10 @@ class ImageMatcher:
         # cv2.waitKey(0)
         # cv2.imshow('screencap_mask', screencap_mask)
         # cv2.waitKey(0)
+        # cv2.imshow('screencap_im', screencap_im_bgr)
+        # cv2.waitKey(0)
+        # cv2.imshow('screencap_search', screencap_search_bgr)
+        # cv2.waitKey(0)
         match_result = cv2.matchTemplate(
             cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr,
             cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
