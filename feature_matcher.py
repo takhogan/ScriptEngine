@@ -24,19 +24,23 @@ class FeatureMatcher:
                             key_size=12,
                             multi_probe_level=2)
         search_params = {}
-        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-        matches = bf.knnMatch(des1, des2, k=2)
+        bf = cv2.BFMatcher()
+        # print(des2.dtype)
+        # exit(0)
+        matches = bf.match(des1, des2)
         matches = sorted(matches, key=lambda x: x.distance)
-        print(' matches : ', list(map(len, matches)))
+        # print(matches)
+        # exit(0)
+        # print(' matches : ', list(map(len, matches)))
         # As per Lowe's ratio test to filter good matches
         good_matches = []
         for match_pair in matches:
-            if len(match_pair) == 2:
-                if match_pair[0].distance < 1 * match_pair[1].distance:
-                    good_matches.append(match_pair[0])
-        print(len(good_matches))
+            # if len(match_pair) == 2:
+            #     if match_pair[0].distance < 1 * match_pair[1].distance:
+                    good_matches.append(match_pair)
+        # print(len(good_matches))
         start_red = 255
-        for good_match in good_matches:
+        for good_match in good_matches[:10]:
             screencap_img_idx = kp1[good_match.queryIdx].pt
             search_img_idx = kp2[good_match.trainIdx].pt
             cv2.circle(img1, list(map(int, screencap_img_idx)), radius=5, color=(0, 0, start_red), thickness=-1)
@@ -61,7 +65,10 @@ class FeatureMatcher:
     if __name__ == "__main__":
 
         im1 = cv2.imread(r'C:\Users\takho\ScriptEngine\scripts\lvl30Castle\actions\0-row\0-detectObject\assets\positiveExamples\0-img.png')
+        im1 = np.uint8(cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY))
+        im1[im1 == 0] = 255
         im2 = cv2.imread(r'C:\Users\takho\ScriptEngine\logs\realmScanner-2022-07-02 11-22-11\detectCastleHandler-2022-07-02 11-22-32\5-matching_overlay.png')
+        im2 = np.uint8(cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
 
         img = get_corrected_img(im2, im1)
         cv2.imshow('Corrected image', img)
