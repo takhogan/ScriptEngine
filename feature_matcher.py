@@ -2,6 +2,7 @@ import argparse
 
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class FeatureMatcher:
@@ -70,6 +71,61 @@ class FeatureMatcher:
         im2 = cv2.imread(r'C:\Users\takho\ScriptEngine\logs\realmScanner-2022-07-02 11-22-11\detectCastleHandler-2022-07-02 11-22-32\5-matching_overlay.png')
         im2 = np.uint8(cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY))
 
-        img = get_corrected_img(im2, im1)
-        cv2.imshow('Corrected image', img)
-        cv2.waitKey(0)
+        template_height,template_width = im1.shape
+        input_squares = [[[98.125,192],
+        [102.75, 105]],
+        [[394.125, 346.5],
+        [116.25,118.125]],
+        [[145.875, 467.25],
+        [127.5, 132.75]]]
+
+        source_pts = []
+        dest_pts = []
+        sizes = []
+        x_coords = []
+        widths = []
+        y_coords = []
+        heights = []
+        for input_square in input_squares:
+            [[x, y],[w,h]] = input_square
+
+            source_pts.append([0,0])
+            source_pts.append([0, template_height])
+            source_pts.append([template_width, 0])
+            source_pts.append([template_width, template_height])
+
+            dest_pts.append([x, y - h])
+            dest_pts.append([x, y])
+            dest_pts.append([x + w, y - h])
+            dest_pts.append([x + w, y])
+            x_coords.append(x)
+            # x_coords.append(x + w)
+            widths.append(w)
+            # widths.append(w)
+
+            y_coords.append(y)
+            heights.append(h)
+            # y_coords.append(y - h)
+            sizes.append(w)
+
+        print(source_pts)
+        print(dest_pts)
+
+        source_pts = np.array(source_pts)
+        dest_pts = np.array(dest_pts)
+
+        h, status = cv2.findHomography(source_pts, dest_pts)
+        print(np.dot(h, np.array([0,0,1])))
+        print(x_coords)
+        print(y_coords)
+        print(widths)
+        print(heights)
+        # plt.plot(y_coords, widths)
+        # plt.show()
+        # cv2.waitKey(0)
+        # plt.plot(y_coords, heights)
+        # plt.show()
+
+        # img = get_corrected_img(im2, im1)
+        # cv2.imshow('Corrected image', img)
+        # cv2.waitKey(0)
