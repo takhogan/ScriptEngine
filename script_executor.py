@@ -253,9 +253,8 @@ class ScriptExecutor:
 
                         output_text = pytesseract.image_to_string(
                             search_im,
-                            config='-c ' + (
-                                ('tessedit_char_whitelist=' + action["actionData"]["characterWhiteList"]) if len(action["actionData"]["characterWhiteList"]) > 0 else ''
-                            )
+                            config=('-c tessedit_char_whitelist=' + action["actionData"]["characterWhiteList"]) if len(action["actionData"]["characterWhiteList"]) > 0 else ''
+
                         )
                         print(output_text)
                         self.state[action["actionData"]["outputVarName"]] = output_text
