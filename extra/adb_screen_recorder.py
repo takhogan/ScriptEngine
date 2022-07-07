@@ -145,6 +145,7 @@ class RecordingThread(threading.Thread):
 
     def run(self):
         recording_codec = 'mp42'
+        os.makedirs('./data', exist_ok=True)
         out_writer = cv2.VideoWriter("./data/output.mp4", cv2.VideoWriter_fourcc(*recording_codec), 8.0,
                                      (self.width, self.height))
         print('recording...')
