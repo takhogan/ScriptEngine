@@ -9,6 +9,7 @@ from script_execution_state import ScriptExecutionState
 from python_host_controller import python_host
 from adb_host_controller import adb_host
 from detect_object_helper import DetectObjectHelper
+from script_engine_utils import generate_context_switch_action
 import time
 import os
 import datetime
@@ -274,7 +275,14 @@ class ScriptExecutor:
             exit(0)
         # print('state (6) : ', self.state)
         # print(' context (3) : ', self.context["action_attempts"])
+
+        self.post_handle_action()
         return action
+
+    def post_handle_action(self):
+        if self.context['run_queue'] is not None:
+            self.run_queue += self.context['run_queue']
+            self.context['run_queue'] = None
 
     def get_out_of_attempts_handler(self, action):
         if action is None:
@@ -302,11 +310,25 @@ class ScriptExecutor:
     def handle_post_execution(self, action):
         pass
 
+    #if it is handle all branches then you take the first branch and for the rest you create a context switch action
     def execute_actions(self):
         self.handle_out_of_attempts_check()
         n_actions = len(self.actions)
         is_return = False
         # print('execute_actions : ', self.actions)
+
+        if self.context["branching_behavior"] == "firstMatch":
+            pass
+        elif self.context["branching_behavior"] == "attemptAllBranches" and len(self.actions) > 1:
+            state_copy = self.state.copy()
+            context_copy = self.context.copy()
+            for action in self.actions[1:]:
+                self.run_queue.append(
+                    generate_context_switch_action(action["childGroups"], state_copy, context_copy, {})
+                )
+            self.actions = [self.actions[0]]
+            n_actions = 1
+
         for action_index in range(0, n_actions):
             self.context["action_index"] = action_index
             action = self.actions[action_index]
@@ -359,8 +381,11 @@ class ScriptExecutor:
             self.status = ScriptExecutionState.RETURN
 
     def check_if_done(self):
-        if len(self.actions) == 0:
+        if len(self.actions) == 0 and len(self.run_queue) == 0:
             self.status = ScriptExecutionState.FINISHED
+            return
+        if len(self.run_queue) > 0:
+            self.actions.append(self.run_queue.pop())
 
     def handle_out_of_attempts_check(self):
         out_of_attempts_handler,out_of_attempts_link = self.get_out_of_attempts_handler(self.context['parent_action'])
@@ -452,13 +477,10 @@ class ScriptExecutor:
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
-        if self.context["branching_behavior"] == "firstMatch":
-            while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR and self.status != ScriptExecutionState.FAILURE:
-                self.execute_actions()
-                # print(self.status, ' status ')
-                self.check_if_done()
-        elif self.context["branching_behavior"] == "attemptAllBranches":
-            self.run_all_branches(log_level)
+        while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR and self.status != ScriptExecutionState.FAILURE:
+            self.execute_actions()
+            # print(self.status, ' status ')
+            self.check_if_done()
 
 
 
@@ -467,12 +489,9 @@ class ScriptExecutor:
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
-        if self.context["branching_behavior"] == "firstMatch":
-            self.execute_actions()
-            if self.status == ScriptExecutionState.STARTING:
-                self.run(log_level)
-        elif self.context["branching_behavior"] == "attemptAllBranches":
-            self.run_all_branches(log_level)
+        self.execute_actions()
+        if self.status == ScriptExecutionState.STARTING:
+            self.run(log_level)
 
 
 
@@ -484,12 +503,10 @@ class ScriptExecutor:
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
-        if self.context["branching_behavior"] == "firstMatch":
-            while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR:
-                self.execute_actions()
-                self.check_if_done()
-        elif self.context["branching_behavior"] == "attemptAllBranches":
-            self.run_all_branches(log_level)
+        while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR:
+            self.execute_actions()
+            self.check_if_done()
+
 
 
 

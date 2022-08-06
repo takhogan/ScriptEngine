@@ -2,6 +2,19 @@
 import math
 import numpy as np
 
+
+def generate_context_switch_action(childGroups, state, context, update_dict):
+    return {
+        "actionName" : "contextSwitchAction",
+        "targetSystem" : "none",
+        "childGroups" : childGroups,
+        "actionData" : {
+            "state" : state,
+            "context" : context,
+            "update_dict" : update_dict
+        }
+    }
+
 def masked_mse(target_im, compare_im, mask_size):
     return 1 - np.sum(np.square(np.subtract(target_im, compare_im))) / mask_size
 

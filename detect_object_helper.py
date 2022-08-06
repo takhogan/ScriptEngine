@@ -1,3 +1,5 @@
+from script_engine_utils import generate_context_switch_action
+
 class DetectObjectHelper:
     def __init__(self):
         pass
@@ -27,3 +29,18 @@ class DetectObjectHelper:
                             input_area["point"][1]
                         )
         return screencap_im_bgr, match_point
+
+    @staticmethod
+    def append_to_run_queue(action, state, context, matches):
+        state_copy = state.copy()
+        context_copy = context.copy()
+        for match in matches[1:action["actionData"]["maxMatches"]]:
+            context["run_queue"].append(
+                generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
+                    "state": {
+                        action['actionData']['outputVarName']: [match]
+                    }
+                })
+            )
+        state[action['actionData']['outputVarName']] = [matches[0]]
+        return state, context
