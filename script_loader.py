@@ -16,7 +16,7 @@ def parse_script_file(action_rows_file_obj, props_file_obj, dir_path):
         for action in action_row["actions"]:
             detect_type_action = action["actionName"] in {
                 "clickAction",
-                "mouseScrollAction"
+                "mouseScrollAction",
                 "declareScene",
                 "dragLocationSource",
                 "dragLocationTarget",

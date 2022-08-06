@@ -1,5 +1,6 @@
 import copy
 import json
+import shlex
 import sys
 
 import cv2
@@ -52,7 +53,8 @@ class ScriptExecutor:
             'action_attempts' : [0] * len(script_obj["actionRows"][0]["actions"]),
             'out_of_attempts' : False,
             'out_of_attempts_action' : None,
-            'object_handler_encountered' : False
+            'object_handler_encountered' : False,
+            'run_queue' : None
         }
         # print('update context : ', context["action_attempts"] if (context is not None and "action_attempts" in context) else 'none')
         if context is not None:
@@ -254,7 +256,7 @@ class ScriptExecutor:
 
                         output_text = pytesseract.image_to_string(
                             search_im,
-                            config=('-c tessedit_char_whitelist=' + action["actionData"]["characterWhiteList"]) if len(action["actionData"]["characterWhiteList"]) > 0 else ''
+                            config=('-c tessedit_char_whitelist={}'.format(shlex.quote(action["actionData"]["characterWhiteList"]))) if len(action["actionData"]["characterWhiteList"]) > 0 else ''
 
                         )
                         print(output_text)

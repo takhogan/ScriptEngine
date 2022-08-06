@@ -34,6 +34,8 @@ class DetectObjectHelper:
     def append_to_run_queue(action, state, context, matches):
         state_copy = state.copy()
         context_copy = context.copy()
+        if len(matches) > 1 and context["run_queue"] is None:
+            context["run_queue"] = []
         for match in matches[1:action["actionData"]["maxMatches"]]:
             context["run_queue"].append(
                 generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
