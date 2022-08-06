@@ -24,6 +24,7 @@ from click_action_helper import ClickActionHelper
 from detect_scene_helper import DetectSceneHelper
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
+from script_engine_utils import generate_context_switch_action
 
 class python_host:
     def __init__(self, props):
@@ -168,6 +169,7 @@ class python_host:
             if self.props["scriptMode"] == "train":
                 cv2.imwrite(logs_path + 'search_img.png', screencap_search_bgr)
             matches = self.image_matcher.template_match(
+                action,
                 screencap_im_bgr,
                 screencap_search_bgr,
                 action["actionData"]["positiveExamples"][0]["mask_single_channel"],
@@ -180,8 +182,8 @@ class python_host:
                 threshold=float(action["actionData"]["threshold"])
             )
             if len(matches) > 0:
+                state, context = DetectObjectHelper.append_to_run_queue(action, state, context, matches)
 
-                state[action['actionData']['outputVarName']] = matches[:action["actionData"]["maxMatches"]]
                 return ScriptExecutionState.SUCCESS, state, context
             else:
                 return ScriptExecutionState.FAILURE, state, context

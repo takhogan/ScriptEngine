@@ -42,7 +42,6 @@ def parse_script_file(action_rows_file_obj, props_file_obj, dir_path):
 
 
 
-
     with props_file_obj as props_file:
         props = json.load(props_file)
     return {

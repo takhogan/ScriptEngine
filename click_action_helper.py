@@ -1,6 +1,7 @@
 import random
 import numpy as np
 import cv2
+from script_run_obj import ScriptRun
 
 class ClickActionHelper:
     def __init__(self):
@@ -15,8 +16,12 @@ class ClickActionHelper:
                 # potentially for loop here
                 next_input_points = input_points[1:]
                 input_point = input_points[0]
-                if len(next_input_points) > 0:
-                    context["replay_stack"].append(action)
+                # if len(next_input_points) > 0:
+                #     context["run_queue"].append(
+                #         ScriptRun(state, context, {
+                #
+                #         }, action)
+                #     )
                 state[var_name] = next_input_points
                 if input_point["input_type"] == "rectangle":
                     width_coord = random.random() * input_point["width"]

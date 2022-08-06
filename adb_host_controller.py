@@ -464,6 +464,7 @@ class adb_host:
             if self.props["scriptMode"] == "train":
                 cv2.imwrite(logs_path + 'search_img.png', screencap_search_bgr)
             matches = self.image_matcher.template_match(
+                action,
                 screencap_im_bgr,
                 screencap_search_bgr,
                 action["actionData"]["positiveExamples"][0]["mask_single_channel"],
@@ -478,7 +479,7 @@ class adb_host:
             # exit(0)
             if len(matches) > 0:
                 # print(matches)
-                state[action['actionData']['outputVarName']] = matches[:action["actionData"]["maxMatches"]]
+                state, context = DetectObjectHelper.append_to_run_queue(action, state, context, matches)
                 return ScriptExecutionState.SUCCESS, state, context
             else:
                 return ScriptExecutionState.FAILURE, state, context
