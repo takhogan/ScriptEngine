@@ -99,7 +99,7 @@ def check_and_execute_active_tasks(service, calendar_id, running_scripts):
         if event['summary'] not in running_scripts:
             event_process = multiprocessing.Process(
                 target=run_script_sequence,
-                args=(event['description'].split('\n'),)
+                args=(event['description'].split('\n'), event['end']['dateTime'])
             )
             event_process.start()
             running_scripts[event['summary']] = {}

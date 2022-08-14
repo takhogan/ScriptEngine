@@ -5,16 +5,16 @@ from script_loader import parse_zip
 from script_executor import ScriptExecutor
 
 
-def run_script_sequence(script_sequence):
+def run_script_sequence(script_sequence, timeout):
     for script in script_sequence:
-        load_and_run(script)
+        load_and_run(script, timeout)
 
 
-def load_and_run(script_name):
+def load_and_run(script_name, timeout):
     # if you want to open zip then you pass .zip in command line args
     script_object = parse_zip('./scripts/' + script_name)
     # print(script_object)
-    main_script = ScriptExecutor(script_object)
+    main_script = ScriptExecutor(script_object, timeout)
     main_script.run(log_level='INFO')
 
 
