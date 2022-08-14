@@ -6,3 +6,5 @@ logs/
 data/
 venv/
 scripts/
+credentials.json
+token.json
