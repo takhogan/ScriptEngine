@@ -76,7 +76,7 @@ class python_host:
                     delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev) if action["actionData"]["clickCount"] > 1 else [truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]
 
             for click_count in range(0, action["actionData"]["clickCount"]):
-                pyautogui.click(point_choice)
+                pyautogui.click(x=point_choice[0], y=point_choice[1], button=action['actionData']['mouseButton'])
                 time.sleep(delays[click_count])
 
             ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)

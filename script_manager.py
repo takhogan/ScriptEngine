@@ -1,24 +1,103 @@
 import sys
+import random
+import time
+
+import datetime
 
 sys.path.append(".")
 from script_loader import parse_zip
 from script_executor import ScriptExecutor
 
 
-def run_script_sequence(script_sequence):
-    for script in script_sequence:
-        load_and_run(script)
+def run_script_sequence(script_sequence, sequences, timeout):
+    def parse_delay_command(delay_obj):
+        rand_val = random.random()
+        delay_range_repr = script_sequence['commands'][delay_obj][1:-1].split(',')
+        delay_range_repr = [int(delay_range_repr[0]), int(delay_range_repr[1])]
+        delay_range = delay_range_repr[1] - delay_range_repr[0]
+        delay_val = delay_range_repr[0] + rand_val * delay_range
+        time.sleep(delay_val)
+
+    if 'dropoutChance' in script_sequence['commands']:
+        dropoutRoll = random.random()
+        if dropoutRoll < float(script_sequence['commands']['dropoutChance']):
+            return
+
+    if 'startDelay' in script_sequence['commands']:
+        parse_delay_command(script_sequence['commands']['startDelay'])
 
 
-def load_and_run(script_name):
+    for script in script_sequence['sequence']:
+        if script in sequences:
+            run_script_sequence(sequences[script], sequences, timeout)
+        else:
+            load_and_run(script, timeout)
+
+
+def parse_script_sequence_def(script_sequence_def):
+    is_sequence_def = False
+    sequence_name = None
+    sequences = {}
+    main_sequence = {
+        'sequence': [],
+        'constants': {},
+        'commands': {}
+    }
+    for line in script_sequence_def:
+        if line[-1] == ':':
+            is_sequence_def = True
+            sequence_name = line[:-1]
+            sequences[sequence_name] = {
+                'sequence': [],
+                'commands': {},
+                'constants': {}
+            }
+        if line[0] != '\t':
+            is_sequence_def = False
+
+        if is_sequence_def:
+            if line[0].strip() == '[':
+                line = line.strip()[1:-1]
+                def_statement = line.split(':')
+                if def_statement[0].upper() == def_statement[0]:
+                    sequences[sequence_name]['constants'][def_statement[0]] = def_statement[1]
+                else:
+                    sequences[sequence_name]['commands'][def_statement[0]] = def_statement[1]
+            else:
+                sequences[sequence_name]['sequence'].append(line)
+        else:
+            if line[0].strip() == '[':
+                line = line.strip()[1:-1]
+                def_statement = line.split(':')
+                if def_statement[0].upper() == def_statement[0]:
+                    main_sequence['constants'][def_statement[0]] = def_statement[1]
+                else:
+                    main_sequence['commands'][def_statement[0]] = def_statement[1]
+            else:
+                main_sequence['sequence'].append(line)
+    return main_sequence,sequences
+
+def parse_and_run_script_sequence_def(script_sequence_def, timeout):
+    main_sequence,sequences = parse_script_sequence_def(script_sequence_def)
+
+    if 'onInit' in sequences:
+        run_script_sequence(sequences['onInit'], sequences, timeout)
+
+    run_script_sequence(main_sequence, sequences, timeout)
+
+    if 'onDestroy' in sequences:
+        run_script_sequence(sequences['onDestroy'], sequences, timeout)
+
+
+def load_and_run(script_name, timeout):
     # if you want to open zip then you pass .zip in command line args
     script_object = parse_zip('./scripts/' + script_name)
     # print(script_object)
-    main_script = ScriptExecutor(script_object)
+    main_script = ScriptExecutor(script_object, timeout)
     main_script.run(log_level='INFO')
 
 
 
 if __name__=='__main__':
     script_name = sys.argv[1]
-    load_and_run(script_name)
+    load_and_run(script_name, datetime.datetime.now() + datetime.timedelta(minutes=30))

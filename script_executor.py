@@ -2,6 +2,7 @@ import copy
 import json
 import shlex
 import sys
+import datetime
 
 import cv2
 
@@ -18,7 +19,8 @@ import pytesseract
 
 
 class ScriptExecutor:
-    def __init__(self, script_obj, log_level='INFO', log_folder=None, context=None, state=None):
+    def __init__(self, script_obj, timeout, log_level='INFO', log_folder=None, context=None, state=None):
+        self.timeout = timeout
         self.log_level = log_level
         self.props = script_obj['props']
         self.actions = script_obj["actionRows"][0]["actions"]
@@ -149,6 +151,7 @@ class ScriptExecutor:
                                 input_vars = search_area_handler_state
                             ref_script_executor = ScriptExecutor(
                                 ref_script,
+                                self.timeout,
                                 self.log_level,
                                 log_folder=script_ref_log_folder,
                                 context=child_context,
@@ -157,6 +160,7 @@ class ScriptExecutor:
                         else:
                             ref_script_executor = ScriptExecutor(
                                 ref_script,
+                                self.timeout,
                                 self.log_level,
                                 log_folder=script_ref_log_folder,
                                 context=child_context,
@@ -383,6 +387,9 @@ class ScriptExecutor:
             self.status = ScriptExecutionState.RETURN
 
     def check_if_done(self):
+        if datetime.datetime.now() > self.timeout:
+            print('script timeout')
+            exit(0)
         if len(self.actions) == 0 and len(self.run_queue) == 0:
             self.status = ScriptExecutionState.FINISHED
             return

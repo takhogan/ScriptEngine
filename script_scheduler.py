@@ -9,7 +9,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from script_manager import run_script_sequence
+from script_manager import parse_and_run_script_sequence_def
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/calendar']
@@ -98,8 +98,8 @@ def check_and_execute_active_tasks(service, calendar_id, running_scripts):
 
         if event['summary'] not in running_scripts:
             event_process = multiprocessing.Process(
-                target=run_script_sequence,
-                args=(event['description'].split('\n'),)
+                target=parse_and_run_script_sequence_def,
+                args=(event['description'], event['end']['dateTime'])
             )
             event_process.start()
             running_scripts[event['summary']] = {}
