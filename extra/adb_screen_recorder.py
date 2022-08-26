@@ -85,6 +85,7 @@ class ScreenRecorderApp:
                 self.app_state[pressed_button_key + '_active'] = False
             else:
                 self.app_state[pressed_button_key + '_active'] = True
+                print(pressed_button_key + '_active')
             self.handle_state()
 
         return on_button_pressed
