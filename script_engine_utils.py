@@ -6,9 +6,10 @@ import numpy as np
 def generate_context_switch_action(childGroups, state, context, update_dict):
     return {
         "actionName" : "contextSwitchAction",
-        "targetSystem" : "none",
+        "actionGroup" : 0,
         "childGroups" : childGroups,
         "actionData" : {
+            "targetSystem": "none",
             "state" : state,
             "context" : context,
             "update_dict" : update_dict
