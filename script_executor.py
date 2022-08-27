@@ -82,6 +82,7 @@ class ScriptExecutor:
 
 
     def handle_action(self, action):
+        print(self.props["script_name"], action["actionName"])
         print(self.props["script_name"], ' ', action["actionData"]["targetSystem"],
               ' action : ', action["actionName"] + '-' + str(action["actionGroup"]),
               ' children: ', list(map(lambda action: action["actionGroup"], self.get_children(action))),
@@ -177,9 +178,11 @@ class ScriptExecutor:
                         if self.context["search_patterns"][
                             self.context["parent_action"]["actionData"]["searchPatternID"]
                         ]["stitcher_status"] != "STITCHER_OK":
+                            print('launching error handler')
                             pass
                         else:
-                            ref_script_executor.status = ScriptExecutionState.RETURN
+                            print('returning without error')
+                            self.status = ScriptExecutionState.RETURN
                             return
 
                     # print('runMode: ', action["actionData"]["runMode"])

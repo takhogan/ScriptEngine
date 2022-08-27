@@ -10,7 +10,7 @@ class DetectSceneHelper:
 
     @staticmethod
     def get_match(sceneAction, screencap_im, dir_path, logs_path):
-        print(sceneAction["actionData"]["positiveExamples"][0])
+        # print(sceneAction["actionData"]["positiveExamples"][0])
         screencap_mask = sceneAction["actionData"]["positiveExamples"][0]["mask"]
         screencap_mask_single_channel = sceneAction["actionData"]["positiveExamples"][0]["mask_single_channel"]
         mask_size = np.count_nonzero(screencap_mask_single_channel)
