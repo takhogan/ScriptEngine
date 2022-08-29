@@ -269,6 +269,16 @@ class ScriptExecutor:
                         print(output_text)
                         self.state[action["actionData"]["outputVarName"]] = output_text
                         self.status = ScriptExecutionState.SUCCESS
+                elif action["actionName"] == "contextSwitchAction":
+                    self.state = action["actionData"]["state"]
+                    self.context = action["actionData"]["context"]
+                    if 'state' in action["actionData"]["update_dict"]:
+                        for key,value in action["actionData"]["update_dict"]["state"].items():
+                            self.state[key] = value
+                    if 'context' in action["actionData"]["update_dict"]:
+                        for key,value in action["actionData"]["update_dict"]["context"].items():
+                            self.context[key] = value
+                    self.status = ScriptExecutionState.SUCCESS
                 else:
                     self.status = ScriptExecutionState.ERROR
                     print("action unimplemented ")
