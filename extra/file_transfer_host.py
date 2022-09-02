@@ -8,7 +8,10 @@ from flask_cors import CORS, cross_origin
 import shutil
 
 ALLOWED_EXTENSIONS = set(['zip'])
-ALLOWED_IPS = set(['10.0.0.98'])
+ALLOWED_IPS = set([
+    '10.0.0.98',
+    '10.0.0.119'
+])
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -17,6 +20,7 @@ def allowed_file(filename):
 @cross_origin()
 def upload_file():
     if request.remote_addr not in ALLOWED_IPS:
+        print('blocked ip : ', request.remote_addr)
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
         return resp
