@@ -363,6 +363,7 @@ class ScriptExecutor:
             # print('pre handle: ', action)
             self.actions[action_index] = self.handle_action(action)
             # print('post handle : ', action)
+            print(self.context['action_attempts'], action_index)
             self.context["action_attempts"][action_index] += 1
             if self.status == ScriptExecutionState.FINISHED:
                 self.context['parent_action'] = action
