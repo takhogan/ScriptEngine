@@ -36,6 +36,7 @@ class DetectSceneHelper:
             'input_type': 'shape',
             'point': [0, 0],
             'shape': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
+            'matched_area': screencap_masked,
             'height': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].shape[0],
             'width': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].shape[1],
             'score': ssim_coeff
