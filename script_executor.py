@@ -405,12 +405,13 @@ class ScriptExecutor:
     def check_if_done(self):
         if datetime.datetime.now().astimezone(tz.tzlocal()) > self.timeout:
             print('script timeout - ', datetime.datetime.now())
-            exit(0)
+            return True
         if len(self.actions) == 0 and len(self.run_queue) == 0:
             self.status = ScriptExecutionState.FINISHED
-            return
+            return True
         if len(self.run_queue) > 0:
             self.actions.append(self.run_queue.pop())
+        return False
 
     def handle_out_of_attempts_check(self):
         out_of_attempts_handler,out_of_attempts_link = self.get_out_of_attempts_handler(self.context['parent_action'])
@@ -505,7 +506,8 @@ class ScriptExecutor:
         while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR and self.status != ScriptExecutionState.FAILURE:
             self.execute_actions()
             # print(self.status, ' status ')
-            self.check_if_done()
+            if self.check_if_done():
+                break
 
 
 
@@ -530,7 +532,8 @@ class ScriptExecutor:
         self.status = ScriptExecutionState.STARTING
         while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR:
             self.execute_actions()
-            self.check_if_done()
+            if self.check_if_done():
+                break
 
 
 
