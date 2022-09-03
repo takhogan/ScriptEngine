@@ -63,7 +63,8 @@ def parse_script_sequence_def(script_sequence_def):
                 'commands': {},
                 'constants': {}
             }
-        if line[0] != '\t':
+            continue
+        if line[0].isalpha():
             is_sequence_def = False
 
         if is_sequence_def:
@@ -75,7 +76,7 @@ def parse_script_sequence_def(script_sequence_def):
                 else:
                     sequences[sequence_name]['commands'][def_statement[0]] = def_statement[1]
             else:
-                sequences[sequence_name]['sequence'].append(line)
+                sequences[sequence_name]['sequence'].append(line.strip())
         else:
             if line[0].strip() == '[':
                 line = line.strip()[1:-1]
@@ -91,20 +92,6 @@ def parse_script_sequence_def(script_sequence_def):
 def parse_and_run_script_sequence_def(script_sequence_def, timeout):
     main_sequence,sequences = parse_script_sequence_def(script_sequence_def)
     print(main_sequence, sequences)
-    if 'onInit' in sequences:
-        run_script_sequence(sequences['onInit'], sequences, timeout)
-
-    run_script_sequence(main_sequence, sequences, timeout)
-
-    if 'onDestroy' in sequences:
-        run_script_sequence(sequences['onDestroy'], sequences, timeout)
-
-
-def load_and_run(script_name, timeout):
-    # if you want to open zip then you pass .zip in command line args
-    script_object = parse_zip('./scripts/' + script_name)
-    # print(script_object)
-    #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-object
     if isinstance(timeout, str):
         dt, _, us = timeout.partition(".")
         utc_tz = tz.gettz('UTC')
@@ -112,6 +99,20 @@ def load_and_run(script_name, timeout):
         timeout = datetime.datetime.strptime(timeout[:-1], "%Y-%m-%dT%H:%M:%S")
         if is_utc:
             timeout = timeout.replace(tzinfo=utc_tz).astimezone(tz.tzlocal())
+    if 'onInit' in sequences:
+        run_script_sequence(sequences['onInit'], sequences, timeout)
+
+    run_script_sequence(main_sequence, sequences, timeout)
+
+    if 'onDestroy' in sequences:
+        run_script_sequence(sequences['onDestroy'], sequences, timeout + datetime.timedelta(minutes=15))
+
+
+def load_and_run(script_name, timeout):
+    # if you want to open zip then you pass .zip in command line args
+    script_object = parse_zip('./scripts/' + script_name)
+    #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
+    # exit(0)
     main_script = ScriptExecutor(script_object, timeout)
     main_script.run(log_level='INFO')
 
@@ -119,4 +120,4 @@ def load_and_run(script_name, timeout):
 
 if __name__=='__main__':
     script_name = sys.argv[1]
-    load_and_run(script_name, datetime.datetime.now() + datetime.timedelta(minutes=30))
+    load_and_run(script_name, (datetime.datetime.now() + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal()))

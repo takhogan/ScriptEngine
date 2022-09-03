@@ -2,6 +2,8 @@ import datetime
 import os.path
 import time
 import multiprocessing
+import unicodedata
+
 from bs4 import BeautifulSoup
 
 from google.auth.transport.requests import Request
@@ -19,7 +21,7 @@ CALENDAR_NAME = 'ScriptScheduler'
 
 def clean_description(description):
     if bool(BeautifulSoup(description, "html.parser").find()):
-        description = BeautifulSoup(description, features="html.parser").get_text('\n')
+        description = unicodedata.normalize("NFKC", BeautifulSoup(description, features="html.parser").get_text('\n'))
     return description
 
 
