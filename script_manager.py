@@ -3,6 +3,7 @@ import random
 import time
 from dateutil import tz
 
+
 import datetime
 
 sys.path.append(".")
@@ -23,7 +24,7 @@ def run_script_sequence(script_sequence, sequences, timeout):
         delay_range = delay_range_repr[1] - delay_range_repr[0]
         delay_val = delay_range_repr[0] + rand_val * delay_range
         print('sleeping for ' + str(delay_val) + 's')
-        # time.sleep(delay_val)
+        time.sleep(delay_val)
 
     if 'dropoutChance' in script_sequence['commands']:
         dropoutRoll = random.random()
@@ -52,6 +53,8 @@ def parse_script_sequence_def(script_sequence_def):
         'commands': {}
     }
     for line in script_sequence_def.split('\n'):
+        if line == '':
+            continue
         if line[-1] == ':':
             is_sequence_def = True
             sequence_name = line[:-1]
