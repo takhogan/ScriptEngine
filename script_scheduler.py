@@ -77,7 +77,7 @@ def initialize_service():
 
 def check_and_execute_active_tasks(service, calendar_id, running_scripts):
     now_datetime = datetime.datetime.utcnow()
-    now_plus_five_datetime = now_datetime + datetime.timedelta(minutes=10)
+    now_plus_five_datetime = now_datetime + datetime.timedelta(minutes=5)
 
     now = now_datetime.isoformat() + 'Z'
     now_plus_five = now_plus_five_datetime.isoformat() + 'Z'
@@ -107,9 +107,12 @@ def check_and_execute_active_tasks(service, calendar_id, running_scripts):
     # event['summary']
 
     event_list = set(map(lambda event: event['summary'], events))
+    delete_events = []
     for event in running_scripts.keys():
         if event not in event_list:
-            del running_scripts[event]
+            delete_events.append(event)
+    for event in delete_events:
+        del running_scripts[event]
     print('running scripts: ', list(running_scripts))
 
 def run():

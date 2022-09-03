@@ -3,6 +3,7 @@ import json
 import shlex
 import sys
 import datetime
+from dateutil import tz
 
 import cv2
 
@@ -270,8 +271,8 @@ class ScriptExecutor:
                         self.state[action["actionData"]["outputVarName"]] = output_text
                         self.status = ScriptExecutionState.SUCCESS
                 elif action["actionName"] == "contextSwitchAction":
-                    self.state = action["actionData"]["state"]
-                    self.context = action["actionData"]["context"]
+                    self.state = action["actionData"]["state"].copy()
+                    self.context = action["actionData"]["context"].copy()
                     if 'state' in action["actionData"]["update_dict"]:
                         for key,value in action["actionData"]["update_dict"]["state"].items():
                             self.state[key] = value
@@ -376,6 +377,7 @@ class ScriptExecutor:
                 # print('acton: ', action, ' childGroups: ', action['childGroups'])
                 self.actions = child_actions
                 self.context["action_attempts"] = [0] * len(child_actions)
+                print('settings action_attempts : ', self.context["action_attempts"])
                 # print('next: ', self.actions)
                 self.status = ScriptExecutionState.STARTING
                 return
@@ -401,7 +403,7 @@ class ScriptExecutor:
             self.status = ScriptExecutionState.RETURN
 
     def check_if_done(self):
-        if datetime.datetime.now() > self.timeout:
+        if datetime.datetime.now().astimezone(tz.tzlocal()) > self.timeout:
             print('script timeout')
             exit(0)
         if len(self.actions) == 0 and len(self.run_queue) == 0:
