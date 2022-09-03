@@ -404,7 +404,7 @@ class ScriptExecutor:
 
     def check_if_done(self):
         if datetime.datetime.now().astimezone(tz.tzlocal()) > self.timeout:
-            print('script timeout')
+            print('script timeout - ', datetime.datetime.now())
             exit(0)
         if len(self.actions) == 0 and len(self.run_queue) == 0:
             self.status = ScriptExecutionState.FINISHED

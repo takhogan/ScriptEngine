@@ -2,6 +2,7 @@ import datetime
 import os.path
 import time
 import multiprocessing
+from bs4 import BeautifulSoup
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -16,8 +17,10 @@ SCOPES = ['https://www.googleapis.com/auth/calendar']
 CALENDAR_NAME = 'ScriptScheduler'
 
 
-def parse_script_schedule_event():
-    pass
+def clean_description(description):
+    if bool(BeautifulSoup(description, "html.parser").find()):
+        description = BeautifulSoup(description, features="html.parser").get_text('\n')
+    return description
 
 
 def create_calendar_if_not_exists(service):
@@ -97,9 +100,10 @@ def check_and_execute_active_tasks(service, calendar_id, running_scripts):
         event = events[0]
 
         if event['summary'] not in running_scripts:
+
             event_process = multiprocessing.Process(
                 target=parse_and_run_script_sequence_def,
-                args=(event['description'], event['end']['dateTime'])
+                args=(clean_description(event['description']), event['end']['dateTime'])
             )
             event_process.start()
             running_scripts[event['summary']] = {}
