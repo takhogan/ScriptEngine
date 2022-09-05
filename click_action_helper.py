@@ -12,6 +12,7 @@ class ClickActionHelper:
         point_choice = random.choice(action["actionData"]["pointList"]) if action["actionData"]["pointList"] else (None, None)
         if var_name is not None and len(var_name) > 0:
             input_points = eval(var_name, state)
+            # print('input_points: ', input_points)
             if len(input_points) > 0:
                 # potentially for loop here
                 next_input_points = input_points[1:]
@@ -35,6 +36,7 @@ class ClickActionHelper:
                         input_point["point"][1] + shape_ys[point_choice_index]
                     )
                     # print('point_choice : ', shape_xs, ', ', shape_ys, ', ', point_choice_index, ', ', point_choice)
+        # print('point_choice : ', point_choice)
         return point_choice, state, context
 
     @staticmethod

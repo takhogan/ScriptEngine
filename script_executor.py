@@ -330,13 +330,14 @@ class ScriptExecutor:
     def handle_post_execution(self, action):
         pass
 
+
     #if it is handle all branches then you take the first branch and for the rest you create a context switch action
     def execute_actions(self):
         self.handle_out_of_attempts_check()
         n_actions = len(self.actions)
         is_return = False
         # print('execute_actions : ', self.actions)
-
+        print('len actions ', len(self.actions), list(map(lambda action: action['actionName'], self.actions)))
         if self.context["branching_behavior"] == "firstMatch":
             pass
         elif self.context["branching_behavior"] == "attemptAllBranches" and len(self.actions) > 1:
@@ -344,7 +345,19 @@ class ScriptExecutor:
             context_copy = self.context.copy()
             for action in self.actions[1:]:
                 self.run_queue.append(
-                    generate_context_switch_action(action["childGroups"], state_copy, context_copy, {})
+                    generate_context_switch_action([{
+                        'srcGroup': None,
+                        'srcRowIndex': None,
+                        'srcActionIndex': None,
+                        'destGroup': action['actionGroup'],
+                        'destRowIndex': action['rowIndex'],
+                        'destActionIndex': action['actionIndex'],
+                        'coords': None,
+                        'long': None,
+                        'isPipeLink': None,
+                        'type': 'firstMatch',
+                        'typePayload': None
+                    }], state_copy, context_copy, {})
                 )
             self.actions = [self.actions[0]]
             n_actions = 1
@@ -409,7 +422,7 @@ class ScriptExecutor:
         if len(self.actions) == 0 and len(self.run_queue) == 0:
             self.status = ScriptExecutionState.FINISHED
             return True
-        if len(self.run_queue) > 0:
+        if len(self.actions) == 0 and len(self.run_queue) > 0:
             self.actions.append(self.run_queue.pop())
         return False
 
@@ -516,9 +529,42 @@ class ScriptExecutor:
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
-        self.execute_actions()
-        if self.status == ScriptExecutionState.STARTING:
-            self.run(log_level)
+        branches = []
+        is_attempt_all_branches = self.context["branching_behavior"] == "attemptAllBranches"
+        if is_attempt_all_branches:
+            state_copy = self.state.copy()
+            context_copy = self.context.copy()
+            for action in self.actions:
+                branches.append(
+                    [generate_context_switch_action([{
+                        'srcGroup': None,
+                        'srcRowIndex': None,
+                        'srcActionIndex': None,
+                        'destGroup': action['actionGroup'],
+                        'destRowIndex': action['rowIndex'],
+                        'destActionIndex': action['actionIndex'],
+                        'coords': None,
+                        'long': None,
+                        'isPipeLink': None,
+                        'type': 'firstMatch',
+                        'typePayload': None
+                    }], state_copy, context_copy, {})]
+                )
+        else:
+            branches = [self.actions]
+        for branch in branches:
+            self.actions = branch
+            if is_attempt_all_branches:
+                self.execute_actions()
+            self.execute_actions()
+            if self.status == ScriptExecutionState.STARTING:
+                self.run(log_level)
+            else:
+                self.actions = []
+                if len(self.run_queue) > 1:
+                    if self.check_if_done():
+                        return
+                    self.run_one()
 
 
 

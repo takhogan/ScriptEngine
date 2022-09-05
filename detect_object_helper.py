@@ -44,5 +44,6 @@ class DetectObjectHelper:
                     }
                 })
             )
+        print('run_queue : ', len(context['run_queue']) if context['run_queue'] is not None else None)
         state[action['actionData']['outputVarName']] = [matches[0]]
         return state, context
