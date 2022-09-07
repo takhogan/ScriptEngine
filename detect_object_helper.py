@@ -34,7 +34,10 @@ class DetectObjectHelper:
     def append_to_run_queue(action, state, context, matches, detect_run_type):
         state_copy = state.copy()
         context_copy = context.copy()
-        update_dict = {}
+        update_dict = {
+            'state' : {},
+            'context' : {}
+        }
         detect_run_type_normal = detect_run_type == 'normal'
         if len(matches) > 1 and context["run_queue"] is None:
             if detect_run_type_normal:
