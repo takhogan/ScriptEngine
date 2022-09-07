@@ -689,6 +689,7 @@ class adb_host:
             retaken_post_img_name = None
             retaken_post_img_path = None
             while not stitching_complete:
+                print('len : stitch imgs', len(stitch_imgs), pre_img.shape, post_img.shape)
                 err_code, result_im = search_pattern_obj["stitcher"].stitch(stitch_imgs, [search_pattern_obj["draggable_area"]] * len(stitch_imgs))
                 draggable_area_path = search_pattern_obj["draggable_area_path"]
 
