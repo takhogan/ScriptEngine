@@ -31,19 +31,32 @@ class DetectObjectHelper:
         return screencap_im_bgr, match_point
 
     @staticmethod
-    def append_to_run_queue(action, state, context, matches):
+    def append_to_run_queue(action, state, context, matches, detect_run_type):
         state_copy = state.copy()
         context_copy = context.copy()
+        update_dict = {}
+        detect_run_type_normal = detect_run_type == 'normal'
         if len(matches) > 1 and context["run_queue"] is None:
-            context["run_queue"] = []
+            if detect_run_type_normal:
+                context["run_queue"] = []
+            else:
+                update_dict['context']['run_queue'] = []
+
         for match in matches[1:action["actionData"]["maxMatches"]]:
-            context["run_queue"].append(
-                generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
-                    "state": {
-                        action['actionData']['outputVarName']: [match]
-                    }
-                })
-            )
+            switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
+                "state": {
+                    action['actionData']['outputVarName']: [match]
+                }
+            })
+            if detect_run_type_normal:
+                context["run_queue"].append(
+                    switch_action
+                )
+            else:
+                update_dict['context']['run_queue'].append(switch_action)
         print('run_queue : ', len(context['run_queue']) if context['run_queue'] is not None else None)
-        state[action['actionData']['outputVarName']] = [matches[0]]
-        return state, context
+        if detect_run_type_normal:
+            state[action['actionData']['outputVarName']] = [matches[0]]
+        else:
+            update_dict['state'][action['actionData']['outputVarName']] = [matches[0]]
+        return state, context, update_dict

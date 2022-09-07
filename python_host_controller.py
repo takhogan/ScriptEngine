@@ -33,8 +33,13 @@ class python_host:
         self.height = host_dimensions.height
         self.props = props
         self.image_matcher = ImageMatcher()
-        if is_null(self.props['width']) or is_null(self.props['height']):
-            self.props['height'],self.props['width'],_ = np.array(pyautogui.screenshot()).shape
+        width,height,_ = np.array(pyautogui.screenshot()).shape
+        if (not is_null(self.props['width']) and (self.props['width'] != width)) or \
+                (not is_null(self.props['height']) and self.props['height'] != height):
+            print('python host dims mismatch, expected : ', self.props['height'], self.props['width'],
+                  'observed :', height, width)
+        self.props['width'] = width
+        self.props['height'] = height
 
     def run_script(self, action, state):
         # print('run_script: ', action)
@@ -53,7 +58,7 @@ class python_host:
 
     def handle_action(self, action, state, context, log_level, log_folder):
         # print(action["actionName"])
-        time.sleep(1)
+        time.sleep(0.25)
         # print('inside host', self.width, self.height)
         logs_path = log_folder + str(context['script_counter']) + '-' + action["actionName"] + '-'
         if action["actionName"] == "shellScript":
@@ -147,9 +152,26 @@ class python_host:
         elif action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
+            if 'results_precalculated' in action['actionData'] and action['actionData']['results_precalculated']:
+                if 'state' in action["actionData"]["update_dict"]:
+                    for key, value in action["actionData"]["update_dict"]["state"].items():
+                        state[key] = value
+                if 'context' in action["actionData"]["update_dict"]:
+                    for key, value in action["actionData"]["update_dict"]["context"].items():
+                        context[key] = value
+                return_tuple = (action['action_result'], action['state'], action['context'])
+                action['actionData']['screencap_im_bgr'] = None
+                action['actionData']['results_precalculated'] = False
+                action['actionData']['update_dict'] = None
+                return return_tuple
+
             screencap_im_bgr,match_point = DetectObjectHelper.get_detect_area(action, state)
+
             if screencap_im_bgr is None:
-                screencap_im_bgr = self.screenshot()
+                if 'screeencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
+                    screencap_im_bgr = action['actionData']['screencap_im_bgr']
+                else:
+                    screencap_im_bgr = self.screenshot()
 
             # print('props dims: ', (self.props['height'],  self.props['width']), ' im dims: ', screencap_im_bgr.shape)
             # exit(0)
@@ -182,8 +204,15 @@ class python_host:
                 threshold=float(action["actionData"]["threshold"])
             )
             if len(matches) > 0:
-                state, context = DetectObjectHelper.append_to_run_queue(action, state, context, matches)
-
+                state, context, update_dict = DetectObjectHelper.append_to_run_queue(
+                    action, state, context, matches,
+                    action['actionData']['detect_run_type'] if 'detect_run_type' in action['actionData'] else 'normal'
+                )
+                if 'detect_run_type' in action['actionData'] and\
+                        action['actionData']['detect_run_type'] == 'result_precalculation':
+                    action['actionData']['results_precalculated'] = True
+                    action['actionData']['update_dict'] = update_dict
+                    action['actionData']['detect_run_type'] = None
                 return ScriptExecutionState.SUCCESS, state, context
             else:
                 return ScriptExecutionState.FAILURE, state, context

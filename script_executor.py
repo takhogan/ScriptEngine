@@ -18,6 +18,15 @@ import os
 import datetime
 import pytesseract
 
+DETECT_TYPES_SET = {
+    'detectObject',
+    'declareScene'
+}
+
+FORWARD_PEEK_EXEMPT_ACTIONS = {
+    'contextSwitchAction'
+}
+
 
 class ScriptExecutor:
     def __init__(self, script_obj, timeout, log_level='INFO', log_folder=None, context=None, state=None):
@@ -327,13 +336,43 @@ class ScriptExecutor:
                 child_actions.append(self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]])
         return child_actions
 
-    def handle_post_execution(self, action):
-        pass
+    def forward_detect_peek(self):
+        detect_types_by_target_system = {}
+        for action in self.actions:
+            if action['actionName'] in DETECT_TYPES_SET:
+                target_system = action['actionData']['targetSystem']
+                if target_system in detect_types_by_target_system:
+                    detect_types_by_target_system[target_system].append(action)
+                else:
+                    detect_types_by_target_system[target_system] = [action]
+        for target_system,actions in detect_types_by_target_system.items():
+            if target_system == 'adb':
+                self.adb_host.init_system()
+                screenshot = self.adb_host.screenshot()
+                for action in actions:
+                    action['actionData']['screeencap_im_bgr'] = screenshot
+                    action['actionData']['detect_run_type'] = 'result_precalculation'
+                    action['actionData']['results_precalculated'] = False
+                    self.status, self.state, self.context = self.adb_host.handle_action(
+                        action, self.state, self.context, self.log_level, self.log_folder
+                    )
+            elif target_system == 'python':
+                screenshot = self.python_host.screenshot()
+                for action in actions:
+                    action['actionData']['screeencap_im_bgr'] = screenshot
+                    action['actionData']['detect_run_type'] = 'result_precalculation'
+                    action['actionData']['results_precalculated'] = False
+                    self.status, self.state, self.context = self.python_host.handle_action(
+                        action, self.state, self.context, self.log_level, self.log_folder
+                    )
+
 
 
     #if it is handle all branches then you take the first branch and for the rest you create a context switch action
-    def execute_actions(self):
+    def execute_actions(self, forward_peek=True):
         self.handle_out_of_attempts_check()
+        if forward_peek:
+            self.forward_detect_peek()
         n_actions = len(self.actions)
         is_return = False
         # print('execute_actions : ', self.actions)

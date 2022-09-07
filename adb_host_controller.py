@@ -450,9 +450,25 @@ class adb_host:
         elif action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
+            if 'results_precalculated' in action['actionData'] and action['actionData']['results_precalculated']:
+                if 'state' in action["actionData"]["update_dict"]:
+                    for key, value in action["actionData"]["update_dict"]["state"].items():
+                        state[key] = value
+                if 'context' in action["actionData"]["update_dict"]:
+                    for key, value in action["actionData"]["update_dict"]["context"].items():
+                        context[key] = value
+                return_tuple = (action['action_result'], action['state'], action['context'])
+                action['actionData']['screencap_im_bgr'] = None
+                action['actionData']['results_precalculated'] = False
+                action['actionData']['update_dict'] = None
+                return return_tuple
+
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
             if screencap_im_bgr is None:
-                screencap_im_bgr = self.screenshot()
+                if 'screeencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
+                    screencap_im_bgr = action['actionData']['screencap_im_bgr']
+                else:
+                    screencap_im_bgr = self.screenshot()
             # print('imshape: ', np.array(screencap_im_bgr).shape, ' width: ', self.props['width'], ' height: ', self.props['height'])
             # if is_null(self.props['width']) or is_null(self.props['height']):
             #     screencap_im = np.array(screencap_im_bgr)
@@ -479,7 +495,15 @@ class adb_host:
             # exit(0)
             if len(matches) > 0:
                 # print(matches)
-                state, context = DetectObjectHelper.append_to_run_queue(action, state, context, matches)
+                state, context, update_dict = DetectObjectHelper.append_to_run_queue(
+                    action, state, context, matches,
+                    action['actionData']['detect_run_type'] if 'detect_run_type' in action['actionData'] else 'normal'
+                )
+                if 'detect_run_type' in action['actionData'] and\
+                        action['actionData']['detect_run_type'] == 'result_precalculation':
+                    action['actionData']['results_precalculated'] = True
+                    action['actionData']['update_dict'] = update_dict
+                    action['actionData']['detect_run_type'] = None
                 return ScriptExecutionState.SUCCESS, state, context
             else:
                 return ScriptExecutionState.FAILURE, state, context
