@@ -457,7 +457,7 @@ class adb_host:
                 if 'context' in action["actionData"]["update_dict"]:
                     for key, value in action["actionData"]["update_dict"]["context"].items():
                         context[key] = value
-                return_tuple = (action['action_result'], action['state'], action['context'])
+                return_tuple = (action['actionData']['action_result'], state, context)
                 action['actionData']['screencap_im_bgr'] = None
                 action['actionData']['results_precalculated'] = False
                 action['actionData']['update_dict'] = None
@@ -465,7 +465,7 @@ class adb_host:
 
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
             if screencap_im_bgr is None:
-                if 'screeencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
+                if 'screencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
                     screencap_im_bgr = action['actionData']['screencap_im_bgr']
                 else:
                     screencap_im_bgr = self.screenshot()
@@ -494,19 +494,21 @@ class adb_host:
             )
             # exit(0)
             if len(matches) > 0:
-                # print(matches)
                 state, context, update_dict = DetectObjectHelper.append_to_run_queue(
                     action, state, context, matches,
                     action['actionData']['detect_run_type'] if 'detect_run_type' in action['actionData'] else 'normal'
                 )
-                if 'detect_run_type' in action['actionData'] and\
-                        action['actionData']['detect_run_type'] == 'result_precalculation':
-                    action['actionData']['results_precalculated'] = True
-                    action['actionData']['update_dict'] = update_dict
-                    action['actionData']['detect_run_type'] = None
-                return ScriptExecutionState.SUCCESS, state, context
+                action_result = ScriptExecutionState.SUCCESS
             else:
-                return ScriptExecutionState.FAILURE, state, context
+                update_dict = {}
+                action_result = ScriptExecutionState.FAILURE
+            if 'detect_run_type' in action['actionData'] and \
+                    action['actionData']['detect_run_type'] == 'result_precalculation':
+                action['actionData']['results_precalculated'] = True
+                action['actionData']['update_dict'] = update_dict
+                action['actionData']['action_result'] = action_result
+                action['actionData']['detect_run_type'] = None
+            return action_result, state, context
 
         elif action["actionName"] == "clickAction":
             var_name = action["actionData"]["inputExpression"]

@@ -350,7 +350,7 @@ class ScriptExecutor:
                 self.adb_host.init_system()
                 screenshot = self.adb_host.screenshot()
                 for action in actions:
-                    action['actionData']['screeencap_im_bgr'] = screenshot
+                    action['actionData']['screencap_im_bgr'] = screenshot
                     action['actionData']['detect_run_type'] = 'result_precalculation'
                     action['actionData']['results_precalculated'] = False
                     self.status, self.state, self.context = self.adb_host.handle_action(
