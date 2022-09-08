@@ -29,6 +29,8 @@ from click_action_helper import ClickActionHelper
 from detect_scene_helper import DetectSceneHelper
 from detect_object_helper import DetectObjectHelper
 
+
+
 class adb_host:
     def __init__(self, props, host_os, adb_ip):
         self.device_profile = 'windows-bluestacks'
@@ -437,7 +439,6 @@ class adb_host:
 
     def handle_action(self, action, state, context, log_level, log_folder):
         logs_path = log_folder + str(context['script_counter']) + '-'
-        time.sleep(0.25)
         if action["actionName"] == "declareScene":
             screencap_im_bgr = self.screenshot()
             matches,ssim_coeff = DetectSceneHelper.get_match(action, screencap_im_bgr, self.props["dir_path"], logs_path)
