@@ -96,5 +96,4 @@ def parse_zip(script_file_path):
             script_obj['include'][include_script_name] = include_script_obj
     props = script_obj['props']
     script_obj['props']["dir_path"] = dir_path
-    script_obj['props']["start_time"] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
     return script_obj

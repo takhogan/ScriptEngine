@@ -57,8 +57,6 @@ class python_host:
 
 
     def handle_action(self, action, state, context, log_level, log_folder):
-        # print(action["actionName"])
-        time.sleep(0.25)
         # print('inside host', self.width, self.height)
         logs_path = log_folder + str(context['script_counter']) + '-' + action["actionName"] + '-'
         if action["actionName"] == "shellScript":

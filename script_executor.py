@@ -27,9 +27,21 @@ FORWARD_PEEK_EXEMPT_ACTIONS = {
     'contextSwitchAction'
 }
 
+DELAY_EXEMPT_ACTIONS = {
+    'declareObject',
+    'detectScene',
+    'sleepStatement',
+    'scriptReference',
+    'conditionalStatement',
+    'variableAssignment',
+    'jsonFileAction',
+    'imageToTextAction',
+    'contextSwitchAction'
+}
+
 
 class ScriptExecutor:
-    def __init__(self, script_obj, timeout, log_level='INFO', log_folder=None, context=None, state=None):
+    def __init__(self, script_obj, timeout, log_level='INFO', parent_folder='', context=None, state=None):
         self.timeout = timeout
         self.log_level = log_level
         self.props = script_obj['props']
@@ -38,12 +50,10 @@ class ScriptExecutor:
         self.python_host = python_host(self.props.copy())
         self.adb_host = adb_host(self.props.copy(), self.python_host, '127.0.0.1:5555')
         # TODO IP shouldn't be hard coded
+        print('list : ', list(script_obj))
         self.include_scripts = script_obj['include']
-        self.log_folder = ('./logs/' + self.props['script_name'] + '-' + self.props['start_time'] if log_folder is None else log_folder)
+        self.create_log_folders(parent_folder)
         self.run_queue = []
-        os.mkdir(self.log_folder)
-        os.mkdir(self.log_folder + '/search_patterns')
-        self.log_folder += '/'
 
         self.state = {
 
@@ -74,6 +84,15 @@ class ScriptExecutor:
         # print('context (1) : ', self.context["action_attempts"])
         self.status = ScriptExecutionState.FINISHED
 
+    def create_log_folders(self, parent_folder=''):
+        self.props["start_time"] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+        self.log_folder = (
+            ('./logs/' if parent_folder == '' else parent_folder) + self.props['script_name'] + '-' + self.props['start_time']
+        )
+        os.makedirs(self.log_folder, exist_ok=True)
+        os.makedirs(self.log_folder + '/search_patterns', exist_ok=True)
+        self.log_folder += '/'
+
     def rewind(self, input_vars):
         # print('rewind context : ', self.context["action_attempts"])
         # print('input_vars : ', input_vars)
@@ -92,7 +111,6 @@ class ScriptExecutor:
 
 
     def handle_action(self, action):
-        print(self.props["script_name"], action["actionName"])
         print(self.props["script_name"], ' ', action["actionData"]["targetSystem"],
               ' action : ', action["actionName"] + '-' + str(action["actionGroup"]),
               ' children: ', list(map(lambda action: action["actionGroup"], self.get_children(action))),
@@ -100,6 +118,8 @@ class ScriptExecutor:
               ' outOfAttempts: ', self.context["out_of_attempts"])
         self.context["script_counter"] += 1
         # print(' context (2) : ', self.context["action_attempts"])
+        if action["actionName"] not in DELAY_EXEMPT_ACTIONS:
+            time.sleep(0.25)
 
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
@@ -145,11 +165,7 @@ class ScriptExecutor:
                     # creates script engine object
                     if is_new_script:
                         ref_script = self.include_scripts[action["actionData"]["scriptName"]]
-                        ref_script["props"]["start_time"] = self.props["start_time"]
-                        ref_script["include"] = self.include_scripts
-                        script_ref_start_time = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
-                        script_ref_log_folder = self.log_folder + action["actionData"]["scriptName"] + '-' + script_ref_start_time
-
+                        ref_script['include'] = self.include_scripts
                         if is_error_handler or is_object_handler:
                             search_area_handler_state = {
                                 "target_search_pattern" : self.context["search_patterns"][
@@ -164,7 +180,7 @@ class ScriptExecutor:
                                 ref_script,
                                 self.timeout,
                                 self.log_level,
-                                log_folder=script_ref_log_folder,
+                                parent_folder=self.log_folder,
                                 context=child_context,
                                 state=input_vars
                             )
@@ -173,7 +189,7 @@ class ScriptExecutor:
                                 ref_script,
                                 self.timeout,
                                 self.log_level,
-                                log_folder=script_ref_log_folder,
+                                parent_folder=self.log_folder,
                                 context=child_context,
                                 state=input_vars
                             )
@@ -196,6 +212,7 @@ class ScriptExecutor:
                             return
 
                     # print('runMode: ', action["actionData"]["runMode"])
+                    ref_script_executor.create_log_folders(self.log_folder)
                     if action["actionData"]["runMode"] == "run":
                         ref_script_executor.run()
                     elif action["actionData"]["runMode"] == "runOne":
@@ -416,7 +433,6 @@ class ScriptExecutor:
             # print('pre handle: ', action)
             self.actions[action_index] = self.handle_action(action)
             # print('post handle : ', action)
-            print(self.context['action_attempts'], action_index)
             self.context["action_attempts"][action_index] += 1
             if self.status == ScriptExecutionState.FINISHED:
                 self.context['parent_action'] = action
@@ -429,7 +445,6 @@ class ScriptExecutor:
                 # print('acton: ', action, ' childGroups: ', action['childGroups'])
                 self.actions = child_actions
                 self.context["action_attempts"] = [0] * len(child_actions)
-                print('settings action_attempts : ', self.context["action_attempts"])
                 # print('next: ', self.actions)
                 self.status = ScriptExecutionState.STARTING
                 return
