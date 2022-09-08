@@ -10,17 +10,29 @@ sys.path.append(".")
 from script_loader import parse_zip
 from script_executor import ScriptExecutor
 
+def str_timeout_to_datetime_timeout(timeout):
+    if isinstance(timeout, str):
+        dt, _, us = timeout.partition(".")
+        utc_tz = tz.gettz('UTC')
+        is_utc = timeout[-1] == 'Z'
+        timeout = datetime.datetime.strptime(timeout[:-1], "%Y-%m-%dT%H:%M:%S")
+        if is_utc:
+            timeout = timeout.replace(tzinfo=utc_tz).astimezone(tz.tzlocal())
+    return timeout
 
 def run_script_sequence(script_sequence, sequences, timeout):
-    def parse_delay_command(delay_obj):
-        print('parsing delay')
-        rand_val = random.random()
-        if '(' in delay_obj:
-            delay_range_repr = delay_obj[1:-1].split(',')
+    def get_command_tuple_val(command_val):
+        if '(' in command_val:
+            delay_range_repr = command_val[1:-1].split(',')
         else:
-            delay_range_repr = delay_obj.split(',')
+            delay_range_repr = command_val.split(',')
 
-        delay_range_repr = [int(delay_range_repr[0]), int(delay_range_repr[1])]
+        return [int(delay_range_repr[0]), int(delay_range_repr[1])]
+
+    def parse_delay_command(delay_obj):
+        delay_range_repr = get_command_tuple_val(delay_obj)
+        rand_val = random.random()
+        print('parsing delay')
         delay_range = delay_range_repr[1] - delay_range_repr[0]
         delay_val = delay_range_repr[0] + rand_val * delay_range
         print('sleeping for ' + str(delay_val) + 's')
@@ -34,13 +46,20 @@ def run_script_sequence(script_sequence, sequences, timeout):
     if 'startDelay' in script_sequence['commands']:
         parse_delay_command(script_sequence['commands']['startDelay'])
 
+    extended_timeout = timeout
+    if 'endExtension' in script_sequence['commands']:
+        timeout = str_timeout_to_datetime_timeout(timeout)
+        delay_range_repr = get_command_tuple_val(script_sequence['commands']['endExtension'])
+        delay_val = random.randrange(delay_range_repr[0], delay_range_repr[1])
+        extended_timeout = timeout + datetime.timedelta(seconds=delay_val)
+
 
     for script in script_sequence['sequence']:
         if script in sequences:
-            run_script_sequence(sequences[script], sequences, timeout)
+            run_script_sequence(sequences[script], sequences, extended_timeout)
         else:
             print('running script ', script)
-            load_and_run(script, timeout)
+            load_and_run(script, extended_timeout)
 
 
 def parse_script_sequence_def(script_sequence_def):
@@ -92,13 +111,7 @@ def parse_script_sequence_def(script_sequence_def):
 def parse_and_run_script_sequence_def(script_sequence_def, timeout):
     main_sequence,sequences = parse_script_sequence_def(script_sequence_def)
     print(main_sequence, sequences)
-    if isinstance(timeout, str):
-        dt, _, us = timeout.partition(".")
-        utc_tz = tz.gettz('UTC')
-        is_utc = timeout[-1] == 'Z'
-        timeout = datetime.datetime.strptime(timeout[:-1], "%Y-%m-%dT%H:%M:%S")
-        if is_utc:
-            timeout = timeout.replace(tzinfo=utc_tz).astimezone(tz.tzlocal())
+    timeout = str_timeout_to_datetime_timeout(timeout)
     if 'onInit' in sequences:
         run_script_sequence(sequences['onInit'], sequences, timeout)
 

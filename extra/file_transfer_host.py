@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 from flask_cors import CORS, cross_origin
 import shutil
 import pyautogui
+import subprocess
 
 ALLOWED_EXTENSIONS = set(['zip'])
 ALLOWED_IPS = set([
@@ -18,6 +19,17 @@ ALLOWED_IPS = set([
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/github-pull', methods=['GET'])
+def github_pull():
+    if request.remote_addr not in ALLOWED_IPS:
+        print('blocked ip : ', request.remote_addr)
+        resp = jsonify({'message': 'Configure server to allow requests'})
+        resp.status_code = 400
+        return resp
+
+    return (subprocess.check_output('git pull'), 201)
+
 
 @app.route('/capture', methods=['GET'])
 def capture():
