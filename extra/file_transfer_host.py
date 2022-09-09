@@ -2,6 +2,7 @@ import os
 import datetime
 import urllib.request
 from io import BytesIO
+import glob
 
 from file_transfer_host_app import app
 from flask import Flask, request, redirect, jsonify, make_response, send_file
@@ -14,11 +15,36 @@ import subprocess
 ALLOWED_EXTENSIONS = set(['zip'])
 ALLOWED_IPS = set([
     '10.0.0.98',
-    '10.0.0.119'
+    '10.0.0.119',
+    '10.0.0.8'
 ])
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@app.route('/img-paths', methods=['GET'])
+def get_img_paths():
+    def order_script_log_paths_by_date(log_paths, folder_index):
+        log_paths_split = list(map(os.path.split, log_paths))
+        str_to_datetime = lambda datetime_str: datetime.datetime.now().strptime(datetime_str, '%Y-%m-%d %H-%M-%S')
+        log_path_timestamps = list(map(str_to_datetime, map(lambda log_path: '-'.join(log_path[folder_index].split('-')[1:]), log_paths_split)))
+        log_paths_w_timestamp = list(zip(log_paths, log_path_timestamps))
+        log_paths_w_timestamp.sort(key=lambda log_pair: log_pair[1], reverse=True)
+        return log_paths_w_timestamp
+
+    log_paths = glob.glob('C:\\Users\\takho\\ScriptEngine\\logs\\*')
+    log_paths_w_timestamp = order_script_log_paths_by_date(log_paths, -1)[-5:]
+    logs_obj = []
+    for log_path,log_timestamp in log_paths_w_timestamp:
+        log_imgs = glob.glob(log_path + '\\**\\*.png', recursive=True)
+        log_imgs_w_timestamp = order_script_log_paths_by_date(log_imgs, -2)
+        logs_obj.append({
+            'log_path' : log_path,
+            'log_timestamp' : log_timestamp,
+            'log_imgs' : log_imgs_w_timestamp
+        })
+    return jsonify(logs_obj)
 
 @app.route('/github-pull', methods=['GET'])
 def github_pull():

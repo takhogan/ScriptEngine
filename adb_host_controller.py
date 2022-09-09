@@ -434,7 +434,7 @@ class adb_host:
         shell_process = subprocess.Popen([self.adb_path, 'shell'],
                                          stdin=subprocess.PIPE)
         shell_process.communicate((''.join(command_string)).encode('utf-8'))
-        print((''.join(command_string)).encode('utf-8'))
+        # print((''.join(command_string)).encode('utf-8'))
         self.event_counter += 1
 
     def handle_action(self, action, state, context, log_level, log_folder):
