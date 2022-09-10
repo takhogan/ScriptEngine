@@ -7,6 +7,7 @@ import unicodedata
 from bs4 import BeautifulSoup
 
 from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
@@ -57,9 +58,14 @@ def initialize_service():
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
+        needs_refresh = True
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+                needs_refresh = False
+            except RefreshError:
+                pass
+        if needs_refresh:
             flow = InstalledAppFlow.from_client_secrets_file(
                 'credentials.json', SCOPES)
             # if issues here: https://github.com/googleapis/google-auth-library-python-oauthlib/issues/69
@@ -87,13 +93,15 @@ def check_and_execute_active_tasks(service, calendar_id, running_scripts):
     now = now_datetime.isoformat() + 'Z'
     now_plus_five = now_plus_five_datetime.isoformat() + 'Z'
     print(now, '-', now_plus_five)
-
-    events_result = service.events().list(calendarId=calendar_id,
-                                          timeMin=now,
-                                          timeMax=now_plus_five,
-                                          singleEvents=True,
-                                          timeZone='UTC',
-                                          orderBy='startTime').execute()
+    try:
+        events_result = service.events().list(calendarId=calendar_id,
+                                              timeMin=now,
+                                              timeMax=now_plus_five,
+                                              singleEvents=True,
+                                              timeZone='UTC',
+                                              orderBy='startTime').execute()
+    except RefreshError:
+        pass
     events = events_result.get('items', [])
 
     if not events:
