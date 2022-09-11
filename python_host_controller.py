@@ -26,6 +26,8 @@ from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
 from script_engine_utils import generate_context_switch_action
 
+KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
+
 class python_host:
     def __init__(self, props):
         host_dimensions = pyautogui.size()
@@ -101,7 +103,10 @@ class python_host:
                         if is_escaped_char:
                             if expression_char == '}':
                                 is_escaped_char = False
-                                pyautogui.press(escaped_char)
+                                if escaped_char in KEYBOARD_KEYS:
+                                    pyautogui.press(escaped_char)
+                                else:
+                                    pyautogui.press(eval(escaped_char, state.copy()))
                                 escaped_char = ''
                             else:
                                 escaped_char += expression_char

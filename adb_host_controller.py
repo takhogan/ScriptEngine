@@ -19,6 +19,7 @@ from os import path
 import os
 import glob
 import itertools
+import pyautogui
 
 sys.path.append(".")
 from script_execution_state import ScriptExecutionState
@@ -29,7 +30,7 @@ from click_action_helper import ClickActionHelper
 from detect_scene_helper import DetectSceneHelper
 from detect_object_helper import DetectObjectHelper
 
-
+KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
 
 class adb_host:
     def __init__(self, props, host_os, adb_ip):
