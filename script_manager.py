@@ -59,7 +59,7 @@ def run_script_sequence(script_sequence, sequences, timeout):
             run_script_sequence(sequences[script], sequences, extended_timeout)
         else:
             print('running script ', script)
-            load_and_run(script, extended_timeout)
+            load_and_run(script, extended_timeout, script_sequence['constants'])
 
 
 def parse_script_sequence_def(script_sequence_def):
@@ -121,12 +121,12 @@ def parse_and_run_script_sequence_def(script_sequence_def, timeout):
         run_script_sequence(sequences['onDestroy'], sequences, timeout + datetime.timedelta(minutes=15))
 
 
-def load_and_run(script_name, timeout):
+def load_and_run(script_name, timeout, constants=None):
     # if you want to open zip then you pass .zip in command line args
     script_object = parse_zip('./scripts/' + script_name)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
-    main_script = ScriptExecutor(script_object, timeout)
+    main_script = ScriptExecutor(script_object, timeout, state=constants)
     main_script.run(log_level='INFO')
 
 
