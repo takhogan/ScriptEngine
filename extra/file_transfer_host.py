@@ -26,18 +26,30 @@ def allowed_file(filename):
 @app.route('/img-paths', methods=['GET'])
 def get_img_paths():
     def order_script_log_paths_by_date(log_paths, folder_index):
-        log_paths_split = list(map(os.path.split, log_paths))
+        log_paths_split = list(map(lambda log_path: os.path.normpath(log_path).split(os.path.sep), log_paths))
+        # print('1', log_paths_split)
         str_to_datetime = lambda datetime_str: datetime.datetime.now().strptime(datetime_str, '%Y-%m-%d %H-%M-%S')
+        # print('2', str_to_datetime)
+        # print('2.5', list(map(lambda log_path: '-'.join(log_path[folder_index].split('-')[1:]), log_paths_split)))
+        # pre_paths = list(map(lambda log_path: '-'.join(log_path[folder_index].split('-')[1:]), log_paths_split))
+        # for pre_path_index in range(0, len(pre_paths)):
+        #     if pre_paths[pre_path_index] == '':
+        #         print(log_paths_split[pre_path_index])
+        #         exit(0)
         log_path_timestamps = list(map(str_to_datetime, map(lambda log_path: '-'.join(log_path[folder_index].split('-')[1:]), log_paths_split)))
+        # print('3', log_path_timestamps)
         log_paths_w_timestamp = list(zip(log_paths, log_path_timestamps))
+        # print('4', log_paths_w_timestamp)
         log_paths_w_timestamp.sort(key=lambda log_pair: log_pair[1], reverse=True)
         return log_paths_w_timestamp
 
     log_paths = glob.glob('C:\\Users\\takho\\ScriptEngine\\logs\\*')
-    log_paths_w_timestamp = order_script_log_paths_by_date(log_paths, -1)[-5:]
+    log_paths_w_timestamp = order_script_log_paths_by_date(log_paths, -1)[:5]
     logs_obj = []
     for log_path,log_timestamp in log_paths_w_timestamp:
         log_imgs = glob.glob(log_path + '\\**\\*.png', recursive=True)
+        log_imgs = list(filter(lambda log_path: not os.path.normpath(log_path).split(os.path.sep)[-2].startswith('searchPattern') and\
+                          not os.path.normpath(log_path).split(os.path.sep)[-2].startswith('errors'), log_imgs))
         log_imgs_w_timestamp = order_script_log_paths_by_date(log_imgs, -2)
         logs_obj.append({
             'log_path' : log_path,
