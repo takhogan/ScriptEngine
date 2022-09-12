@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { LogObject } from '../types/log-viewer-types';
 import { Subscription } from 'rxjs';
+import { LogLoaderService } from '../log-loader.service';
 
 
 @Component({
@@ -9,13 +10,15 @@ import { Subscription } from 'rxjs';
   styleUrls: ['./app.component.css']
 })
 export class AppComponent implements OnDestroy, OnInit {
-  selectedLogIndex : number;
+  selectedLogIndex : number | null;
   logList : Array<LogObject>;
 
   private subs : Array<Subscription>;
 
   constructor(private logLoader : LogLoaderService) {
-
+    this.selectedLogIndex = null;
+    this.logList = [];
+    this.subs = [];
   }
 
   ngOnInit() {
@@ -27,7 +30,7 @@ export class AppComponent implements OnDestroy, OnInit {
     }))
   }
 
-  ngOnDestory() {
+  ngOnDestroy() {
     this.subs.forEach(sub => {
       sub.unsubscribe();
     });
