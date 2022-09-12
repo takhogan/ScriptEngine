@@ -92,7 +92,6 @@ def check_and_execute_active_tasks(service, calendar_id, running_scripts):
 
     now = now_datetime.isoformat() + 'Z'
     now_plus_five = now_plus_five_datetime.isoformat() + 'Z'
-    print(now, '-', now_plus_five)
     try:
         events_result = service.events().list(calendarId=calendar_id,
                                               timeMin=now,
@@ -138,7 +137,7 @@ def check_and_execute_active_tasks(service, calendar_id, running_scripts):
             delete_events.append(event)
     for event in delete_events:
         del running_scripts[event]
-    print('running scripts: ', list(running_scripts))
+    print(now, '-', now_plus_five, ' running scripts: ', list(running_scripts))
 
 def run():
     service,calendar_id = initialize_service()

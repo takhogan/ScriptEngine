@@ -13,6 +13,8 @@ from python_host_controller import python_host
 from adb_host_controller import adb_host
 from detect_object_helper import DetectObjectHelper
 from script_engine_utils import generate_context_switch_action
+from script_logger import ScriptLogger
+
 import time
 import os
 import datetime
@@ -92,6 +94,7 @@ class ScriptExecutor:
         os.makedirs(self.log_folder, exist_ok=True)
         os.makedirs(self.log_folder + '/search_patterns', exist_ok=True)
         self.log_folder += '/'
+        self.logger = ScriptLogger(self.log_folder)
 
     def rewind(self, input_vars):
         # print('rewind context : ', self.context["action_attempts"])
@@ -111,11 +114,13 @@ class ScriptExecutor:
 
 
     def handle_action(self, action):
-        print(self.props["script_name"], ' ', action["actionData"]["targetSystem"],
-              ' action : ', action["actionName"] + '-' + str(action["actionGroup"]),
-              ' children: ', list(map(lambda action: action["actionGroup"], self.get_children(action))),
-              ' attempts: ', self.context["action_attempts"],
-              ' outOfAttempts: ', self.context["out_of_attempts"])
+        print(
+            self.props["script_name"] + ' ' + action["actionData"]["targetSystem"] +\
+              ' action : ' + action["actionName"] + '-' + str(action["actionGroup"]) +\
+              ' children: ' + str(list(map(lambda action: action["actionGroup"], self.get_children(action)))) +\
+              ' attempts: ' + str(self.context["action_attempts"]) +\
+              ' outOfAttempts: ' + str(self.context["out_of_attempts"])
+        )
         self.context["script_counter"] += 1
         # print(' context (2) : ', self.context["action_attempts"])
         if action["actionName"] not in DELAY_EXEMPT_ACTIONS:
