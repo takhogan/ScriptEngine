@@ -100,8 +100,19 @@ def check_and_execute_active_tasks(service, calendar_id, running_scripts):
                                               singleEvents=True,
                                               timeZone='UTC',
                                               orderBy='startTime').execute()
-    except RefreshError:
-        pass
+    except RefreshError as r_error:
+        print(r_error)
+        initialize_service()
+        events_result = service.events().list(calendarId=calendar_id,
+                                              timeMin=now,
+                                              timeMax=now_plus_five,
+                                              singleEvents=True,
+                                              timeZone='UTC',
+                                              orderBy='startTime').execute()
+    except ConnectionResetError as cr_error:
+        print(cr_error)
+        time.sleep(60)
+        return
     events = events_result.get('items', [])
 
     if not events:
