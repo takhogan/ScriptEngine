@@ -1,6 +1,8 @@
 import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { LogObject } from '../../types/log-viewer-types';
 import { Subscription } from 'rxjs';
+import { LogLoaderService } from '../../log-loader.service';
+
 
 @Component({
   selector: 'app-log-selector',
@@ -10,23 +12,29 @@ import { Subscription } from 'rxjs';
 export class LogSelectorComponent implements OnDestroy, OnInit {
 
   @Input() logList : Array<LogObject>;
-  private selectedLogIndex : number;
+  selectedLogIndex : number | null;
 
-  constructor(private logLoader : LogLoaderService) { }
+  private subs : Array<Subscription>;
+
+  constructor(private logLoader : LogLoaderService) {
+    this.logList = [];
+    this.selectedLogIndex = null;
+    this.subs = [];
+  }
 
   ngOnInit(): void {
-    this.sub.push(this.logLoader.selectedLogIndex$.subscribe(logIndex => {
+    this.subs.push(this.logLoader.selectedLogIndex$.subscribe(logIndex => {
       this.selectedLogIndex = logIndex;
     }));
   }
 
-  ngOnDestory() {
+  ngOnDestroy() {
     this.subs.forEach(sub => {
       sub.unsubscribe();
     });
   }
 
-  onLogSelect(logIndex) {
+  onLogSelect(logIndex : number) {
     this.logLoader.updateSelectedLogIndex(logIndex);
   }
 

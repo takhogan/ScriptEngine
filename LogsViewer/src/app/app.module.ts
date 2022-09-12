@@ -1,5 +1,7 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
+import { HttpClientModule } from '@angular/common/http';
+
 
 import { AppComponent } from './app.component';
 import { LogSelectorComponent } from './log-selector/log-selector.component';
@@ -14,7 +16,8 @@ import { LogNavbarComponent } from './log-navbar/log-navbar.component';
     LogNavbarComponent
   ],
   imports: [
-    BrowserModule
+    BrowserModule,
+    HttpClientModule
   ],
   providers: [],
   bootstrap: [AppComponent]

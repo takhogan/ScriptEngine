@@ -1,5 +1,5 @@
 <div
-  *ngFor="log of logList; index as logIndex;"
+  *ngFor="let log of logList; index as logIndex;"
   class="row"
   (click)="onLogSelect(logIndex)">
   <h1>{{log.log_path}}</h1>

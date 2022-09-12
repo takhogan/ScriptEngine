@@ -10,9 +10,16 @@ export class LogViewerComponent implements OnInit {
 
   @Input() logObj : LogObject;
 
-  constructor() { }
+  constructor() {
+    this.logObj = {
+      log_path : '',
+      log_timestamp : new Date(),
+      log_imgs : []
+    };
+  }
 
   ngOnInit(): void {
+
   }
 
 }
