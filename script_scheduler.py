@@ -21,8 +21,15 @@ CALENDAR_NAME = 'ScriptScheduler'
 
 
 def clean_description(description):
+    # print('preclean : ', description)
     if bool(BeautifulSoup(description, "html.parser").find()):
-        description = unicodedata.normalize("NFKC", BeautifulSoup(description, features="html.parser").get_text('\n'))
+        parsed_html = BeautifulSoup(description, features="html.parser")
+        for u_tag in parsed_html.select('u'):
+            u_tag.extract()
+        for br_tag in parsed_html.find_all("br"):
+            br_tag.replace_with("\n")
+        description = parsed_html.get_text()
+        # description = unicodedata.normalize("NFKC",)
     return description
 
 
@@ -115,12 +122,13 @@ def check_and_execute_active_tasks(service, calendar_id, running_scripts):
     events = events_result.get('items', [])
 
     if not events:
-        print('No events found.')
+        pass
+        # print('No events found.')
     else:
         event = events[0]
 
         if event['summary'] not in running_scripts:
-
+            print(clean_description(event['description']))
             event_process = multiprocessing.Process(
                 target=parse_and_run_script_sequence_def,
                 args=(clean_description(event['description']), event['end']['dateTime'])

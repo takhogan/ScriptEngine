@@ -1,6 +1,7 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { LogObject } from '../../types/log-viewer-types';
 
+
 @Component({
   selector: 'app-log-viewer',
   templateUrl: './log-viewer.component.html',

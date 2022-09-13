@@ -5,8 +5,8 @@
     <div
       *ngFor="let logImg of logObj.log_imgs"
       class="row">
-      {{logImg}}
-      <img [src]="logImg" width="100%" height="100%">
+      <p [innerText]="logImg[0]"></p> {{logImg[1]}}
+      <img [src]="logImg[0]" max-height="400px" max-width="800px" alt="image">
     </div>
   </div>
 </div>
