@@ -1,4 +1,5 @@
 import { Injectable, OnInit, OnDestroy } from '@angular/core';
+import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { BehaviorSubject, Subject, Subscription } from 'rxjs';
 import { LogObject } from './types/log-viewer-types';
 import { HttpClient, HttpEventType, HttpHeaders, HttpParams, HttpRequest, HttpResponse} from '@angular/common/http';
@@ -19,11 +20,13 @@ export class LogLoaderService implements OnInit,OnDestroy {
   selectedLogIndex$ = this.selectedLogIndexSource.asObservable();
   logList$ = this.logListSource.asObservable();
 
-  constructor(private http : HttpClient) {
+  constructor(private http : HttpClient,
+              private sanitizer: DomSanitizer) {
     this.logList = [];
     this.selectedLogIndex = null;
     this.subs = [];
     this.refreshLogList();
+
   }
 
   ngOnInit() {
@@ -45,10 +48,17 @@ export class LogLoaderService implements OnInit,OnDestroy {
 
     this.subs.push(this.http.get<Array<LogObject>>(logViewerBackendURL).subscribe(logObjectArr => {
       console.log('loaded ', logObjectArr.length, ' elements');
+      logObjectArr = logObjectArr.map(logObject => {
+        logObject.log_imgs = logObject.log_imgs.map(log_img => {
+          return [this.sanitizer.bypassSecurityTrustUrl(log_img[0] as string), log_img[1]];
+        });
+        return logObject;
+      });
+      
       this.logList = logObjectArr;
       this.logListSource.next(this.logList);
     }, err => {
-      console.log('error : ', err);
+      console.log('error message : ', err);
     }));
   }
 

@@ -48,10 +48,13 @@ def run_script_sequence(script_sequence, sequences, timeout):
 
     extended_timeout = timeout
     if 'endExtension' in script_sequence['commands']:
+        print('parsing end extension')
         timeout = str_timeout_to_datetime_timeout(timeout)
         delay_range_repr = get_command_tuple_val(script_sequence['commands']['endExtension'])
         delay_val = random.randrange(delay_range_repr[0], delay_range_repr[1])
+        print('delaying end for ', delay_val)
         extended_timeout = timeout + datetime.timedelta(seconds=delay_val)
+        print('extended timeout : ', extended_timeout)
 
 
     for script in script_sequence['sequence']:
@@ -71,6 +74,8 @@ def parse_script_sequence_def(script_sequence_def):
         'constants': {},
         'commands': {}
     }
+    # print(script_sequence_def)
+    # print(script_sequence_def.split('\n'))
     for line in script_sequence_def.split('\n'):
         if line == '':
             continue
@@ -97,9 +102,11 @@ def parse_script_sequence_def(script_sequence_def):
             else:
                 sequences[sequence_name]['sequence'].append(line.strip())
         else:
+            # print(line)
             if line[0].strip() == '[':
                 line = line.strip()[1:-1]
                 def_statement = line.split(':')
+                # print(def_statement)
                 if def_statement[0].upper() == def_statement[0]:
                     main_sequence['constants'][def_statement[0]] = def_statement[1]
                 else:
@@ -109,6 +116,7 @@ def parse_script_sequence_def(script_sequence_def):
     return main_sequence,sequences
 
 def parse_and_run_script_sequence_def(script_sequence_def, timeout):
+    # print('def ', script_sequence_def)
     main_sequence,sequences = parse_script_sequence_def(script_sequence_def)
     print(main_sequence, sequences)
     timeout = str_timeout_to_datetime_timeout(timeout)

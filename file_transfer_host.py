@@ -5,7 +5,7 @@ from io import BytesIO
 import glob
 
 from file_transfer_host_app import app
-from flask import Flask, request, redirect, jsonify, make_response, send_file
+from flask import Flask, request, redirect, jsonify, make_response, send_file, send_from_directory, render_template
 from werkzeug.utils import secure_filename
 from flask_cors import CORS, cross_origin
 import shutil
@@ -25,7 +25,7 @@ def allowed_file(filename):
 
 @app.route('/img-paths', methods=['GET'])
 def get_img_paths():
-    def order_script_log_paths_by_date(log_paths, folder_index):
+    def order_script_log_paths_by_date(log_paths, folder_index, reverse=True):
         log_paths_split = list(map(lambda log_path: os.path.normpath(log_path).split(os.path.sep), log_paths))
         # print('1', log_paths_split)
         str_to_datetime = lambda datetime_str: datetime.datetime.now().strptime(datetime_str, '%Y-%m-%d %H-%M-%S')
@@ -40,23 +40,26 @@ def get_img_paths():
         # print('3', log_path_timestamps)
         log_paths_w_timestamp = list(zip(log_paths, log_path_timestamps))
         # print('4', log_paths_w_timestamp)
-        log_paths_w_timestamp.sort(key=lambda log_pair: log_pair[1], reverse=True)
+        log_paths_w_timestamp.sort(key=lambda log_pair: log_pair[1], reverse=reverse)
         return log_paths_w_timestamp
 
-    log_paths = glob.glob('C:\\Users\\takho\\ScriptEngine\\logs\\*')
+    log_paths = glob.glob('C:\\Users\\takho\\ScriptEngine\\logs\\*\\')
+    log_paths = list(map(lambda log_path: log_path.replace('C:\\Users\\takho\\ScriptEngine\\logs\\', '')[:-1], log_paths))
     log_paths_w_timestamp = order_script_log_paths_by_date(log_paths, -1)[:5]
     logs_obj = []
     for log_path,log_timestamp in log_paths_w_timestamp:
-        log_imgs = glob.glob(log_path + '\\**\\*.png', recursive=True)
+        log_imgs = glob.glob('logs\\' + log_path + '\\**\\*.png', recursive=True)
+        log_imgs = list(map(lambda log_path: log_path.replace('logs\\', ''), log_imgs))
         log_imgs = list(filter(lambda log_path: not os.path.normpath(log_path).split(os.path.sep)[-2].startswith('searchPattern') and\
                           not os.path.normpath(log_path).split(os.path.sep)[-2].startswith('errors'), log_imgs))
-        log_imgs_w_timestamp = order_script_log_paths_by_date(log_imgs, -2)
+        log_imgs_w_timestamp = order_script_log_paths_by_date(log_imgs, -2, reverse=False)
         logs_obj.append({
             'log_path' : log_path,
             'log_timestamp' : log_timestamp,
             'log_imgs' : log_imgs_w_timestamp
         })
-    return jsonify(logs_obj)
+    return logs_obj
+    # return jsonify(logs_obj)
 
 @app.route('/github-pull', methods=['GET'])
 def github_pull():
@@ -165,25 +168,20 @@ def upload_file():
         # resp.status_code = 400
         return make_response(resp, 400)
 
-
-
-# def gcloud_endpoint(request):
-#     if request.method == 'OPTIONS':
-#         # Allows GET requests from any origin with the Content-Type
-#         # header and caches preflight response for an 3600s
-#         headers = {
-#             'Access-Control-Allow-Origin': '*',
-#             'Access-Control-Allow-Methods': 'GET',
-#             'Access-Control-Allow-Headers': 'Content-Type',
-#             'Access-Control-Max-Age': '3600'
-#         }
-#
-#         return ('', 204, headers)
-#
-#     headers = {
-#         'Access-Control-Allow-Origin': '*',
-#         'Content-Type' : 'application/json'
-#     }
+# Serving static files
+@app.route('/', defaults={'path': ''})
+@app.route('/<string:path>')
+@app.route('/<path:path>')
+def static_proxy(path):
+    if os.path.isfile('logs/' + path):
+        # If request is made for a file by angular for example main.js
+        # condition will be true, file will be served from the public directory
+        print('here: ', path)
+        return send_from_directory('./logs', path)
+    else:
+        # Otherwise index.html will be served,
+        # angular router will handle the rest
+        return render_template("index.html")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port="3849")
