@@ -64,7 +64,8 @@ class python_host:
         if action["actionName"] == "shellScript":
             return ScriptExecutionState.SUCCESS, self.run_script(action, state), context
         elif action["actionName"] == "sleepStatement":
-            time.sleep(float(eval(str(action["actionData"]["inputExpression"]), state)))
+            if str(action["actionData"]["inputExpression"]).strip() != '':
+                time.sleep(float(eval(str(action["actionData"]["inputExpression"]), state.copy())))
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "clickAction":
             var_name = action["actionData"]["inputExpression"]

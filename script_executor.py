@@ -14,11 +14,14 @@ from adb_host_controller import adb_host
 from detect_object_helper import DetectObjectHelper
 from script_engine_utils import generate_context_switch_action
 from script_logger import ScriptLogger
+from rv_helper import RandomVariableHelper
+
 
 import time
 import os
 import datetime
 import pytesseract
+import requests
 
 DETECT_TYPES_SET = {
     'detectObject',
@@ -31,7 +34,6 @@ FORWARD_PEEK_EXEMPT_ACTIONS = {
 
 DELAY_EXEMPT_ACTIONS = {
     'declareObject',
-    'detectScene',
     'sleepStatement',
     'scriptReference',
     'conditionalStatement',
@@ -40,6 +42,8 @@ DELAY_EXEMPT_ACTIONS = {
     'imageToTextAction',
     'contextSwitchAction'
 }
+
+VIBER_CONTROLLER_ENDPOINT_URL = 'https://viber-controller-qziox5v33q-uc.a.run.app'
 
 
 class ScriptExecutor:
@@ -275,6 +279,14 @@ class ScriptExecutor:
                         self.state[action["actionData"]["outputVarName"]] = expression
                     # print(' state (6) : ', self.state)
                     self.status = ScriptExecutionState.SUCCESS
+                elif action["actionName"] == "sleepStatement":
+                    if str(action["actionData"]["inputExpression"]).strip() != '':
+                        time.sleep(float(eval(str(action["actionData"]["inputExpression"]), self.state.copy())))
+                    self.status = ScriptExecutionState.SUCCESS
+                elif action["actionName"] == "randomVariable":
+                    delays = RandomVariableHelper.get_rv_val(action)
+                    self.state[action["actionData"]["outputVarName"]] = delays
+                    self.status = ScriptExecutionState.SUCCESS
                 elif action["actionName"] == "jsonFileAction":
                     if action["actionData"]["mode"] == "read":
                         with open(self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"], "r") as read_file:
@@ -310,6 +322,19 @@ class ScriptExecutor:
                     if 'context' in action["actionData"]["update_dict"]:
                         for key,value in action["actionData"]["update_dict"]["context"].items():
                             self.context[key] = value
+                    self.status = ScriptExecutionState.SUCCESS
+                elif action["actionName"] == "sendMessageAction":
+                    if action["actionData"]["messagingProvider"] == "viber":
+                        with open('viber_credentials.json', 'r') as creds_file:
+                            creds = json.load(creds_file)
+                        print(requests.post(url=VIBER_CONTROLLER_ENDPOINT_URL, json={
+                            'action': 'sendMessage',
+                            'payload': eval(action["actionData"]["inputExpression"], self.state.copy())
+                        }, headers={
+                            'SECRET': creds['SECRET']
+                            # 'Authorization' : 'Bearer ' + creds['AUTHORIZATION']
+                        }).text)
+                        del creds
                     self.status = ScriptExecutionState.SUCCESS
                 else:
                     self.status = ScriptExecutionState.ERROR

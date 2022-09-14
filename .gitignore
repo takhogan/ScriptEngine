@@ -6,5 +6,6 @@ logs/
 data/
 venv/
 scripts/
+viber_credentials.json
 credentials.json
 token.json
