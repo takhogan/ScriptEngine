@@ -1,4 +1,5 @@
 from scipy.stats import truncnorm
+import random
 
 class RandomVariableHelper:
 
@@ -15,6 +16,12 @@ class RandomVariableHelper:
             delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)
             print(delays)
             return delays
+        elif action["actionData"]["distType"] == "uniform":
+            min_val = action["actionData"]["min"]
+            max_val = action["actionData"]["max"]
+            dist_range = max_val - min_val
+            return random.random() * dist_range + min_val
+            pass
         else:
             print('random variable unimplemented: ' + action["actionData"]["distType"])
             exit(0)
