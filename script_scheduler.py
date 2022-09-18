@@ -73,10 +73,19 @@ def initialize_service():
             except RefreshError:
                 pass
         if needs_refresh:
+            refresh_process = multiprocessing.Process(
+                target=parse_and_run_script_sequence_def,
+                args=(
+                    clean_description('refreshGoogleToken'),
+                    (datetime.datetime.utcnow() + datetime.timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%S") + 'Z'
+                )
+            )
+            refresh_process.start()
             flow = InstalledAppFlow.from_client_secrets_file(
                 'credentials.json', SCOPES)
             # if issues here: https://github.com/googleapis/google-auth-library-python-oauthlib/issues/69
             creds = flow.run_local_server(port=0)
+
         # Save the credentials for the next run
         with open('token.json', 'w') as token:
             token.write(creds.to_json())

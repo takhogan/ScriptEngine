@@ -116,15 +116,14 @@ def parse_script_sequence_def(script_sequence_def):
     return main_sequence,sequences
 
 def parse_and_run_script_sequence_def(script_sequence_def, timeout):
-    # print('def ', script_sequence_def)
+    print('def ', script_sequence_def)
     main_sequence,sequences = parse_script_sequence_def(script_sequence_def)
     print(main_sequence, sequences)
     timeout = str_timeout_to_datetime_timeout(timeout)
     if 'onInit' in sequences:
         run_script_sequence(sequences['onInit'], sequences, timeout)
-
+    print('1')
     run_script_sequence(main_sequence, sequences, timeout)
-
     if 'onDestroy' in sequences:
         run_script_sequence(sequences['onDestroy'], sequences, timeout + datetime.timedelta(minutes=15))
 
