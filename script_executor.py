@@ -303,14 +303,13 @@ class ScriptExecutor:
                 elif action["actionName"] == "imageToTextAction":
                     if action["actionData"]["conversionEngine"] == "tesseractOCR":
                         search_im, match_pt = DetectObjectHelper.get_detect_area(action, self.state)
-
-
+                        cv2.imwrite(self.log_folder + str(self.context['script_counter']) + '-' + '-image_to_text.png', search_im)
                         output_text = pytesseract.image_to_string(
                             search_im,
                             config=('-c tessedit_char_whitelist={}'.format(shlex.quote(action["actionData"]["characterWhiteList"]))) if len(action["actionData"]["characterWhiteList"]) > 0 else ''
 
                         )
-                        print(output_text)
+                        print('output_text : ', output_text)
                         self.state[action["actionData"]["outputVarName"]] = output_text
                         self.status = ScriptExecutionState.SUCCESS
                 elif action["actionName"] == "contextSwitchAction":
@@ -422,8 +421,6 @@ class ScriptExecutor:
             self.forward_detect_peek()
         n_actions = len(self.actions)
         is_return = False
-        # print('execute_actions : ', self.actions)
-        print('len actions ', len(self.actions), list(map(lambda action: action['actionName'], self.actions)))
         if self.context["branching_behavior"] == "firstMatch":
             pass
         elif self.context["branching_behavior"] == "attemptAllBranches" and len(self.actions) > 1:
