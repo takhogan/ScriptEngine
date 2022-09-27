@@ -15,7 +15,7 @@ import subprocess
 ALLOWED_EXTENSIONS = set(['zip'])
 ALLOWED_IPS = set([
     '10.0.0.98',
-    '10.0.0.119',
+    '10.0.0.117',
     '10.0.0.8'
 ])
 
