@@ -206,6 +206,7 @@ class python_host:
                 logs_path,
                 self.props["scriptMode"],
                 match_point,
+                output_cropping=action["actionData"]["maskLocation"] if action["actionData"]["maskLocation"] != 'null' else None,
                 threshold=float(action["actionData"]["threshold"])
             )
             if len(matches) > 0:
