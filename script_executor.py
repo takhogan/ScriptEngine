@@ -302,13 +302,16 @@ class ScriptExecutor:
                         self.status = ScriptExecutionState.ERROR
                 elif action["actionName"] == "imageToTextAction":
                     if action["actionData"]["conversionEngine"] == "tesseractOCR":
+                        log_file_path = self.log_folder + str(self.context['script_counter'])
                         search_im, match_pt = DetectObjectHelper.get_detect_area(action, self.state)
-                        cv2.imwrite(self.log_folder + str(self.context['script_counter']) + '-' + '-image_to_text.png', search_im)
+                        cv2.imwrite(log_file_path + '-image_to_text.png', search_im)
                         output_text = pytesseract.image_to_string(
                             search_im,
                             config=('-c tessedit_char_whitelist={}'.format(shlex.quote(action["actionData"]["characterWhiteList"]))) if len(action["actionData"]["characterWhiteList"]) > 0 else ''
 
                         )
+                        with open(log_file_path + '-output-' + output_text[:10] + '.txt', 'w') as log_file:
+                            log_file.write(output_text)
                         print('output_text : ', output_text)
                         self.state[action["actionData"]["outputVarName"]] = output_text
                         self.status = ScriptExecutionState.SUCCESS

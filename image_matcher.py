@@ -12,6 +12,7 @@ class ImageMatcher:
     def template_match(detectObject,
                        screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr, screencap_outputmask_gray,
                        detector_name, logs_path, script_mode, match_point,
+                       output_cropping=None,
                        threshold=0.96, use_color=True, use_mask=True):
         # print(screencap_search.shape)
         if detector_name == "pixelDifference":
@@ -21,6 +22,7 @@ class ImageMatcher:
                 screencap_mask_gray,
                 screencap_outputmask_bgr,
                 logs_path,
+                output_cropping=output_cropping,
                 threshold=threshold,
                 use_color=use_color,
                 use_mask=use_mask
@@ -79,7 +81,7 @@ class ImageMatcher:
 
     @staticmethod
     def produce_template_matches(screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr,
-                                 logs_path, threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
+                                 logs_path, output_cropping=None, threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
         # https://docs.opencv.org/3.4/de/da9/tutorial_template_matching.html
         h, w = screencap_search_bgr.shape[0:2]
         # print(screencap_search.shape)
@@ -99,11 +101,22 @@ class ImageMatcher:
         # cv2.waitKey(0)
         # cv2.imshow('screencap_search', screencap_search_bgr)
         # cv2.waitKey(0)
-        match_result = cv2.matchTemplate(
-            cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr,
-            cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
-            cv2.TM_CCOEFF_NORMED,result=None,
-            mask=screencap_mask_gray if use_mask else None)
+        try:
+            match_result = cv2.matchTemplate(
+                cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr,
+                cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
+                cv2.TM_CCOEFF_NORMED,result=None,
+                mask=screencap_mask_gray if use_mask else None)
+        except cv2.error as e:
+            print(e)
+            cv2.imshow('screencap_im', screencap_im_bgr)
+            cv2.waitKey(0)
+            cv2.imshow('screencap_search', screencap_search_bgr)
+            cv2.waitKey(0)
+            cv2.imshow('screencap_mask_gray', screencap_mask_gray)
+            cv2.waitKey(0)
+            print(screencap_im_bgr.shape, screencap_search_bgr.shape, screencap_mask_gray.shape)
+            exit(1)
         # match_result = 1 - match_result
 
         # cv2.normalize(match_result, match_result, 0, 1, cv2.NORM_MINMAX, -1)
@@ -121,6 +134,8 @@ class ImageMatcher:
             redundant = False
             match_score = match_result[pt[1], pt[0]]
             match_img_bgr = cv2.bitwise_and(screencap_im_bgr[pt[1]:pt[1] + h, pt[0]:pt[0] + w].copy(), screencap_outputmask_bgr)
+            if output_cropping is not None:
+                match_img_bgr = match_img_bgr[output_cropping[0][1]:output_cropping[1][1], output_cropping[0][0]:output_cropping[1][0]].copy()
             if match_score == np.inf:
                 print(pt)
                 continue
@@ -143,7 +158,10 @@ class ImageMatcher:
                     # change name to fit image format
                     cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(match_result[pt[1], pt[0]]) + '-img.png', match_img_bgr)
                 match_img_index += 1
-        print('n matches : ', len(matches), ' best match : ', np.max(match_result[np.where(np.inf > match_result)]) if (match_result[np.where(np.inf > match_result)]).size > 0 else 'none')
+        best_match = str(np.max(match_result[np.where(np.inf > match_result)])) if (match_result[np.where(np.inf > match_result)]).size > 0 else 'none'
+        print('n matches : ', len(matches), ' best match : ', best_match)
+        with open(logs_path + '-best-' + best_match + '.txt', 'w') as log_file:
+            log_file.write('n matches : ' + str(len(matches)))
         result_im_bgr = screencap_im_bgr
         for pt in zip(*loc[::-1]):
             cv2.rectangle(result_im_bgr, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2)
