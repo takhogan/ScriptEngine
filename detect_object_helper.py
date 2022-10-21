@@ -1,4 +1,5 @@
 from script_engine_utils import generate_context_switch_action
+import cv2
 
 class DetectObjectHelper:
     def __init__(self):
@@ -10,6 +11,7 @@ class DetectObjectHelper:
         match_point = None
         var_name = action["actionData"]["inputExpression"]
         if var_name is not None and len(var_name) > 0:
+            print('loading img : ', var_name, '.')
             input_area = eval(var_name, state)
             if len(input_area) > 0:
                 # potentially for loop here
@@ -59,6 +61,10 @@ class DetectObjectHelper:
                 update_dict['context']['run_queue'].append(switch_action)
         print('run_queue : ', len(context['run_queue']) if context['run_queue'] is not None else None)
         if detect_run_type_normal:
+            print(action['actionGroup'], '-', action['actionData']['outputVarName'])
+            if action['actionGroup'] == 31:
+                cv2.imshow('31', matches[0])
+                cv2.waitKey(0)
             state[action['actionData']['outputVarName']] = [matches[0]]
         else:
             update_dict['state'][action['actionData']['outputVarName']] = [matches[0]]

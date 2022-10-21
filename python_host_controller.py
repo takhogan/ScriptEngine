@@ -173,10 +173,13 @@ class python_host:
             screencap_im_bgr,match_point = DetectObjectHelper.get_detect_area(action, state)
 
             if screencap_im_bgr is None:
+                print('screencap_im_bgr is None')
                 if 'screencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
                     screencap_im_bgr = action['actionData']['screencap_im_bgr']
+                    print('loading previous im')
                 else:
                     screencap_im_bgr = self.screenshot()
+                    print('loading new img')
 
             # print('props dims: ', (self.props['height'],  self.props['width']), ' im dims: ', screencap_im_bgr.shape)
             # exit(0)
@@ -191,7 +194,6 @@ class python_host:
             # print(screencap_mask.shape)
 
             screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
-
             # screencap_search_bgr = cv2.cvtColor(screencap_search.copy(), cv2.COLOR_RGB2BGR)
             if self.props["scriptMode"] == "train":
                 cv2.imwrite(logs_path + 'search_img.png', screencap_search_bgr)
