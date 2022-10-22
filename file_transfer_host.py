@@ -22,7 +22,6 @@ ALLOWED_IPS = set([
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-
 @app.route('/img-paths', methods=['GET'])
 def get_img_paths():
     def order_script_log_paths_by_date(log_paths, folder_index, reverse=True):

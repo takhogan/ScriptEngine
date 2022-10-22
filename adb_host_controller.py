@@ -510,6 +510,7 @@ class adb_host:
                 action['actionData']['update_dict'] = update_dict
                 action['actionData']['action_result'] = action_result
                 action['actionData']['detect_run_type'] = None
+                context['action'] = action
             return action_result, state, context
 
         elif action["actionName"] == "clickAction":
