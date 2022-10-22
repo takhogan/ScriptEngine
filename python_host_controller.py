@@ -158,6 +158,8 @@ class python_host:
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
             if 'results_precalculated' in action['actionData'] and action['actionData']['results_precalculated']:
+                if action['actionGroup'] == 31:
+                    print(action['actionGroup'], 'update block', action["actionData"]["update_dict"])
                 if 'state' in action["actionData"]["update_dict"]:
                     for key, value in action["actionData"]["update_dict"]["state"].items():
                         state[key] = value
@@ -168,10 +170,9 @@ class python_host:
                 action['actionData']['screencap_im_bgr'] = None
                 action['actionData']['results_precalculated'] = False
                 action['actionData']['update_dict'] = None
+                print("'detectObject_4' in state",'detectObject_4' in state)
                 return return_tuple
-
             screencap_im_bgr,match_point = DetectObjectHelper.get_detect_area(action, state)
-
             if screencap_im_bgr is None:
                 print('screencap_im_bgr is None')
                 if 'screencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
@@ -208,7 +209,10 @@ class python_host:
                 logs_path,
                 self.props["scriptMode"],
                 match_point,
-                output_cropping=action["actionData"]["maskLocation"] if action["actionData"]["maskLocation"] != 'null' else None,
+                output_cropping=action["actionData"]["maskLocation"] if
+                    (action["actionData"]["maskLocation"] != 'null' and
+                     "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
+                     ) else None,
                 threshold=float(action["actionData"]["threshold"])
             )
             if len(matches) > 0:
@@ -220,12 +224,14 @@ class python_host:
             else:
                 update_dict = {}
                 action_result = ScriptExecutionState.FAILURE
+
             if 'detect_run_type' in action['actionData'] and\
                     action['actionData']['detect_run_type'] == 'result_precalculation':
                 action['actionData']['results_precalculated'] = True
                 action['actionData']['update_dict'] = update_dict
                 action['actionData']['action_result'] = action_result
                 action['actionData']['detect_run_type'] = None
+                context['action'] = action
             return action_result, state, context
         elif action["actionName"] == "randomVariable":
             delays = RandomVariableHelper.get_rv_val(action)

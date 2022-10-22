@@ -60,6 +60,7 @@ class DetectObjectHelper:
             else:
                 update_dict['context']['run_queue'].append(switch_action)
         print('run_queue : ', len(context['run_queue']) if context['run_queue'] is not None else None)
+        print('output ', action['actionData']['outputVarName'], detect_run_type_normal)
         if detect_run_type_normal:
             print(action['actionGroup'], '-', action['actionData']['outputVarName'])
             if action['actionGroup'] == 31:
@@ -68,4 +69,12 @@ class DetectObjectHelper:
             state[action['actionData']['outputVarName']] = [matches[0]]
         else:
             update_dict['state'][action['actionData']['outputVarName']] = [matches[0]]
+        # if action['actionData']['outputVarName'] == 'detectObject_4':
+        #     print(type(update_dict['state'][action['actionData']['outputVarName']]))
+        #     print(update_dict['state'][action['actionData']['outputVarName']])
+        #     print('-end')
+        #
+        #     cv2.imshow('detect_object_4', update_dict['state'][action['actionData']['outputVarName']][0]['matched_area'])
+        #     cv2.waitKey(0)
+        #     exit(0)
         return state, context, update_dict

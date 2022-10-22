@@ -138,6 +138,11 @@ class ScriptExecutor:
                 self.status, self.state, self.context = self.adb_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
             elif action["actionData"]["targetSystem"] == "python":
                 self.status, self.state, self.context = self.python_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
+                if action['actionGroup'] == 31:
+                    # cv2.imshow("self.state['detectObject_4']", self.state['detectObject_4'][0]['matched_area'])
+                    # cv2.waitKey(0)
+                    # exit(0)
+                    pass
             elif action["actionData"]["targetSystem"] == "none":
                 if action["actionName"] == 'scriptReference':
                     is_new_script = "initializedScript" not in action["actionData"] or action["actionData"]["initializedScript"] is None
@@ -304,14 +309,21 @@ class ScriptExecutor:
                         self.status = ScriptExecutionState.ERROR
                 elif action["actionName"] == "imageToTextAction":
                     if action["actionData"]["conversionEngine"] == "tesseractOCR":
+                        TARGET_TYPE_TO_PSM = {
+                            'word' : 8,
+                            'sentence' : 7,
+                            'page' : 3
+                        }
                         log_file_path = self.log_folder + str(self.context['script_counter'])
                         search_im, match_pt = DetectObjectHelper.get_detect_area(action, self.state)
                         cv2.imwrite(log_file_path + '-image_to_text.png', search_im)
                         output_text = pytesseract.image_to_string(
                             search_im,
-                            config=('-c tessedit_char_whitelist={}'.format(shlex.quote(action["actionData"]["characterWhiteList"]))) if len(action["actionData"]["characterWhiteList"]) > 0 else ''
-
-                        )
+                            config=(
+                                '-c tessedit_char_whitelist={}'.format(shlex.quote(action["actionData"]["characterWhiteList"]))) if
+                                len(action["actionData"]["characterWhiteList"]) > 0 else '' +\
+                                '--psm ' + str(TARGET_TYPE_TO_PSM[action['actionData']['targetType']])
+                        ).strip()
                         with open(log_file_path + '-output-' + output_text[:10] + '.txt', 'w') as log_file:
                             log_file.write(output_text)
                         print('output_text : ', output_text)
@@ -393,38 +405,45 @@ class ScriptExecutor:
 
     def forward_detect_peek(self):
         detect_types_by_target_system = {}
-        for action in self.actions:
+        for action_index,action in enumerate(self.actions):
             print(action['actionGroup'], '-forward peek pre sort : ',
                   action['actionData']['inputExpression'] if 'inputExpression' in action[
                       'actionData'] else 'not detect')
+            print('action Groups', list(map(lambda action: action['actionGroup'], self.actions)))
 
             if action['actionName'] in DETECT_TYPES_SET:
+                # if len(action['actionData']['inputExpression']) > 0:
+                #     pass
+                # else:
                 target_system = action['actionData']['targetSystem']
                 if target_system in detect_types_by_target_system:
-                    detect_types_by_target_system[target_system].append(action)
+                    detect_types_by_target_system[target_system].append([action_index,action])
                 else:
-                    detect_types_by_target_system[target_system] = [action]
+                    detect_types_by_target_system[target_system] = [[action_index,action]]
         for target_system,actions in detect_types_by_target_system.items():
             if target_system == 'adb':
                 self.adb_host.init_system()
                 screenshot = self.adb_host.screenshot()
-                for action in actions:
+                for [action_index,action] in actions:
                     action['actionData']['screencap_im_bgr'] = screenshot
                     action['actionData']['detect_run_type'] = 'result_precalculation'
                     action['actionData']['results_precalculated'] = False
                     self.status, self.state, self.context = self.adb_host.handle_action(
                         action, self.state, self.context, self.log_level, self.log_folder
                     )
+                    self.actions[action_index] = self.context['action']
             elif target_system == 'python':
                 screenshot = self.python_host.screenshot()
-                for action in actions:
+                for [action_index,action] in actions:
                     print(action['actionGroup'], '-forward peek : ', action['actionData']['inputExpression'] if 'inputExpression' in action['actionData'] else 'not detect')
                     action['actionData']['screeencap_im_bgr'] = screenshot
                     action['actionData']['detect_run_type'] = 'result_precalculation'
                     action['actionData']['results_precalculated'] = False
+
                     self.status, self.state, self.context = self.python_host.handle_action(
                         action, self.state, self.context, self.log_level, self.log_folder
                     )
+                    self.actions[action_index] = self.context['action']
 
 
 
@@ -440,7 +459,8 @@ class ScriptExecutor:
 
         if len(self.action_rows) > 10:
             print(self.action_rows[9]["actions"][0]['actionGroup'], 'input',
-                  self.action_rows[9]["actions"][0]['actionData']['inputExpression'])
+                  self.action_rows[9]["actions"][0]['actionData']['inputExpression'],
+                  'detectObject_4' in self.state)
 
         self.handle_out_of_attempts_check()
         if forward_peek:
