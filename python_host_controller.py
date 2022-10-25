@@ -38,7 +38,7 @@ class python_host:
         height,width,_ = np.array(pyautogui.screenshot()).shape
         if (not is_null(self.props['width']) and (self.props['width'] != width)) or \
                 (not is_null(self.props['height']) and self.props['height'] != height):
-            print('python host dims mismatch, expected : ', self.props['height'], self.props['width'],
+            print('Warning: python host dims mismatch, expected : ', self.props['height'], self.props['width'],
                   'observed :', height, width)
         self.props['width'] = width
         self.props['height'] = height
@@ -71,7 +71,7 @@ class python_host:
             var_name = action["actionData"]["inputExpression"]
             point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context)
             point_choice = (point_choice[0] * self.width / self.props['width'],point_choice[1] * self.height / self.props['height'])
-            print(point_choice)
+            print('Click at point: ', point_choice)
             delays = []
             if action["actionData"]["delayState"] == "active":
                 if action["actionData"]["distType"] == 'normal':
@@ -158,8 +158,6 @@ class python_host:
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
             if 'results_precalculated' in action['actionData'] and action['actionData']['results_precalculated']:
-                if action['actionGroup'] == 31:
-                    print(action['actionGroup'], 'update block', action["actionData"]["update_dict"])
                 if 'state' in action["actionData"]["update_dict"]:
                     for key, value in action["actionData"]["update_dict"]["state"].items():
                         state[key] = value
@@ -170,17 +168,13 @@ class python_host:
                 action['actionData']['screencap_im_bgr'] = None
                 action['actionData']['results_precalculated'] = False
                 action['actionData']['update_dict'] = None
-                print("'detectObject_4' in state",'detectObject_4' in state)
                 return return_tuple
             screencap_im_bgr,match_point = DetectObjectHelper.get_detect_area(action, state)
             if screencap_im_bgr is None:
-                print('screencap_im_bgr is None')
                 if 'screencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
                     screencap_im_bgr = action['actionData']['screencap_im_bgr']
-                    print('loading previous im')
                 else:
                     screencap_im_bgr = self.screenshot()
-                    print('loading new img')
 
             # print('props dims: ', (self.props['height'],  self.props['width']), ' im dims: ', screencap_im_bgr.shape)
             # exit(0)

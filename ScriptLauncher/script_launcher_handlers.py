@@ -4,6 +4,9 @@ import urllib.request
 from io import BytesIO
 import glob
 
+from dateutil import tz
+from ..script_manager import load_and_run
+
 from script_launcher_app import app
 from flask import Flask, request, redirect, jsonify, make_response, send_file, send_from_directory, render_template
 from flask_cors import CORS, cross_origin
@@ -23,7 +26,16 @@ def list_run_scripts():
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
         return resp
-    return (subprocess.check_output(['ls']), 201)
+    def buttonize(script_file):
+        return "<li><a href=\"/run/" + script_file.split('.')[0] + "\"/>" + script_file + "</a></li>"
+    script_files = subprocess.check_output([
+        'dir',
+        'C:\\Users\\takho\\ScriptEngine\\scripts\\',
+        '/b',
+        '/a-d'], shell=True
+    ).decode('utf-8').split('\r\n')
+    script_file_buttons = '<br>'.join(list(map(buttonize, script_files)))
+    return (script_file_buttons, 201)
 
 @app.route('/run/<scriptname>')
 def run_script(scriptname):
@@ -32,7 +44,8 @@ def run_script(scriptname):
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
         return resp
-    return (scriptname, 201)
+    #use subprocess
+    return (scriptname + ' started!', 201)
 
 
 if __name__ == "__main__":
