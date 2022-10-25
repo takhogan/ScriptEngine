@@ -56,7 +56,6 @@ class ScriptExecutor:
         self.python_host = python_host(self.props.copy())
         self.adb_host = adb_host(self.props.copy(), self.python_host, '127.0.0.1:5555')
         # TODO IP shouldn't be hard coded
-        print('list : ', list(script_obj))
         self.include_scripts = script_obj['include']
         self.create_log_folders(parent_folder)
         self.run_queue = []
@@ -125,8 +124,6 @@ class ScriptExecutor:
               ' attempts: ' + str(self.context["action_attempts"]) +\
               ' outOfAttempts: ' + str(self.context["out_of_attempts"])
         )
-        if len(self.action_rows) > 10:
-            print(self.action_rows[9]["actions"][0]['actionGroup'], 'input' ,self.action_rows[9]["actions"][0]['actionData']['inputExpression'])
         self.context["script_counter"] += 1
         # print(' context (2) : ', self.context["action_attempts"])
         if action["actionName"] not in DELAY_EXEMPT_ACTIONS:
@@ -166,9 +163,6 @@ class ScriptExecutor:
                     is_object_handler = 'searchAreaObjectHandler' in child_context["script_attributes"] and \
                                         self.context["parent_action"] is not None and \
                                         self.context["parent_action"]["actionName"] == "searchPatternContinueAction"
-                    print('is_error_handler: ', is_error_handler, ', ',
-                          'is_object_handler: ', is_object_handler, ', ',
-                          'is_new_script: ', is_new_script)
 
                     parsed_input_vars = list(filter(lambda input_vars: input_vars != '', action["actionData"]["inputVars"].split(",")))
                     # print(' state (2.5) ', self.state)
@@ -395,10 +389,6 @@ class ScriptExecutor:
         child_actions = []
 
         for childGroupLink in action["childGroups"]:
-            if childGroupLink["destRowIndex"] == 9:
-                print('9: ', self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]]['actionGroup'],
-                      '-',
-                      self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]]['actionData']['inputExpression'],)
             if not childGroupLink["type"] == "outOfAttemptsHandler":
                 child_actions.append(self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]])
         return child_actions
@@ -406,11 +396,6 @@ class ScriptExecutor:
     def forward_detect_peek(self):
         detect_types_by_target_system = {}
         for action_index,action in enumerate(self.actions):
-            print(action['actionGroup'], '-forward peek pre sort : ',
-                  action['actionData']['inputExpression'] if 'inputExpression' in action[
-                      'actionData'] else 'not detect')
-            print('action Groups', list(map(lambda action: action['actionGroup'], self.actions)))
-
             if action['actionName'] in DETECT_TYPES_SET:
                 # if len(action['actionData']['inputExpression']) > 0:
                 #     pass
@@ -435,7 +420,6 @@ class ScriptExecutor:
             elif target_system == 'python':
                 screenshot = self.python_host.screenshot()
                 for [action_index,action] in actions:
-                    print(action['actionGroup'], '-forward peek : ', action['actionData']['inputExpression'] if 'inputExpression' in action['actionData'] else 'not detect')
                     action['actionData']['screeencap_im_bgr'] = screenshot
                     action['actionData']['detect_run_type'] = 'result_precalculation'
                     action['actionData']['results_precalculated'] = False
@@ -449,19 +433,6 @@ class ScriptExecutor:
 
     #if it is handle all branches then you take the first branch and for the rest you create a context switch action
     def execute_actions(self, forward_peek=True):
-        print('inputs children ', list(
-            map(lambda action: action['actionGroup'] if 'inputExpression' in action[
-                'actionData'] else 'not detect', self.actions)))
-        print('inputs children ', list(
-            map(lambda action: action['rowIndex'] if 'inputExpression' in action[
-                'actionData'] else 'not detect', self.actions)))
-        print('inputs ', list(map(lambda action: action['actionData']['inputExpression'] if 'inputExpression' in action['actionData'] else 'not detect', self.actions)))
-
-        if len(self.action_rows) > 10:
-            print(self.action_rows[9]["actions"][0]['actionGroup'], 'input',
-                  self.action_rows[9]["actions"][0]['actionData']['inputExpression'],
-                  'detectObject_4' in self.state)
-
         self.handle_out_of_attempts_check()
         if forward_peek:
             self.forward_detect_peek()
@@ -494,18 +465,7 @@ class ScriptExecutor:
         for action_index in range(0, n_actions):
             self.context["action_index"] = action_index
             action = self.actions[action_index]
-            print(action['actionGroup'], '-regular peek : ', action['actionData']['inputExpression'] if 'inputExpression' in action['actionData'] else 'not detect')
             child_actions = self.get_children(action)
-            print('inputs children ', list(
-                map(lambda action: action['actionGroup'] if 'inputExpression' in action[
-                    'actionData'] else 'not detect', child_actions)))
-            print('inputs children ', list(
-                map(lambda action: action['rowIndex'] if 'inputExpression' in action[
-                    'actionData'] else 'not detect', child_actions)))
-            print('inputs children ', list(
-                map(lambda action: action['actionData']['inputExpression'] if 'inputExpression' in action[
-                    'actionData'] else 'not detect', child_actions)))
-
             self.context['child_actions'] = child_actions
 
             if "searchAreaObjectHandler" in self.context["script_attributes"] and \

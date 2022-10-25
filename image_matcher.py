@@ -109,12 +109,9 @@ class ImageMatcher:
                 mask=screencap_mask_gray if use_mask else None)
         except cv2.error as e:
             print(e)
-            cv2.imshow('screencap_im', screencap_im_bgr)
-            cv2.waitKey(0)
-            cv2.imshow('screencap_search', screencap_search_bgr)
-            cv2.waitKey(0)
-            cv2.imshow('screencap_mask_gray', screencap_mask_gray)
-            cv2.waitKey(0)
+            cv2.imwrite(logs_path + 'error_screencap_im', screencap_im_bgr)
+            cv2.imwrite(logs_path + 'error_screencap_search', screencap_search_bgr)
+            cv2.imwrite(logs_path + 'error_screencap_mask_gray', screencap_mask_gray)
             print(screencap_im_bgr.shape, screencap_search_bgr.shape, screencap_mask_gray.shape)
             exit(1)
         # match_result = 1 - match_result
@@ -137,7 +134,6 @@ class ImageMatcher:
             if output_cropping is not None:
                 match_img_bgr = match_img_bgr[output_cropping[0][1]:output_cropping[1][1], output_cropping[0][0]:output_cropping[1][0]].copy()
             if match_score == np.inf:
-                print(pt)
                 continue
             for match_index in range(0, len(matches)):
                 match = matches[match_index]
