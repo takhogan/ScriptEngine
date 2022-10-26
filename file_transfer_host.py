@@ -11,6 +11,7 @@ from flask_cors import CORS, cross_origin
 import shutil
 import pyautogui
 import subprocess
+import threading
 
 ALLOWED_EXTENSIONS = set(['zip'])
 ALLOWED_IPS = set([
@@ -21,6 +22,68 @@ ALLOWED_IPS = set([
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+
+@app.route('/run/<scriptname>')
+def run_script(scriptname):
+    if request.remote_addr not in ALLOWED_IPS:
+        print('blocked ip : ', request.remote_addr)
+        resp = jsonify({'message': 'Configure server to allow requests'})
+        resp.status_code = 400
+        return resp
+    running_script_path = app.config['TEMP_FOLDER'] + '/running_script.txt'
+    if not os.path.exists(running_script_path):
+        with open(running_script_path, 'w') as running_script_file:
+            running_script_file.write(scriptname)
+        def run_in_thread():
+            shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
+                                              'C:\\Users\\takho\\ScriptEngine\\script_manager.py',
+                                              scriptname], shell=True, stdin=subprocess.PIPE,
+                                             cwd='C:\\Users\\takho\\ScriptEngine')
+            shell_process.wait()
+            os.remove(running_script_path)
+            return
+
+        script_thread = threading.Thread(target=run_in_thread)
+        script_thread.start()
+        # returns immediately after the thread starts
+        return (scriptname + ' started! ', 201)
+    else:
+        with open(running_script_path, 'r') as running_script_file:
+            return ('Please wait for script completion, script: ' + running_script_file.read() + ' still running!', 400)
+
+@app.route('/run/', methods=['GET'])
+@app.route('/run', methods=['GET'])
+def list_run_scripts():
+    if request.remote_addr not in ALLOWED_IPS:
+        print('blocked ip : ', request.remote_addr)
+        resp = jsonify({'message': 'Configure server to allow requests'})
+        resp.status_code = 400
+        return resp
+    def buttonize(script_file):
+        return "<li><a href=\"/run/" + script_file.split('.')[0] + "\"/>" + script_file + "</a></li>"
+    script_files = subprocess.check_output([
+        'dir',
+        'C:\\Users\\takho\\ScriptEngine\\scripts\\',
+        '/b',
+        '/a-d'], shell=True
+    ).decode('utf-8').split('\r\n')
+    script_files.sort()
+    script_file_buttons = '<br>'.join(list(map(buttonize, script_files)))
+    return (script_file_buttons, 201)
+
+@app.route('/reset', methods=['GET'])
+def reset_server():
+    if request.remote_addr not in ALLOWED_IPS:
+        print('blocked ip : ', request.remote_addr)
+        resp = jsonify({'message': 'Configure server to allow requests'})
+        resp.status_code = 400
+        return resp
+    running_script_path = app.config['TEMP_FOLDER'] + '/running_script.txt'
+    if os.path.exists(running_script_path):
+        os.remove(running_script_path)
+        return ('reset temp files', 201)
 
 @app.route('/img-paths', methods=['GET'])
 def get_img_paths():
@@ -99,7 +162,9 @@ def capture():
         img_io = BytesIO()
         pil_img.save(img_io, 'JPEG', quality=70)
         img_io.seek(0)
-        return send_file(img_io, mimetype='image/jpeg')
+        capture_response = make_response(send_file(img_io, mimetype='image/jpeg'))
+        capture_response.headers['Refresh'] = '5; url=/capture'
+        return capture_response
 
     screenshot = pyautogui.screenshot()
     return serve_pil_image(screenshot)

@@ -107,8 +107,10 @@ class python_host:
                                 if escaped_char in KEYBOARD_KEYS:
                                     pyautogui.press(escaped_char)
                                 else:
-                                    print('eval : ', escaped_char)
-                                    pyautogui.press(eval(escaped_char, state.copy()))
+                                    print('keyboard expression eval : ', escaped_char, ':', eval(escaped_char, state.copy()))
+                                    eval_expression = eval(escaped_char, state.copy())
+                                    for eval_expression_char in eval_expression:
+                                        pyautogui.press(eval_expression_char)
                                 escaped_char = ''
                             else:
                                 escaped_char += expression_char
