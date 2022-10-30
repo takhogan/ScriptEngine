@@ -3,6 +3,7 @@ import datetime
 import urllib.request
 from io import BytesIO
 import glob
+from waitress import serve
 
 from file_transfer_host_app import app
 from flask import Flask, request, redirect, jsonify, make_response, send_file, send_from_directory, render_template
@@ -12,6 +13,7 @@ import shutil
 import pyautogui
 import subprocess
 import threading
+import sys
 
 ALLOWED_EXTENSIONS = set(['zip'])
 ALLOWED_IPS = set([
@@ -25,7 +27,7 @@ def allowed_file(filename):
 
 
 
-@app.route('/run/<scriptname>')
+@app.route('/run/<scriptname>', strict_slashes=False)
 def run_script(scriptname):
     if request.remote_addr not in ALLOWED_IPS:
         print('blocked ip : ', request.remote_addr)
@@ -53,8 +55,7 @@ def run_script(scriptname):
         with open(running_script_path, 'r') as running_script_file:
             return ('Please wait for script completion, script: ' + running_script_file.read() + ' still running!', 400)
 
-@app.route('/run/', methods=['GET'])
-@app.route('/run', methods=['GET'])
+@app.route('/run', methods=['GET'], strict_slashes=False)
 def list_run_scripts():
     if request.remote_addr not in ALLOWED_IPS:
         print('blocked ip : ', request.remote_addr)
@@ -73,7 +74,7 @@ def list_run_scripts():
     script_file_buttons = '<br>'.join(list(map(buttonize, script_files)))
     return (script_file_buttons, 201)
 
-@app.route('/reset', methods=['GET'])
+@app.route('/reset', methods=['GET'], strict_slashes=False)
 def reset_server():
     if request.remote_addr not in ALLOWED_IPS:
         print('blocked ip : ', request.remote_addr)
@@ -85,7 +86,7 @@ def reset_server():
         os.remove(running_script_path)
         return ('reset temp files', 201)
 
-@app.route('/img-paths', methods=['GET'])
+@app.route('/img-paths', methods=['GET'], strict_slashes=False)
 def get_img_paths():
     def order_script_log_paths_by_date(log_paths, folder_index, reverse=True):
         log_paths_split = list(map(lambda log_path: os.path.normpath(log_path).split(os.path.sep), log_paths))
@@ -123,7 +124,7 @@ def get_img_paths():
     return logs_obj
     # return jsonify(logs_obj)
 
-@app.route('/github-pull', methods=['GET'])
+@app.route('/github-pull', methods=['GET'], strict_slashes=False)
 def github_pull():
     if request.remote_addr not in ALLOWED_IPS:
         print('blocked ip : ', request.remote_addr)
@@ -134,7 +135,7 @@ def github_pull():
     return (subprocess.check_output('git pull'), 201)
 
 
-@app.route('/capture', methods=['GET'])
+@app.route('/capture', methods=['GET'], strict_slashes=False)
 def capture():
     if request.remote_addr not in ALLOWED_IPS:
         print('blocked ip : ', request.remote_addr)
@@ -169,7 +170,7 @@ def capture():
     screenshot = pyautogui.screenshot()
     return serve_pil_image(screenshot)
 
-@app.route('/file-upload', methods=['POST', 'OPTIONS'])
+@app.route('/file-upload', methods=['POST', 'OPTIONS'], strict_slashes=False)
 @cross_origin()
 def upload_file():
     if request.remote_addr not in ALLOWED_IPS:
@@ -240,7 +241,6 @@ def static_proxy(path):
     if os.path.isfile('logs/' + path):
         # If request is made for a file by angular for example main.js
         # condition will be true, file will be served from the public directory
-        print('here: ', path)
         return send_from_directory('./logs', path)
     else:
         # Otherwise index.html will be served,
@@ -248,4 +248,8 @@ def static_proxy(path):
         return render_template("index.html")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port="3849")
+    # app.run(host="0.0.0.0", port="3849")
+    PORT = "3849"
+    if len(sys.argv) > 1:
+        PORT = sys.argv[1]
+    serve(app, host="0.0.0.0", port=PORT)
