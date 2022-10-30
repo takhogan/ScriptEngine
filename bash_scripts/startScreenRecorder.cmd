@@ -1,0 +1,1 @@
+start cmd /k "chdir C:\Users\takho\ScriptEngine && C:\Users\takho\ScriptEngine\venv\Scripts\activate && python C:\Users\takho\ScriptEngine\extra\adb_screen_recorder.py"
