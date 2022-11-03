@@ -7,5 +7,5 @@ data/
 venv/
 scripts/
 viber_credentials.json
-credentials.json
-token.json
+assets/credentials.json
+assets/token.json

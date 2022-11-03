@@ -13,7 +13,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from script_manager import parse_and_run_script_sequence_def
+from ScriptEngine import parse_and_run_script_sequence_def
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/calendar']
@@ -61,8 +61,8 @@ def initialize_service():
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    if os.path.exists('assets/token.json'):
+        creds = Credentials.from_authorized_user_file('assets/token.json', SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         needs_refresh = True
@@ -82,12 +82,12 @@ def initialize_service():
             )
             refresh_process.start()
             flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
+                'assets/credentials.json', SCOPES)
             # if issues here: https://github.com/googleapis/google-auth-library-python-oauthlib/issues/69
             creds = flow.run_local_server(port=0)
 
         # Save the credentials for the next run
-        with open('token.json', 'w') as token:
+        with open('assets/token.json', 'w') as token:
             token.write(creds.to_json())
     service = build('calendar', 'v3', credentials=creds)
 
