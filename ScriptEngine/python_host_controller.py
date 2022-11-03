@@ -4,7 +4,7 @@ import datetime
 
 import pandas as pd
 
-sys.path.append(".")
+sys.path.append("..")
 
 import numpy as np
 import pyautogui

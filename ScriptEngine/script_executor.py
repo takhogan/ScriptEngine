@@ -7,7 +7,8 @@ from dateutil import tz
 
 import cv2
 
-sys.path.append(".")
+sys.path.append("..")
+from app_constants import VIBER_CREDENTIALS_FILEPATH
 from script_execution_state import ScriptExecutionState
 from python_host_controller import python_host
 from adb_host_controller import adb_host
@@ -335,7 +336,7 @@ class ScriptExecutor:
                     self.status = ScriptExecutionState.SUCCESS
                 elif action["actionName"] == "sendMessageAction":
                     if action["actionData"]["messagingProvider"] == "viber":
-                        with open('viber_credentials.json', 'r') as creds_file:
+                        with open(VIBER_CREDENTIALS_FILEPATH, 'r') as creds_file:
                             creds = json.load(creds_file)
                         print(requests.post(url=VIBER_CONTROLLER_ENDPOINT_URL, json={
                             'action': 'sendMessage',

@@ -21,7 +21,7 @@ import glob
 import itertools
 import pyautogui
 
-sys.path.append(".")
+sys.path.append("..")
 from script_execution_state import ScriptExecutionState
 from click_path_generator import ClickPathGenerator
 from image_matcher import ImageMatcher
@@ -48,7 +48,7 @@ class adb_host:
         self.xmax = 32726
         self.ymax = 32726
         self.click_path_generator = ClickPathGenerator(41.0, 71.0, self.xmax, self.ymax, 45, 0.4)
-        self.image_stitch_calculator_path = 'build/ImageStitchCalculator.exe'
+        self.image_stitch_calculator_path = '../build/ImageStitchCalculator.exe'
         self.event_counter = 1
         #TODO CORRECT ABOVE
         self.distances_dist = {

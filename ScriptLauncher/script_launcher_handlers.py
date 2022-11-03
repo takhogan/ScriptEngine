@@ -1,15 +1,9 @@
-import os
 import datetime
 import urllib.request
-from io import BytesIO
 import glob
 
-from dateutil import tz
-from ..script_manager import load_and_run
-
 from script_launcher_app import app
-from flask import Flask, request, redirect, jsonify, make_response, send_file, send_from_directory, render_template
-from flask_cors import CORS, cross_origin
+from flask import request, redirect, jsonify, make_response, send_from_directory, render_template
 import subprocess
 
 ALLOWED_IPS = set([

@@ -1,6 +1,6 @@
 import sys
 
-sys.path.append(".")
+sys.path.append("..")
 from zipfile import ZipFile
 import json
 import os
@@ -48,7 +48,8 @@ def parse_script_file(action_rows_file_obj, props_file_obj, dir_path):
         'actionRows': action_rows,
         'props': props,
     }
-
+# self.use_library = use_library if use_library is not None \
+#             else (True if self.props['deploymentToLibrary'] == 'true' else False)
 def parse_zip(script_file_path):
     # is_backslash_system = script_file_path.count('/') > script_file_path.count('\\')
     dir_path = os.path.splitext(script_file_path)[0]

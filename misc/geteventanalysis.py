@@ -169,7 +169,7 @@ df
 
 df.to_csv('touch_data.csv')
 
-df = pd.read_csv('touch_data.csv')
+df = pd.read_csv('../data/touch_data.csv')
 df.drop(df.columns[0], axis=1, inplace=True)
 df
 

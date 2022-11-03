@@ -6,7 +6,7 @@ from dateutil import tz
 
 import datetime
 
-sys.path.append(".")
+sys.path.append("..")
 from script_loader import parse_zip
 from script_executor import ScriptExecutor
 

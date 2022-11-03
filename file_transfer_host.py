@@ -3,6 +3,8 @@ import datetime
 import urllib.request
 from io import BytesIO
 import glob
+from zipfile import ZipFile
+
 from waitress import serve
 
 from file_transfer_host_app import app
@@ -16,20 +18,29 @@ import threading
 import sys
 
 ALLOWED_EXTENSIONS = set(['zip'])
-ALLOWED_IPS = set([
-    '10.0.0.98',
-    '10.0.0.117',
-    '10.0.0.8'
-])
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-
+@app.route('/library', strict_slashes=False)
+def get_library():
+    if request.remote_addr not in app.config['WHITELIST_IPS']:
+        print('blocked ip : ', request.remote_addr)
+        resp = jsonify({'message': 'Configure server to allow requests'})
+        resp.status_code = 400
+        return resp
+    def buttonize(script_file):
+        return "<li><a href=\"/run/" + script_file.split('.')[0] + "\"/>" + script_file + "</a></li>"
+    script_files = glob.glob(
+        'C:\\Users\\takho\\ScriptEngine\\scripts\\scriptLibrary\\'
+    )
+    script_files.sort()
+    # script_file_buttons = '<br>'.join(list(map(buttonize, script_files)))
+    return (script_files, 201)
 
 @app.route('/run/<scriptname>', strict_slashes=False)
 def run_script(scriptname):
-    if request.remote_addr not in ALLOWED_IPS:
+    if request.remote_addr not in app.config['WHITELIST_IPS']:
         print('blocked ip : ', request.remote_addr)
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
@@ -57,7 +68,7 @@ def run_script(scriptname):
 
 @app.route('/run', methods=['GET'], strict_slashes=False)
 def list_run_scripts():
-    if request.remote_addr not in ALLOWED_IPS:
+    if request.remote_addr not in app.config['WHITELIST_IPS']:
         print('blocked ip : ', request.remote_addr)
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
@@ -76,7 +87,7 @@ def list_run_scripts():
 
 @app.route('/reset', methods=['GET'], strict_slashes=False)
 def reset_server():
-    if request.remote_addr not in ALLOWED_IPS:
+    if request.remote_addr not in app.config['WHITELIST_IPS']:
         print('blocked ip : ', request.remote_addr)
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
@@ -126,7 +137,7 @@ def get_img_paths():
 
 @app.route('/github-pull', methods=['GET'], strict_slashes=False)
 def github_pull():
-    if request.remote_addr not in ALLOWED_IPS:
+    if request.remote_addr not in app.config['WHITELIST_IPS']:
         print('blocked ip : ', request.remote_addr)
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
@@ -137,7 +148,7 @@ def github_pull():
 
 @app.route('/capture', methods=['GET'], strict_slashes=False)
 def capture():
-    if request.remote_addr not in ALLOWED_IPS:
+    if request.remote_addr not in app.config['WHITELIST_IPS']:
         print('blocked ip : ', request.remote_addr)
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
@@ -170,10 +181,18 @@ def capture():
     screenshot = pyautogui.screenshot()
     return serve_pil_image(screenshot)
 
+def create_library_deployment(deployment_file):
+    with ZipFile(deployment_file, 'r') as deployment_file_zip:
+        # for dir in include:
+            # add to list of files to deploy
+            # if file already exists,
+        pass
+
+
 @app.route('/file-upload', methods=['POST', 'OPTIONS'], strict_slashes=False)
 @cross_origin()
 def upload_file():
-    if request.remote_addr not in ALLOWED_IPS:
+    if request.remote_addr not in app.config['WHITELIST_IPS']:
         print('blocked ip : ', request.remote_addr)
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
@@ -207,6 +226,9 @@ def upload_file():
         return make_response(resp, 400)
     if file and allowed_file(file.filename):
         print('starting upload')
+        if 'deploymentToLibrary' in request and request['deploymentToLibrary'] == 'True':
+            library_deployment_scripts = create_library_deployment()
+
         filename = secure_filename(file.filename)
         pathname = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         dir_pathname = os.path.join(app.config['UPLOAD_FOLDER'], os.path.splitext(filename)[0])
