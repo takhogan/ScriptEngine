@@ -181,13 +181,6 @@ def capture():
     screenshot = pyautogui.screenshot()
     return serve_pil_image(screenshot)
 
-def create_library_deployment(deployment_file):
-    with ZipFile(deployment_file, 'r') as deployment_file_zip:
-        # for dir in include:
-            # add to list of files to deploy
-            # if file already exists,
-        pass
-
 
 @app.route('/file-upload', methods=['POST', 'OPTIONS'], strict_slashes=False)
 @cross_origin()
@@ -226,26 +219,35 @@ def upload_file():
         return make_response(resp, 400)
     if file and allowed_file(file.filename):
         print('starting upload')
-        if 'deploymentToLibrary' in request and request['deploymentToLibrary'] == 'True':
-            library_deployment_scripts = create_library_deployment()
-
+        is_library_script = 'scriptType' in request.values and request.values['scriptType'] == 'libraryScript'
         filename = secure_filename(file.filename)
-        pathname = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        dir_pathname = os.path.join(app.config['UPLOAD_FOLDER'], os.path.splitext(filename)[0])
+        pathname = os.path.join(app.config[
+            'UPLOAD_LIBRARY_FOLDER' if is_library_script else 'UPLOAD_SCRIPT_FOLDER'
+        ], filename)
+        print('received file :', pathname, is_library_script)
+        dir_pathname = os.path.join(
+            app.config[
+                'UPLOAD_LIBRARY_FOLDER' if is_library_script else 'UPLOAD_SCRIPT_FOLDER'
+            ],
+            os.path.splitext(filename)[0]
+        )
         if os.path.exists(pathname):
             datetime_now = str(datetime.datetime.now()).replace(':', '-').replace('.', '-').replace(' ', '-')
             new_filename = os.path.join(
-                app.config['UPLOAD_FOLDER'],
-                'backups',
+                app.config[
+                    'UPLOAD_LIBRARY_BACKUPS_FOLDER' if is_library_script else 'UPLOAD_SCRIPT_BACKUPS_FOLDER'
+                ],
                 os.path.splitext(filename)[0] + '-' + datetime_now + '.zip')
             print('creating backup - ' + new_filename)
             shutil.copy(pathname, new_filename)
             os.remove(pathname)
         if os.path.exists(dir_pathname):
             shutil.rmtree(dir_pathname)
-        print('saving file')
         file.save(pathname)
-        shutil.unpack_archive(pathname, app.config['UPLOAD_FOLDER'])
+        shutil.unpack_archive(pathname, app.config[
+            'UPLOAD_LIBRARY_FOLDER' if is_library_script else 'UPLOAD_SCRIPT_FOLDER'
+        ])
+        print('file saved : ', filename)
         resp = jsonify({'message' : 'File successfully uploaded'})
         # resp.status_code = 201
         return make_response(resp, 201)
