@@ -58,6 +58,7 @@ def parse_zip(script_file_path):
         with ZipFile(script_file_path) as script_zip:
             action_rows_file_obj = script_zip.open(script_path + '/actions/actionRows.json', 'r')
             props_file_obj = script_zip.open(script_path + '/props.json', 'r')
+            #
             script_obj = parse_script_file(action_rows_file_obj,props_file_obj, dir_path)
             script_obj['props']["script_path"] = script_file_path
             script_obj['props']["script_name"] = script_path
@@ -72,6 +73,7 @@ def parse_zip(script_file_path):
                 include_file_path = '/'.join(file_path_split)
                 action_rows_file_obj = script_zip.open(include_file_path + '/actions/actionRows.json', 'r')
                 props_file_obj = script_zip.open(include_file_path + '/props.json', 'r')
+                #
                 include_dir_path = '/'.join(dir_path.split('/')[:-1] + include_file_path.split('/'))
                 include_script_obj = parse_script_file(action_rows_file_obj, props_file_obj, include_dir_path)
                 include_script_obj['props']['script_name'] = include_script_name
@@ -95,6 +97,5 @@ def parse_zip(script_file_path):
             include_script_obj['props']['script_name'] = include_script_name.split('/')[-1]
             include_script_obj['props']["dir_path"] = include_dir_path
             script_obj['include'][include_script_name] = include_script_obj
-    props = script_obj['props']
     script_obj['props']["dir_path"] = dir_path
     return script_obj
