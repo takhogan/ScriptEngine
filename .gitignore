@@ -9,3 +9,4 @@ scripts/
 viber_credentials.json
 assets/credentials.json
 assets/token.json
+__pycache__/
