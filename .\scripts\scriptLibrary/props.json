@@ -1,0 +1,15 @@
+{
+    "videoDims": null,
+    "windowBounds": null,
+    "emulatorPath": "/Users/Tak/Library/Android/sdk/emulator/emulator",
+    "adbPath": "adb",
+    "deviceName": "Pixel_2_API_30",
+    "targetSystem": "none",
+    "scriptName": "MacOpenwindowToClosedwindow",
+    "width": null,
+    "height": null,
+    "scriptMode": "train",
+    "deploymentTarget": "http://10.147.17.223:3849",
+    "deploymentTargetURL": "http://10.147.17.223:3849/file-upload",
+    "deploymentToLibrary": true
+}

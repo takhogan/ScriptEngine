@@ -50,16 +50,21 @@ def parse_script_file(action_rows_file_obj, props_file_obj, dir_path):
     }
 # self.use_library = use_library if use_library is not None \
 #             else (True if self.props['deploymentToLibrary'] == 'true' else False)
-def parse_zip(script_file_path):
+def parse_zip(script_name):
     # is_backslash_system = script_file_path.count('/') > script_file_path.count('\\')
+    script_file_path = './scripts/scriptFolders/' + script_name
     dir_path = os.path.splitext(script_file_path)[0]
     if os.path.splitext(script_file_path)[1] == '.zip':
         script_path = os.path.splitext(os.path.basename(script_file_path))[0]
+        # TODO this method is referencing files outside of the zip, will not work if uncompressed file is not there
         with ZipFile(script_file_path) as script_zip:
             action_rows_file_obj = script_zip.open(script_path + '/actions/actionRows.json', 'r')
             props_file_obj = script_zip.open(script_path + '/props.json', 'r')
-            #
             script_obj = parse_script_file(action_rows_file_obj,props_file_obj, dir_path)
+            use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
+            if use_library_scripts:
+                print('mode use_library_scripts not supported for zip file, extract zip file to a directory')
+                exit(1)
             script_obj['props']["script_path"] = script_file_path
             script_obj['props']["script_name"] = script_path
             script_obj['include'] = {}
@@ -84,16 +89,23 @@ def parse_zip(script_file_path):
         action_rows_file_obj = open(script_path + '/actions/actionRows.json', 'r')
         props_file_obj = open(script_path + '/props.json', 'r')
         script_obj = parse_script_file(action_rows_file_obj, props_file_obj, dir_path)
+        use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
+        action_rows_file_obj.close()
+        props_file_obj.close()
+
         script_obj['props']["script_path"] = script_file_path
         script_obj['props']["script_name"] = script_path.split('/')[-1]
         script_obj['include'] = {}
         for include_file_path in map(lambda filepath: filepath.replace('\\','/'), glob.glob(script_path + '/include/*/')):
             include_file_path = include_file_path[:-1]
             include_script_name = include_file_path.split('/')[-1]
-            action_rows_file_obj = open(include_file_path + '/actions/actionRows.json', 'r')
-            props_file_obj = open(include_file_path + '/props.json', 'r')
+            include_parse_file_path = './scripts/scriptLibrary/' + os.path.basename(include_file_path) \
+                if use_library_scripts else include_file_path
+            action_rows_file_obj = open(include_parse_file_path + '/actions/actionRows.json', 'r')
+            props_file_obj = open(include_parse_file_path + '/props.json', 'r')
             include_dir_path = include_file_path
-            include_script_obj = parse_script_file(action_rows_file_obj, props_file_obj, include_dir_path)
+
+            include_script_obj = parse_script_file(action_rows_file_obj, props_file_obj, include_parse_file_path)
             include_script_obj['props']['script_name'] = include_script_name.split('/')[-1]
             include_script_obj['props']["dir_path"] = include_dir_path
             script_obj['include'][include_script_name] = include_script_obj

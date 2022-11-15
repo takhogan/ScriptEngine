@@ -130,7 +130,7 @@ def parse_and_run_script_sequence_def(script_sequence_def, timeout):
 
 def load_and_run(script_name, timeout, constants=None):
     # if you want to open zip then you pass .zip in command line args
-    script_object = parse_zip('./scripts/' + script_name)
+    script_object = parse_zip(script_name)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
     main_script = ScriptExecutor(script_object, timeout, state=constants)
