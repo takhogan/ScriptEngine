@@ -1,3 +1,4 @@
+import mimetypes
 import os
 import datetime
 import urllib.request
@@ -16,6 +17,8 @@ import pyautogui
 import subprocess
 import threading
 import sys
+import platform
+from utils.file_transfer_host_utils import os_normalize_path
 
 ALLOWED_EXTENSIONS = set(['zip'])
 
@@ -23,20 +26,30 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/library', strict_slashes=False)
+@cross_origin()
 def get_library():
     if request.remote_addr not in app.config['WHITELIST_IPS']:
         print('blocked ip : ', request.remote_addr)
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
         return resp
-    def buttonize(script_file):
-        return "<li><a href=\"/run/" + script_file.split('.')[0] + "\"/>" + script_file + "</a></li>"
     script_files = glob.glob(
-        'C:\\Users\\takho\\ScriptEngine\\scripts\\scriptLibrary\\'
+        os_normalize_path(app.config['UPLOAD_LIBRARY_FOLDER'] + '\\*.zip')
     )
+
     script_files.sort()
-    # script_file_buttons = '<br>'.join(list(map(buttonize, script_files)))
-    return (script_files, 201)
+
+    stream = BytesIO()
+    with ZipFile(stream, 'w') as script_files_zip:
+        for script_file in script_files:
+            script_files_zip.write(script_file, os.path.basename(script_file))
+    stream.seek(0)
+    #
+    return send_file(
+        stream,
+        as_attachment=False,
+        mimetype='.zip'
+    )
 
 @app.route('/run/<scriptname>', strict_slashes=False)
 def run_script(scriptname):
@@ -79,7 +92,11 @@ def list_run_scripts():
         'dir',
         'C:\\Users\\takho\\ScriptEngine\\scripts\\',
         '/b',
-        '/a-d'], shell=True
+        '/a-d'] if platform.system() == 'Windows' else [
+            'ls'
+        ] if platform.system() == 'Darwin' else [
+
+        ], shell=True
     ).decode('utf-8').split('\r\n')
     script_files.sort()
     script_file_buttons = '<br>'.join(list(map(buttonize, script_files)))
@@ -258,9 +275,9 @@ def upload_file():
         return make_response(resp, 400)
 
 # Serving static files
-@app.route('/', defaults={'path': ''})
-@app.route('/<string:path>')
-@app.route('/<path:path>')
+# @app.route('/', defaults={'path': ''})
+# @app.route('/<string:path>')
+# @app.route('/<path:path>')
 def static_proxy(path):
     if os.path.isfile('logs/' + path):
         # If request is made for a file by angular for example main.js
