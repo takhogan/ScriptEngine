@@ -64,7 +64,7 @@ def run_script(scriptname):
             running_script_file.write(scriptname)
         def run_in_thread():
             shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
-                                              'C:\\Users\\takho\\ScriptEngine\\script_manager.py',
+                                              'C:\\Users\\takho\\ScriptEngine\\ScriptEngine\\script_manager.py',
                                               scriptname], shell=True, stdin=subprocess.PIPE,
                                              cwd='C:\\Users\\takho\\ScriptEngine')
             shell_process.wait()
