@@ -133,13 +133,22 @@ class RecordingThread(threading.Thread):
         self.recording_mode = recording_mode
         self.record = True
         if self.recording_mode == 'adb':
-            get_im_command = subprocess.run('adb exec-out screencap -p', cwd="/", shell=True, capture_output=True)
-            bytes_im = BytesIO(get_im_command.stdout)
-            try:
-                source_im = Image.open(bytes_im)
-            except UnidentifiedImageError:
-                print('get_im_command: ', get_im_command)
-                exit(1)
+            def initialize_capture():
+                get_im_command = subprocess.run('adb exec-out screencap -p', cwd="/", shell=True, capture_output=True)
+                bytes_im = BytesIO(get_im_command.stdout)
+                bytes_im_stderr = BytesIO(get_im_command.stderr)
+                try:
+                    if 'no devices' in str(bytes_im_stderr.getvalue()):
+                        subprocess.run('adb kill-server', cwd="/", shell=True, capture_output=True)
+                        subprocess.run('adb start-server', cwd="/", shell=True, capture_output=True)
+                        source_im = initialize_capture()
+                    else:
+                        source_im = Image.open(bytes_im)
+                    return source_im
+                except UnidentifiedImageError:
+                    print('get_im_command: ', get_im_command)
+                    exit(1)
+            source_im = initialize_capture()
             self.height,self.width,_ = np.array(source_im).shape
         elif self.recording_mode == 'pc':
             self.height,self.width,_ = np.array(pyautogui.screenshot()).shape
