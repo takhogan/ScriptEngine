@@ -63,10 +63,20 @@ def run_script(scriptname):
         with open(running_script_path, 'w') as running_script_file:
             running_script_file.write(scriptname)
         def run_in_thread():
-            shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
-                                              'C:\\Users\\takho\\ScriptEngine\\ScriptEngine\\script_manager.py',
-                                              scriptname], shell=True, stdin=subprocess.PIPE,
-                                             cwd='C:\\Users\\takho\\ScriptEngine')
+            log_file_name = app.config['LOGFILE_FOLDER'] + scriptname + '-stdout-' + str(datetime.datetime.now())\
+                .replace(' ', '-')\
+                .replace(':', '-') + '.txt'
+            err_file_name = app.config['LOGFILE_FOLDER'] + scriptname + '-stderr-' + str(datetime.datetime.now())\
+                .replace(' ', '-')\
+                .replace(':', '-') + '.txt'
+            with open(log_file_name, 'w') as log_file:
+                with open(err_file_name, 'w') as err_file:
+                    shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
+                                                      'C:\\Users\\takho\\ScriptEngine\\ScriptEngine\\script_manager.py',
+                                                      scriptname], shell=True,
+                                                     stdout=log_file,
+                                                     stderr=err_file,
+                                                     cwd='C:\\Users\\takho\\ScriptEngine')
             shell_process.wait()
             os.remove(running_script_path)
             return
@@ -90,7 +100,7 @@ def list_run_scripts():
         return "<li><a href=\"/run/" + script_file.split('.')[0] + "\"/>" + script_file + "</a></li>"
     script_files = subprocess.check_output([
         'dir',
-        'C:\\Users\\takho\\ScriptEngine\\scripts\\',
+        'C:\\Users\\takho\\ScriptEngine\\scripts\\scriptFolders',
         '/b',
         '/a-d'] if platform.system() == 'Windows' else [
             'ls'
@@ -112,7 +122,7 @@ def reset_server():
     running_script_path = app.config['TEMP_FOLDER'] + '/running_script.txt'
     if os.path.exists(running_script_path):
         os.remove(running_script_path)
-        return ('reset temp files', 201)
+    return ('reset temp files', 201)
 
 @app.route('/img-paths', methods=['GET'], strict_slashes=False)
 def get_img_paths():
