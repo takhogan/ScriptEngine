@@ -1,4 +1,5 @@
 import json
+import subprocess
 
 from flask import Flask
 from flask_cors import CORS
@@ -12,8 +13,11 @@ CORS(app)
 
 app.config['PLATFORM'] = platform.system()
 
+LOGFILE_FOLDER = '.\\logs\\logFiles\\'
+os.makedirs(LOGFILE_FOLDER, exist_ok=True)
+app.config['LOGFILE_FOLDER'] = LOGFILE_FOLDER
 
-
+subprocess.Popen(['python', '-m', 'http.server', '3848'], cwd='C:\\Users\\takho\\ScriptEngine\\')
 UPLOAD_FOLDER = os_normalize_path('.\\scripts')
 TEMP_FOLDER = os_normalize_path('.\\tmp')
 ASSETS_FOLDER = os_normalize_path('.\\assets')

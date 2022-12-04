@@ -1,6 +1,6 @@
 # Default ignored files
 /shelf/
-/.idea/workspace.xml
+/.idea/
 figs/
 logs/
 data/
@@ -11,4 +11,5 @@ assets/credentials.json
 assets/token.json
 __pycache__/
 venv_host_server/
-
+token.json
+credentials.json
