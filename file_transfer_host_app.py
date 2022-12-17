@@ -6,14 +6,20 @@ from flask_cors import CORS
 import os
 import platform
 
+
 from utils.file_transfer_host_utils import os_normalize_path
+
+# from flask.ext.cache import Cache
+
+# Set up Flask-Cache
 
 app = Flask(__name__,template_folder='./logs')
 CORS(app)
+# cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 app.config['PLATFORM'] = platform.system()
 
-LOGFILE_FOLDER = '.\\logs\\logFiles\\'
+LOGFILE_FOLDER = '.\\logs\\'
 os.makedirs(LOGFILE_FOLDER, exist_ok=True)
 app.config['LOGFILE_FOLDER'] = LOGFILE_FOLDER
 

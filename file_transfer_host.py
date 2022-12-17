@@ -1,3 +1,4 @@
+import json
 import mimetypes
 import os
 import datetime
@@ -6,9 +7,10 @@ from io import BytesIO
 import glob
 from zipfile import ZipFile
 
+from progressbar import ProgressBar
 from waitress import serve
 
-from file_transfer_host_app import app
+from file_transfer_host_app import app#, cache
 from flask import Flask, request, redirect, jsonify, make_response, send_file, send_from_directory, render_template
 from werkzeug.utils import secure_filename
 from flask_cors import CORS, cross_origin
@@ -25,77 +27,125 @@ ALLOWED_EXTENSIONS = set(['zip'])
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/library', strict_slashes=False)
-@cross_origin()
-def get_library():
+@app.before_request
+def log_request_info():
     if request.remote_addr not in app.config['WHITELIST_IPS']:
         print('blocked ip : ', request.remote_addr)
         resp = jsonify({'message': 'Configure server to allow requests'})
         resp.status_code = 400
         return resp
+    timestamp = datetime.datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
+    print(f'{timestamp} {request.remote_addr} {request.method} {request.path}')
+
+
+#@cache.memoize()
+def get_library_zip(library_zip_path):
+    stream = BytesIO()
+    with open(library_zip_path, 'rb') as library_zip:
+        print('returning library package zip')
+        stream.write(library_zip.read())
+        stream.seek(0)
+        return stream
+
+
+# To send back a library script file it must be a zip file
+@app.route('/library', strict_slashes=False)
+@cross_origin()
+def get_library():
     script_files = glob.glob(
         os_normalize_path(app.config['UPLOAD_LIBRARY_FOLDER'] + '\\*.zip')
     )
+    library_zip_changelog_path = app.config['TEMP_FOLDER'] + '\\library_zip_changelog.json'
+    if os.path.exists(library_zip_changelog_path):
+        with open(library_zip_changelog_path, 'r') as library_zip_changelog:
+            library_zip_changelog_dict = json.load(library_zip_changelog)
+    else:
+        library_zip_changelog_dict = {
+            script_file: 0 for script_file in script_files
+        }
 
+    current_times = {
+        script_file: os.stat(script_file).st_mtime for script_file in script_files
+    }
+
+    with open(library_zip_changelog_path, 'w') as library_zip_changelog:
+        json.dump(current_times, library_zip_changelog)
+
+    library_zip_path = app.config['TEMP_FOLDER'] + '\\library_zip.zip'
     script_files.sort()
-
-    stream = BytesIO()
-    with ZipFile(stream, 'w') as script_files_zip:
-        for script_file in script_files:
-            script_files_zip.write(script_file, os.path.basename(script_file))
-    stream.seek(0)
-    #
+    if current_times.keys() == library_zip_changelog_dict.keys() and\
+       all(current_times[script_file] == library_zip_changelog_dict[script_file] for script_file in script_files):
+        print('library package unchanged')
+    else:
+        print('updating library package zip')
+        with ZipFile(library_zip_path, 'w') as library_zip:
+            for script_file in script_files:
+                library_zip.write(script_file)
+    stream = get_library_zip(library_zip_path)
     return send_file(
         stream,
         as_attachment=False,
         mimetype='.zip'
     )
+    # with open(library_zip_path, 'rb') as library_zip:
+    #
+    #
+    #
+    # n_script_files = len(script_files)
+    # bar = ProgressBar(maxval=n_script_files)
+    # bar.start()
+    # stream = BytesIO()
+    # with ZipFile(stream, 'w') as script_files_zip:
+    #     for script_file in script_files:
+    #         print('|', end='')
+    #         script_files_zip.write(script_file, os.path.basename(script_file))
+    #         bar.update(1)
+    # print()
+    # stream.seek(0)
+    # #
+    # return send_file(
+    #     stream,
+    #     as_attachment=False,
+    #     mimetype='.zip'
+    # )
 
 @app.route('/run/<scriptname>', strict_slashes=False)
 def run_script(scriptname):
-    if request.remote_addr not in app.config['WHITELIST_IPS']:
-        print('blocked ip : ', request.remote_addr)
-        resp = jsonify({'message': 'Configure server to allow requests'})
-        resp.status_code = 400
-        return resp
     running_script_path = app.config['TEMP_FOLDER'] + '/running_script.txt'
     if not os.path.exists(running_script_path):
-        with open(running_script_path, 'w') as running_script_file:
-            running_script_file.write(scriptname)
+        start_time = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+        script_log_folder = app.config['LOGFILE_FOLDER'] + scriptname + '-' + start_time + '\\'
+        log_file_name = script_log_folder + 'stdout.txt'
+        os.makedirs(script_log_folder, exist_ok=True)
+        print('logfolder', script_log_folder.split('ScriptEngine'))
         def run_in_thread():
-            log_file_name = app.config['LOGFILE_FOLDER'] + scriptname + '-stdout-' + str(datetime.datetime.now())\
-                .replace(' ', '-')\
-                .replace(':', '-') + '.txt'
-            err_file_name = app.config['LOGFILE_FOLDER'] + scriptname + '-stderr-' + str(datetime.datetime.now())\
-                .replace(' ', '-')\
-                .replace(':', '-') + '.txt'
             with open(log_file_name, 'w') as log_file:
-                with open(err_file_name, 'w') as err_file:
-                    shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
-                                                      'C:\\Users\\takho\\ScriptEngine\\ScriptEngine\\script_manager.py',
-                                                      scriptname], shell=True,
-                                                     stdout=log_file,
-                                                     stderr=err_file,
-                                                     cwd='C:\\Users\\takho\\ScriptEngine')
+                shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
+                                                  'C:\\Users\\takho\\ScriptEngine\\ScriptEngine\\script_manager.py',
+                                                  scriptname,
+                                                  start_time], shell=True,
+                                                 stdout=log_file,
+                                                 stderr=log_file,
+                                                 cwd='C:\\Users\\takho\\ScriptEngine')
             shell_process.wait()
-            os.remove(running_script_path)
             return
 
         script_thread = threading.Thread(target=run_in_thread)
         script_thread.start()
         # returns immediately after the thread starts
-        return (scriptname + ' started! ', 201)
+        print(request.host.split(':')[0] + ':3848')
+        return ('<p>' + scriptname + ' started! </p>' +\
+                    '<a href="http://' + request.host.split(':')[0] + ':3848"' + '> Click here for logs </a><br>' +\
+                    '<a href="/capture"' + '> Click here to monitor </a><br>' +\
+                    '<a href="/run"' + '> Click here to run another </a><br>' +\
+                    '<a href="/reset"' + '> Click here to terminate </a><br>', 201)
     else:
         with open(running_script_path, 'r') as running_script_file:
-            return ('Please wait for script completion, script: ' + running_script_file.read() + ' still running!', 400)
+            return ('<p>Please wait for script completion, script: ' + running_script_file.read() + ' still running!</p>' +\
+                        '<a href=/reset> Click here to terminate </a>', 400)
 
 @app.route('/run', methods=['GET'], strict_slashes=False)
 def list_run_scripts():
-    if request.remote_addr not in app.config['WHITELIST_IPS']:
-        print('blocked ip : ', request.remote_addr)
-        resp = jsonify({'message': 'Configure server to allow requests'})
-        resp.status_code = 400
-        return resp
     def buttonize(script_file):
         return "<li><a href=\"/run/" + script_file.split('.')[0] + "\"/>" + script_file + "</a></li>"
     script_files = subprocess.check_output([
@@ -112,17 +162,24 @@ def list_run_scripts():
     script_file_buttons = '<br>'.join(list(map(buttonize, script_files)))
     return (script_file_buttons, 201)
 
+@app.route('/restart', methods=['GET'], strict_slashes=False)
+def restart_server():
+    # subprocess.Popen([os_normalize_path('bash_scripts\\scriptDeploymentServer.cmd')],
+    #                  cwd='C:\\Users\\takho\\ScriptEngine',
+    #                  shell=True)
+    print('restarting server')
+    # exit(0)
+    # request.environ.get('waitress.server.shutdown')()
+    return ('<p> not restarting server </p>' +\
+            '<a href=/run> Click here to run a script </a>', 201)
+
 @app.route('/reset', methods=['GET'], strict_slashes=False)
-def reset_server():
-    if request.remote_addr not in app.config['WHITELIST_IPS']:
-        print('blocked ip : ', request.remote_addr)
-        resp = jsonify({'message': 'Configure server to allow requests'})
-        resp.status_code = 400
-        return resp
+def reset_running_scripts():
     running_script_path = app.config['TEMP_FOLDER'] + '/running_script.txt'
     if os.path.exists(running_script_path):
         os.remove(running_script_path)
-    return ('reset temp files', 201)
+    return ('<p>running scripts cleared</p>' + \
+            '<a href=/run> Click here to run a script </a>', 201)
 
 @app.route('/img-paths', methods=['GET'], strict_slashes=False)
 def get_img_paths():
@@ -164,22 +221,11 @@ def get_img_paths():
 
 @app.route('/github-pull', methods=['GET'], strict_slashes=False)
 def github_pull():
-    if request.remote_addr not in app.config['WHITELIST_IPS']:
-        print('blocked ip : ', request.remote_addr)
-        resp = jsonify({'message': 'Configure server to allow requests'})
-        resp.status_code = 400
-        return resp
-
     return (subprocess.check_output('git pull'), 201)
 
 
 @app.route('/capture', methods=['GET'], strict_slashes=False)
 def capture():
-    if request.remote_addr not in app.config['WHITELIST_IPS']:
-        print('blocked ip : ', request.remote_addr)
-        resp = jsonify({'message': 'Configure server to allow requests'})
-        resp.status_code = 400
-        return resp
     if request.method == 'OPTIONS':
         headers = {
             'Access-Control-Allow-Origin': '*',
@@ -194,7 +240,6 @@ def capture():
         'Access-Control-Allow-Origin': '*',
         'Content-Type' : 'application/json'
     }
-    print('received request ', request.remote_addr)
 
     # https://stackoverflow.com/questions/7877282/how-to-send-image-generated-by-pil-to-browser
     def serve_pil_image(pil_img):
@@ -212,11 +257,6 @@ def capture():
 @app.route('/file-upload', methods=['POST', 'OPTIONS'], strict_slashes=False)
 @cross_origin()
 def upload_file():
-    if request.remote_addr not in app.config['WHITELIST_IPS']:
-        print('blocked ip : ', request.remote_addr)
-        resp = jsonify({'message': 'Configure server to allow requests'})
-        resp.status_code = 400
-        return resp
     if request.method == 'OPTIONS':
         headers = {
             'Access-Control-Allow-Origin': '*',
