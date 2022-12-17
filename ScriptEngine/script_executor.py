@@ -4,11 +4,12 @@ import shlex
 import sys
 import datetime
 from dateutil import tz
+import tesserocr
 
 import cv2
 
 sys.path.append("..")
-from app_constants import VIBER_CREDENTIALS_FILEPATH
+from script_engine_constants import *
 from script_execution_state import ScriptExecutionState
 from python_host_controller import python_host
 from adb_host_controller import adb_host
@@ -48,10 +49,11 @@ VIBER_CONTROLLER_ENDPOINT_URL = 'https://viber-controller-qziox5v33q-uc.a.run.ap
 
 
 class ScriptExecutor:
-    def __init__(self, script_obj, timeout, log_level='INFO', parent_folder='', context=None, state=None):
+    def __init__(self, script_obj, timeout, log_level='INFO', parent_folder='', start_time=None, context=None, state=None):
+        self.props = script_obj['props']
+        self.props["start_time"] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S') if start_time is None else start_time
         self.timeout = timeout
         self.log_level = log_level
-        self.props = script_obj['props']
         self.actions = script_obj["actionRows"][0]["actions"]
         self.action_rows = script_obj["actionRows"]
         self.python_host = python_host(self.props.copy())
@@ -91,7 +93,6 @@ class ScriptExecutor:
         self.status = ScriptExecutionState.FINISHED
 
     def create_log_folders(self, parent_folder=''):
-        self.props["start_time"] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
         self.log_folder = (
             ('./logs/' if parent_folder == '' else parent_folder) + self.props['script_name'] + '-' + self.props['start_time']
         )
@@ -116,15 +117,17 @@ class ScriptExecutor:
         self.context.update(context)
         self.actions = [action]
 
+    def log_action_details(self, action):
+        print(
+            self.props["script_name"] + ' ' + action["actionData"]["targetSystem"] + \
+            ' action : ' + action["actionName"] + '-' + str(action["actionGroup"]) + \
+            ' children: ' + str(list(map(lambda action: action["actionGroup"], self.get_children(action)))) + \
+            ' attempts: ' + str(self.context["action_attempts"]) + \
+            ' outOfAttempts: ' + str(self.context["out_of_attempts"])
+        )
 
     def handle_action(self, action):
-        print(
-            self.props["script_name"] + ' ' + action["actionData"]["targetSystem"] +\
-              ' action : ' + action["actionName"] + '-' + str(action["actionGroup"]) +\
-              ' children: ' + str(list(map(lambda action: action["actionGroup"], self.get_children(action)))) +\
-              ' attempts: ' + str(self.context["action_attempts"]) +\
-              ' outOfAttempts: ' + str(self.context["out_of_attempts"])
-        )
+        self.log_action_details(action)
         self.context["script_counter"] += 1
         # print(' context (2) : ', self.context["action_attempts"])
         if action["actionName"] not in DELAY_EXEMPT_ACTIONS:
@@ -136,11 +139,6 @@ class ScriptExecutor:
                 self.status, self.state, self.context = self.adb_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
             elif action["actionData"]["targetSystem"] == "python":
                 self.status, self.state, self.context = self.python_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
-                if action['actionGroup'] == 31:
-                    # cv2.imshow("self.state['detectObject_4']", self.state['detectObject_4'][0]['matched_area'])
-                    # cv2.waitKey(0)
-                    # exit(0)
-                    pass
             elif action["actionData"]["targetSystem"] == "none":
                 if action["actionName"] == 'scriptReference':
                     is_new_script = "initializedScript" not in action["actionData"] or action["actionData"]["initializedScript"] is None
@@ -305,20 +303,20 @@ class ScriptExecutor:
                 elif action["actionName"] == "imageToTextAction":
                     if action["actionData"]["conversionEngine"] == "tesseractOCR":
                         TARGET_TYPE_TO_PSM = {
-                            'word' : 8,
-                            'sentence' : 7,
-                            'page' : 3
+                            'word' : '8',
+                            'sentence' : '7',
+                            'page' : '3'
                         }
                         log_file_path = self.log_folder + str(self.context['script_counter'])
                         search_im, match_pt = DetectObjectHelper.get_detect_area(action, self.state)
                         cv2.imwrite(log_file_path + '-image_to_text.png', search_im)
-                        output_text = pytesseract.image_to_string(
-                            search_im,
-                            config=(
-                                '-c tessedit_char_whitelist={}'.format(shlex.quote(action["actionData"]["characterWhiteList"]))) if
-                                len(action["actionData"]["characterWhiteList"]) > 0 else '' +\
-                                '--psm ' + str(TARGET_TYPE_TO_PSM[action['actionData']['targetType']])
-                        ).strip()
+                        search_im = tesserocr.image_from_array(search_im)
+                        with tesserocr.PyTessBaseAPI() as api:
+                            api.setVariable("psm", TARGET_TYPE_TO_PSM[action['actionData']['targetType']])
+                            if len(action["actionData"]["characterWhiteList"]) > 0:
+                                api.SetVariable("tessedit_char_whitelist", str(action["actionData"]["characterWhiteList"]))
+                            api.setImage(search_im)
+                            output_text = api.image_to_string().strip()
                         with open(log_file_path + '-output-' + output_text[:10] + '.txt', 'w') as log_file:
                             log_file.write(output_text)
                         print('output_text : ', output_text)
@@ -347,6 +345,14 @@ class ScriptExecutor:
                         }).text)
                         del creds
                     self.status = ScriptExecutionState.SUCCESS
+                elif action["actionName"] == "exceptionAction":
+                    print(action["actionData"]["exceptionMessage"])
+                    if action["actionData"]["takeScreenshot"]:
+                        pass
+                    if action["actionData"]["exitProgram"]:
+                        print('exiting program')
+                        exit(0)
+                    self.status = ScriptExecutionState.FINISHED
                 else:
                     self.status = ScriptExecutionState.ERROR
                     print("action unimplemented ")
@@ -411,6 +417,7 @@ class ScriptExecutor:
                 self.adb_host.init_system()
                 screenshot = self.adb_host.screenshot()
                 for [action_index,action] in actions:
+                    self.log_action_details(action)
                     action['actionData']['screencap_im_bgr'] = screenshot
                     action['actionData']['detect_run_type'] = 'result_precalculation'
                     action['actionData']['results_precalculated'] = False
@@ -421,6 +428,7 @@ class ScriptExecutor:
             elif target_system == 'python':
                 screenshot = self.python_host.screenshot()
                 for [action_index,action] in actions:
+                    self.log_action_details(action)
                     action['actionData']['screeencap_im_bgr'] = screenshot
                     action['actionData']['detect_run_type'] = 'result_precalculation'
                     action['actionData']['results_precalculated'] = False
@@ -517,6 +525,10 @@ class ScriptExecutor:
         if datetime.datetime.now().astimezone(tz.tzlocal()) > self.timeout:
             print('script timeout - ', datetime.datetime.now())
             return True
+        with open(RUNNING_SCRIPTS_PATH, 'r') as temp_file:
+            if not len(temp_file.read()) > 0:
+                print('received terminate request')
+                return True
         if len(self.actions) == 0 and len(self.run_queue) == 0:
             self.status = ScriptExecutionState.FINISHED
             return True

@@ -22,6 +22,8 @@ class ImageMatcher:
                 screencap_mask_gray,
                 screencap_outputmask_bgr,
                 logs_path,
+                int(detectObject['actionData']['sourceScreenHeight']),
+                int(detectObject['actionData']['sourceScreenWidth']),
                 output_cropping=output_cropping,
                 threshold=threshold,
                 use_color=use_color,
@@ -49,25 +51,10 @@ class ImageMatcher:
             exit(0)
 
         h, w = screencap_outputmask_gray.shape[0:2]
-        # plt.imshow(match_result, cmap='gray')
-        # plt.title('Matching Result'), plt.xticks([]), plt.yticks([])
         cv2.imwrite(logs_path + 'matching_overlay.png', result_im_bgr)
         cv2.imwrite(logs_path + 'match_result.png', match_result * 255)
-        # if self.props["scriptMode"] == "train":
-        #     threshold = 0.94
-        #     train_matches = []
-        #     while not len(train_matches) > 0 and threshold > 0.1:
-        #         threshold -= 0.02
-        #         train_matches, train_match_result, train_result_im = self.produce_matches(screencap_im.copy(), screencap_search,
-        #                                                                 screencap_mask, logs_path,
-        #                                                                 threshold=threshold)
-        #     # print(train_matches[0])
-        #     print('train_threshold: ', threshold)
-        #     cv2.imwrite(logs_path + 'matching_overlay_train.png', cv2.cvtColor(train_result_im, cv2.COLOR_BGR2RGB))
-        #     cv2.imwrite(logs_path + 'match_result_train.png', train_match_result * 255)
-        # print('pre sort matches: ', matches)
         matches.sort(reverse=True, key=lambda match: match[1])
-        # print('post sort matches: ', matches)
+        print('matches : ', [match for match,score,match_area in matches], match_point)
         return [{
                 'input_type': 'shape',
                 'point': (match[0] + match_point[0], match[1] + match_point[1]) if match_point is not None else match,
@@ -80,27 +67,27 @@ class ImageMatcher:
 
 
     @staticmethod
-    def produce_template_matches(screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr,
-                                 logs_path, output_cropping=None, threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
+    def produce_template_matches(
+            screencap_im_bgr,
+            screencap_search_bgr,
+            screencap_mask_gray,
+            screencap_outputmask_bgr,
+            logs_path,
+            source_screen_height,
+            source_screen_width,
+            output_cropping=None,
+            threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
         # https://docs.opencv.org/3.4/de/da9/tutorial_template_matching.html
-        h, w = screencap_search_bgr.shape[0:2]
-        # print(screencap_search.shape)
-        # print(screencap_mask.shape)
-        # exit(0)
-        # print(.shape)
-        # exit(0)
-        # print('match threshold: ', threshold)
-        # exit(0)
-        # cv2.imshow('screencap_im', screencap_im)
-        # cv2.waitKey(0)
-        # cv2.imshow('screencap_search', screencap_search)
-        # cv2.waitKey(0)
-        # cv2.imshow('screencap_mask', screencap_mask)
-        # cv2.waitKey(0)
-        # cv2.imshow('screencap_im', screencap_im_bgr)
-        # cv2.waitKey(0)
-        # cv2.imshow('screencap_search', screencap_search_bgr)
-        # cv2.waitKey(0)
+        capture_height = screencap_im_bgr.shape[0]
+        capture_width = screencap_im_bgr.shape[1]
+        is_dims_mismatch = capture_width != source_screen_width or capture_height != source_screen_height
+        print('is_dims_mismatch', is_dims_mismatch, capture_width, source_screen_width, capture_height, source_screen_height)
+        height_translation = 1
+        width_translation = 1
+        match_result = None
+        thresholded_match_results = None
+        is_match_error = False
+        threshold_match_results = lambda match_results: np.where((np.inf > match_result) & (match_result >= threshold))
         try:
             match_result = cv2.matchTemplate(
                 cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr,
@@ -108,31 +95,87 @@ class ImageMatcher:
                 cv2.TM_CCOEFF_NORMED,result=None,
                 mask=screencap_mask_gray if use_mask else None)
         except cv2.error as e:
-            print(e)
-            cv2.imwrite(logs_path + 'error_screencap_im', screencap_im_bgr)
-            cv2.imwrite(logs_path + 'error_screencap_search', screencap_search_bgr)
-            cv2.imwrite(logs_path + 'error_screencap_mask_gray', screencap_mask_gray)
-            print(screencap_im_bgr.shape, screencap_search_bgr.shape, screencap_mask_gray.shape)
-            exit(1)
-        # match_result = 1 - match_result
+            is_match_error = True
+            # print(e)
+            # cv2.imwrite(logs_path + 'error_screencap_im', screencap_im_bgr)
+            # cv2.imwrite(logs_path + 'error_screencap_search', screencap_search_bgr)
+            # cv2.imwrite(logs_path + 'error_screencap_mask_gray', screencap_mask_gray)
+            # print(screencap_im_bgr.shape, screencap_search_bgr.shape, screencap_mask_gray.shape)
 
-        # cv2.normalize(match_result, match_result, 0, 1, cv2.NORM_MINMAX, -1)
-        # minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(match_result, None)
-        # match_result = cv2.matchTemplate(screencap_im, screencap_search, cv2.TM_CCOEFF_NORMED)
+        if match_result is not None:
+            thresholded_match_results = threshold_match_results(match_result)
+
+        if (
+            is_match_error
+            or thresholded_match_results is not None
+            and len(thresholded_match_results[0]) == 0
+        ) and is_dims_mismatch:
+            parse_resized_img = True
+            try:
+                screencap_im_bgr_resized = cv2.resize(
+                    screencap_im_bgr.copy(),
+                    (source_screen_width, source_screen_height),
+                    interpolation=cv2.INTER_AREA
+                )
+                print('resize : ', screencap_im_bgr_resized.shape, screencap_im_bgr.shape, source_screen_width, source_screen_height)
+                match_result_resized = cv2.matchTemplate(
+                    cv2.cvtColor(screencap_im_bgr_resized.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr_resized,
+                    cv2.cvtColor(screencap_search_bgr.copy(),
+                                 cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
+                    cv2.TM_CCOEFF_NORMED, result=None,
+                    mask=screencap_mask_gray if use_mask else None)
+            except cv2.error as e:
+                if is_match_error:
+                    print('error in resized match template : ', e)
+                    exit(1)
+                else:
+                    parse_resized_img = False
+            if parse_resized_img:
+                screencap_im_bgr = screencap_im_bgr_resized
+                match_result = match_result_resized
+                thresholded_match_results = threshold_match_results(match_result)
+                height_translation = capture_height/source_screen_height
+                width_translation = capture_width/source_screen_width
+                print('translation : ', height_translation, capture_height,source_screen_height, width_translation, capture_width, source_screen_width)
+
+        # if there is an erorr resize image to original dims, pass translation factor to filter_matches
+        return ImageMatcher.filter_matches_and_get_result_im(
+            match_result,
+            thresholded_match_results,
+            screencap_im_bgr,
+            screencap_search_bgr,
+            screencap_outputmask_bgr,
+            logs_path,
+            height_translation=height_translation,
+            width_translation=width_translation,
+            script_mode=script_mode,
+            output_cropping=output_cropping
+        )
+
+    @staticmethod
+    def filter_matches_and_get_result_im(
+            match_result,
+            thresholded_match_results,
+            screencap_im_bgr,
+            screencap_search_bgr,
+            screencap_outputmask_bgr,
+            logs_path,
+            height_translation=1,
+            width_translation=1,
+            script_mode='test', output_cropping=None):
+        h, w = screencap_search_bgr.shape[0:2]
         dist_threshold = (w + h) * 0.1
-        # print(dist_threshold)
-        # print(np.where(match_result >= threshold))
-        loc = np.where((np.inf > match_result) & (match_result >= threshold))
-        # print('loc : ', loc)
         matches = []
         match_img_index = 1
 
-        for pt in zip(*loc[::-1]):
+        for pt in zip(*thresholded_match_results[::-1]):
             redundant = False
             match_score = match_result[pt[1], pt[0]]
-            match_img_bgr = cv2.bitwise_and(screencap_im_bgr[pt[1]:pt[1] + h, pt[0]:pt[0] + w].copy(), screencap_outputmask_bgr)
+            match_img_bgr = cv2.bitwise_and(screencap_im_bgr[pt[1]:pt[1] + h, pt[0]:pt[0] + w].copy(),
+                                            screencap_outputmask_bgr)
             if output_cropping is not None:
-                match_img_bgr = match_img_bgr[output_cropping[0][1]:output_cropping[1][1], output_cropping[0][0]:output_cropping[1][0]].copy()
+                match_img_bgr = match_img_bgr[output_cropping[0][1]:output_cropping[1][1],
+                                output_cropping[0][0]:output_cropping[1][0]].copy()
             if match_score == np.inf:
                 continue
             for match_index in range(0, len(matches)):
@@ -149,17 +192,25 @@ class ImageMatcher:
                 continue
             else:
                 # print('{:f}'.format(match_result[pt[1], pt[0]]))
-                matches.append((pt, match_score, match_img_bgr))
+                matches.append(
+                    (
+                        (pt[0] * width_translation, pt[1] * height_translation),
+                        match_score,
+                        match_img_bgr
+                    )
+                )
                 if script_mode == "train":
                     # change name to fit image format
-                    cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(match_result[pt[1], pt[0]]) + '-img.png', match_img_bgr)
+                    cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(
+                        match_result[pt[1], pt[0]]) + '-img.png', match_img_bgr)
                 match_img_index += 1
-        best_match = str(np.max(match_result[np.where(np.inf > match_result)])) if (match_result[np.where(np.inf > match_result)]).size > 0 else 'none'
+        best_match = str(np.max(match_result[np.where(np.inf > match_result)])) if (match_result[
+            np.where(np.inf > match_result)]).size > 0 else 'none'
         print('n matches : ', len(matches), ' best match : ', best_match)
         with open(logs_path + '-best-' + best_match + '.txt', 'w') as log_file:
             log_file.write('n matches : ' + str(len(matches)))
         result_im_bgr = screencap_im_bgr
-        for pt in zip(*loc[::-1]):
+        for pt in zip(*thresholded_match_results[::-1]):
             cv2.rectangle(result_im_bgr, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2)
         return matches, match_result, result_im_bgr
 

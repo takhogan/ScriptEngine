@@ -1,1 +1,0 @@
-VIBER_CREDENTIALS_FILEPATH = 'assets\\viber_credentials.json'

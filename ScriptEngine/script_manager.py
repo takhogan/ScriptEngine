@@ -2,6 +2,7 @@ import sys
 import random
 import time
 from dateutil import tz
+import os
 
 
 import datetime
@@ -9,9 +10,15 @@ import datetime
 sys.path.append("..")
 from script_loader import parse_zip
 from script_executor import ScriptExecutor
+from script_engine_constants import *
 
-def str_timeout_to_datetime_timeout(timeout):
-    if isinstance(timeout, str):
+def str_timeout_to_datetime_timeout(timeout, src=None):
+    if not isinstance(timeout, str):
+        return timeout
+
+    if src == 'deployment_server':
+        timeout = datetime.datetime.strptime(timeout, "%Y-%m-%d %H-%M-%S")
+    else:
         dt, _, us = timeout.partition(".")
         utc_tz = tz.gettz('UTC')
         is_utc = timeout[-1] == 'Z'
@@ -128,16 +135,34 @@ def parse_and_run_script_sequence_def(script_sequence_def, timeout):
         run_script_sequence(sequences['onDestroy'], sequences, timeout + datetime.timedelta(minutes=15))
 
 
-def load_and_run(script_name, timeout, constants=None):
+def update_running_scripts_file(scriptname):
+    if not os.path.exists(RUNNING_SCRIPTS_PATH):
+        with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
+            print('running_scripts file created')
+            running_script_file.write(scriptname)
+    else:
+        print('running_scripts file removed')
+        os.remove(RUNNING_SCRIPTS_PATH)
+
+def load_and_run(script_name, timeout, constants=None, start_time=None):
     # if you want to open zip then you pass .zip in command line args
+    update_running_scripts_file(script_name)
     script_object = parse_zip(script_name)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
-    main_script = ScriptExecutor(script_object, timeout, state=constants)
+    main_script = ScriptExecutor(script_object, timeout, state=constants, start_time=start_time)
     main_script.run(log_level='INFO')
+    update_running_scripts_file(script_name)
 
 
 
 if __name__=='__main__':
     script_name = sys.argv[1]
-    load_and_run(script_name, (datetime.datetime.now() + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal()))
+    start_time = None
+    if len(sys.argv) > 2:
+        start_time = str_timeout_to_datetime_timeout(sys.argv[2], src='deployment_server')
+    load_and_run(
+        script_name,
+        (start_time + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal()),
+        start_time=sys.argv[2]
+    )

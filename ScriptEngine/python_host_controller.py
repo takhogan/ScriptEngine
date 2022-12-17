@@ -25,6 +25,7 @@ from detect_scene_helper import DetectSceneHelper
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
 from script_engine_utils import generate_context_switch_action
+from forward_detect_peek_helper import ForwardDetectPeekHelper
 
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
 
@@ -100,7 +101,7 @@ class python_host:
                 else:
                     is_escaped_char = False
                     escaped_char = ''
-                    for char_index,expression_char in enumerate(action["actionData"]["keyboardExpression"]):
+                    for char_index,expression_char in enumerate(str(action["actionData"]["keyboardExpression"])):
                         if is_escaped_char:
                             if expression_char == '}':
                                 is_escaped_char = False
@@ -108,7 +109,7 @@ class python_host:
                                     pyautogui.press(escaped_char)
                                 else:
                                     print('keyboard expression eval : ', escaped_char, ':', eval(escaped_char, state.copy()))
-                                    eval_expression = eval(escaped_char, state.copy())
+                                    eval_expression = str(eval(escaped_char, state.copy()))
                                     for eval_expression_char in eval_expression:
                                         pyautogui.press(eval_expression_char)
                                 escaped_char = ''
@@ -149,51 +150,42 @@ class python_host:
                         pyautogui.keyUp(keyPressKey)
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "detectScene":
-            screencap_im = self.screenshot()
-            matches,ssim_coeff = DetectSceneHelper.get_match(action, screencap_im, self.props["dir_path"], logs_path)
+            forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
+            if forward_peek_result is not None:
+                return forward_peek_result
+
+            # screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
+            screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action)
+            if screencap_im_bgr is None:
+                screencap_im_bgr = self.screenshot()
+
+            matches, ssim_coeff = DetectSceneHelper.get_match(action, screencap_im_bgr, self.props["dir_path"],
+                                                              logs_path)
             if ssim_coeff > action["actionData"]["threshold"]:
                 state[action["actionData"]["outputVarName"]] = matches
-                return ScriptExecutionState.SUCCESS, state, context
+                action_result = ScriptExecutionState.SUCCESS
             else:
-                return ScriptExecutionState.FAILURE, state, context
+                action_result = ScriptExecutionState.FAILURE
+            action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, {}, action_result, context)
+            return action_result, state, context
+
         elif action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
-            if 'results_precalculated' in action['actionData'] and action['actionData']['results_precalculated']:
-                if 'state' in action["actionData"]["update_dict"]:
-                    for key, value in action["actionData"]["update_dict"]["state"].items():
-                        state[key] = value
-                if 'context' in action["actionData"]["update_dict"]:
-                    for key, value in action["actionData"]["update_dict"]["context"].items():
-                        context[key] = value
-                return_tuple = (action['actionData']['action_result'], state, context)
-                action['actionData']['screencap_im_bgr'] = None
-                action['actionData']['results_precalculated'] = False
-                action['actionData']['update_dict'] = None
-                return return_tuple
-            screencap_im_bgr,match_point = DetectObjectHelper.get_detect_area(action, state)
-            if screencap_im_bgr is None:
-                if 'screencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
-                    screencap_im_bgr = action['actionData']['screencap_im_bgr']
-                else:
-                    screencap_im_bgr = self.screenshot()
+            forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
+            if forward_peek_result is not None:
+                return forward_peek_result
 
-            # print('props dims: ', (self.props['height'],  self.props['width']), ' im dims: ', screencap_im_bgr.shape)
-            # exit(0)
-            # print('imshape: ', np.array(screencap_im_rgb).shape, ' width: ', self.props['width'], ' height: ', self.props['height'])
-            # if is_null(self.props['width']) or is_null(self.props['height']):
-            #     pass
-            # else:
-            #     screencap_im_bgr = cv2.resize(screencap_im_bgr, (self.props['width'], self.props['height']), interpolation=cv2.INTER_LINEAR)
-            # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"])
-            # print(props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["img"])
-            # print(screencap_im.shape)
-            # print(screencap_mask.shape)
+            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
+            screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action)
+            if screencap_im_bgr is None:
+                screencap_im_bgr = self.screenshot()
+
 
             screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
             # screencap_search_bgr = cv2.cvtColor(screencap_search.copy(), cv2.COLOR_RGB2BGR)
             if self.props["scriptMode"] == "train":
-                cv2.imwrite(logs_path + 'search_img.png', screencap_search_bgr)
+                cv2.imwrite(logs_path + str(action['actionGroup']) + '-search_img.png', screencap_search_bgr)
             matches = self.image_matcher.template_match(
                 action,
                 screencap_im_bgr,
@@ -221,13 +213,7 @@ class python_host:
                 update_dict = {}
                 action_result = ScriptExecutionState.FAILURE
 
-            if 'detect_run_type' in action['actionData'] and\
-                    action['actionData']['detect_run_type'] == 'result_precalculation':
-                action['actionData']['results_precalculated'] = True
-                action['actionData']['update_dict'] = update_dict
-                action['actionData']['action_result'] = action_result
-                action['actionData']['detect_run_type'] = None
-                context['action'] = action
+            action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, update_dict, action_result, context)
             return action_result, state, context
         elif action["actionName"] == "randomVariable":
             delays = RandomVariableHelper.get_rv_val(action)

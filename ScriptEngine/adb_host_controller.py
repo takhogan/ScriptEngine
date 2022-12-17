@@ -29,6 +29,7 @@ from search_pattern_helper import SearchPatternHelper
 from click_action_helper import ClickActionHelper
 from detect_scene_helper import DetectSceneHelper
 from detect_object_helper import DetectObjectHelper
+from forward_detect_peek_helper import ForwardDetectPeekHelper
 
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
 
@@ -73,8 +74,11 @@ class adb_host:
         }
         self.props['scriptMode'] = 'train'
 
-    def init_system(self):
-        if self.width is None or self.height is None:
+
+
+    def init_system(self, reinitialize=False):
+        source_im = None
+        if reinitialize or self.width is None or self.height is None:
             get_device_list = lambda: subprocess.run(self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True)
             devices_output = bytes.decode(get_device_list().stdout, 'utf-8')
             if not 'started' in devices_output:
@@ -109,6 +113,7 @@ class adb_host:
             self.props['width'] = self.width
         if is_null(self.props['height']):
             self.props['height'] = self.height
+        return source_im
 
     def screenshot(self):
         get_im_command = subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True,
@@ -118,7 +123,9 @@ class adb_host:
             source_im = Image.open(bytes_im)
         except UnidentifiedImageError:
             print('get_im_command: ', get_im_command)
-            exit(1)
+            source_im = self.init_system(reinitialize=True)
+            if source_im is None:
+                exit(1)
         return cv2.cvtColor(np.array(source_im), cv2.COLOR_RGB2BGR)
 
     def save_screenshot(self, save_name):
@@ -232,10 +239,14 @@ class adb_host:
                                self.commands["action_terminate_command"],
                                ')']
             click_command += footer_commands
-        elif self.device_profile == 'windows-bluestacks':
+        elif self.device_profile.startswith('windows-bluestacks'):
             #yes x and y is flipped for some reason in bluestacks
-            mapped_x_val = int(((self.height - y) / self.height) * self.ymax)
-            mapped_y_val = int((x / self.width) * self.xmax)
+            if self.device_profile == 'windows-bluestacks-8GB':
+                mapped_x_val = int(((self.height - y) / self.height) * self.ymax)
+                mapped_y_val = int((x / self.width) * self.xmax)
+            else:
+                mapped_x_val = int((x / self.width) * self.xmax)
+                mapped_y_val = int((y / self.height) * self.ymax)
             init_click_commands = [
                 self.commands["x_command_func"](mapped_x_val),
                 self.commands["y_command_func"](mapped_y_val),
@@ -387,12 +398,18 @@ class adb_host:
                                self.commands["action_terminate_command"],
                                ]
             command_string += footer_commands
-        elif self.device_profile == 'windows-bluestacks':
+        elif self.device_profile.startswith('windows-bluestacks'):
             # yes x and y are flipped on purpouse
-            frac_source_x = ((self.height - source_y) / self.height)
-            frac_source_y = (source_x / self.width)
-            frac_target_x = ((self.height - target_y) / self.height)
-            frac_target_y = (target_x / self.width)
+            if self.device_profile == 'windows-bluestacks-8GB':
+                frac_source_x = ((self.height - source_y) / self.height)
+                frac_source_y = (source_x / self.width)
+                frac_target_x = ((self.height - target_y) / self.height)
+                frac_target_y = (target_x / self.width)
+            else:
+                frac_source_x = (source_x / self.width)
+                frac_target_x = (target_x / self.width)
+                frac_source_y = (source_y / self.height)
+                frac_target_y = (target_y / self.height)
             # print('({},{}),({},{})'.format(frac_source_x, frac_source_y, frac_target_x, frac_target_y))
             delta_x, delta_y = self.click_path_generator.generate_click_path(frac_source_x, frac_source_y,
                                                                              frac_target_x, frac_target_y)
@@ -441,46 +458,42 @@ class adb_host:
     def handle_action(self, action, state, context, log_level, log_folder):
         logs_path = log_folder + str(context['script_counter']) + '-'
         if action["actionName"] == "declareScene":
-            screencap_im_bgr = self.screenshot()
+            forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
+            if forward_peek_result is not None:
+                return forward_peek_result
+
+            # screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
+            screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, None)
+            if screencap_im_bgr is None:
+                screencap_im_bgr = self.screenshot()
+
             matches,ssim_coeff = DetectSceneHelper.get_match(action, screencap_im_bgr, self.props["dir_path"], logs_path)
             if ssim_coeff > action["actionData"]["threshold"]:
                 state[action["actionData"]["outputVarName"]] = matches
-                return ScriptExecutionState.SUCCESS, state, context
+                action_result = ScriptExecutionState.SUCCESS
             else:
-                return ScriptExecutionState.FAILURE, state, context
+                action_result = ScriptExecutionState.FAILURE
+            action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, {}, action_result, context)
+            return action_result, state, context
 
         elif action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
-            if 'results_precalculated' in action['actionData'] and action['actionData']['results_precalculated']:
-                if 'state' in action["actionData"]["update_dict"]:
-                    for key, value in action["actionData"]["update_dict"]["state"].items():
-                        state[key] = value
-                if 'context' in action["actionData"]["update_dict"]:
-                    for key, value in action["actionData"]["update_dict"]["context"].items():
-                        context[key] = value
-                return_tuple = (action['actionData']['action_result'], state, context)
-                action['actionData']['screencap_im_bgr'] = None
-                action['actionData']['results_precalculated'] = False
-                action['actionData']['update_dict'] = None
-                return return_tuple
+            forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
+            if forward_peek_result is not None:
+                return forward_peek_result
 
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
+            print('get_detect_result', match_point, screencap_im_bgr.shape if screencap_im_bgr is not None else 'none')
+            screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, screencap_im_bgr)
             if screencap_im_bgr is None:
-                if 'screencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
-                    screencap_im_bgr = action['actionData']['screencap_im_bgr']
-                else:
-                    screencap_im_bgr = self.screenshot()
-            # print('imshape: ', np.array(screencap_im_bgr).shape, ' width: ', self.props['width'], ' height: ', self.props['height'])
-            # if is_null(self.props['width']) or is_null(self.props['height']):
-            #     screencap_im = np.array(screencap_im_bgr)
-            # else:
-            #     screencap_im = cv2.resize(np.array(screencap_im_bgr), (self.props['width'], self.props['height']),
-            #                               interpolation=cv2.INTER_LINEAR)
+                screencap_im_bgr = self.screenshot()
+            print('post transform: ', screencap_im_bgr.shape)
 
             screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
             if self.props["scriptMode"] == "train":
-                cv2.imwrite(logs_path + 'search_img.png', screencap_search_bgr)
+
+                cv2.imwrite(logs_path + str(action['actionGroup']) + '-search_img.png', screencap_search_bgr)
             matches = self.image_matcher.template_match(
                 action,
                 screencap_im_bgr,
@@ -504,13 +517,7 @@ class adb_host:
             else:
                 update_dict = {}
                 action_result = ScriptExecutionState.FAILURE
-            if 'detect_run_type' in action['actionData'] and \
-                    action['actionData']['detect_run_type'] == 'result_precalculation':
-                action['actionData']['results_precalculated'] = True
-                action['actionData']['update_dict'] = update_dict
-                action['actionData']['action_result'] = action_result
-                action['actionData']['detect_run_type'] = None
-                context['action'] = action
+            action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, update_dict, action_result, context)
             return action_result, state, context
 
         elif action["actionName"] == "clickAction":
@@ -827,59 +834,28 @@ class adb_host:
             state[action["actionData"]["outputVarName"]] = datetime.datetime.now()
             # self.state[action["actionData"]["outputVarName"]] = expression
             return ScriptExecutionState.SUCCESS, state, context
+        elif action["actionName"] == "keyboardAction":
+            return self.host_os.handle_action(action, state, context, log_level, log_folder)
         else:
             print("action uninplemented on adb " + action["actionName"])
             exit(0)
 
 
 if __name__ == '__main__':
-    # avd = adb_host({
-    # "videoDims": None,
-    # "windowBounds": None,
-    # "emulatorPath": "/Users/Tak/Library/Android/sdk/emulator/emulator",
-    # "adbPath": "adb",
-    # "deviceName": "Pixel_2_API_30",
-    # "targetSystem": "adb",
-    # "scriptName": "SearchScriptBasic",
-    # "width": 540,
-    # "height": 960,
-    # "scriptMode": "train"
-    # }, '', '127.0.0.1:5555')
-
-    # stitch = cv2.Stitcher_create(cv2.STITCHER_SCANS)
-    # img_paths = [
-    #     'logs/SearchScriptBasic-2022-03-26 18-27-45/search_patterns/searchPattern-1/0--0.20961525570739795-0.27478139545528263-search-step-complete.png',
-    #     'logs/SearchScriptBasic-2022-03-26 18-27-45/search_patterns/searchPattern-1/0--0.20961525570739795-0.27478139545528263-search-step-init.png'
-    # ]
-    # img_1 = cv2.imread(img_paths[0])
-    # img_2 = cv2.imread(img_paths[1])
-    # draggable_area = np.uint8(cv2.cvtColor(cv2.imread('scripts/SearchScriptBasic/actions/0-row/0-searchPatternStartAction/assets/draggableArea.png'), cv2.COLOR_BGR2GRAY))
-    # img_as_string = base64.b64encode(cv2.imencode('.png', img_1)[1].tobytes())
-    # print(img_as_string)
-    # print('--------------------')
-    # img_as_string = img_as_string.decode('ascii')
-    # estimate_transform_result = stitch.estimateTransform([img_1, img_2], [draggable_area, draggable_area])
-    # shell_process = subprocess.call(['.\\lib\\image_stitch_calculator.exe'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # print(shell_process)
-    # print(shell_process.communicate("testklklkllk\n"))
-
-    # result = (subprocess.run(['build/ImageStitchCalculator.exe', './logs/SearchScriptBasic-2022-04-06 19-22-52/search_patterns/searchPattern-1/0-0.1012990034020171--0.2805589630362008-search-step-init.png', './logs/SearchScriptBasic-2022-04-06 19-22-52/search_patterns/searchPattern-1/0-0.1012990034020171--0.2805589630362008-search-step-complete.png', '-m', './scripts/SearchScriptBasic/actions/0-row/0-searchPatternStartAction/assets/draggableArea.png', './scripts/SearchScriptBasic/actions/0-row/0-searchPatternStartAction/assets/draggableArea.png'], capture_output=True, shell=False)).stdout
-    # print(result)
-    # print(bytes.decode(result, 'utf-8'))
-
-    # print(estimate_transform_result)
-    # print(dir(stitch))
-    # print(stitch.estimateTransform())
-    # print(stitch.resultMask())
-    # print(stitch.workScale())
+    adb_host = adb_host({
+        "videoDims": "null",
+        "windowBounds": "null",
+        "emulatorPath": "/Users/Tak/Library/Android/sdk/emulator/emulator",
+        "adbPath": "adb",
+        "deviceName": "Pixel_2_API_30",
+        "targetSystem": "none",
+        "scriptName": "Windows_BlueStacks_Open",
+        "width": 1920,
+        "height": 1080,
+        "scriptMode": "train",
+        "deploymentTarget": "http://10.147.17.223:3849",
+        "deploymentToLibrary": "true"
+    }, None, '127.0.0.1:5555')
+    adb_host.init_system()
+    adb_host.click(642.0, 598.0)
     exit(0)
-    # avd.init_system()
-    # for i in range(0, 10):
-    #     avd.click_and_drag(100, 100, 400, 400)
-    # exit(0)
-    # # print(avd.screenshot())
-    # cv2.imshow('capture', np.array(Image.open(BytesIO(avd.screenshot().stdout))))
-    # cv2.waitKey(0)
-    # avd.click(752, 1935)
-    # avd.click_and_drag(50, 50, 752, 1935)
-    #.returncode = 1 (if err)
