@@ -9,7 +9,31 @@ import datetime
 import cv2
 import numpy as np
 
-def parse_script_file(action_rows_file_obj, props_file_obj, dir_path):
+
+def set_output_mask(positive_example, img_type_prefix, include_contained_area, exclude_matched_area):
+    if include_contained_area and exclude_matched_area:
+        positive_example[img_type_prefix + "outputMask"] = positive_example[
+            img_type_prefix + "containedAreaMask"].copy()
+    elif include_contained_area and not exclude_matched_area:
+        positive_example[img_type_prefix + "outputMask"] = cv2.bitwise_or(
+            positive_example[img_type_prefix + "mask"].copy(),
+            positive_example[img_type_prefix + "containedAreaMask"].copy()
+        )
+    elif not include_contained_area and exclude_matched_area:
+        positive_example[img_type_prefix + "outputMask"] = cv2.bitwise_and(
+            positive_example[img_type_prefix + "mask"].copy(),
+            positive_example[img_type_prefix + "containedAreaMask"].copy()
+        )
+    else:
+        positive_example[img_type_prefix + "outputMask"] = positive_example[img_type_prefix + "mask"].copy()
+    positive_example[img_type_prefix + "outputMask_single_channel"] = np.uint8(
+        cv2.cvtColor(positive_example[img_type_prefix + "outputMask"].copy(), cv2.COLOR_BGR2GRAY)
+    )
+    return positive_example
+
+def parse_script_file(action_rows_file_obj, props_file_obj, inputs_file_obj, dir_path):
+    def read_and_set_image(example, action, img_type):
+        example[img_type] = cv2.imread(dir_path + '/' + action["actionData"]["positiveExamples"][0][img_type])
     with action_rows_file_obj as action_rows_file:
         action_rows = json.load(action_rows_file)
     for action_row in action_rows:
@@ -25,28 +49,30 @@ def parse_script_file(action_rows_file_obj, props_file_obj, dir_path):
             if detect_type_action:
                 include_contained_area = 'includeContainedAreaInOutput' in action["actionData"]["detectorAttributes"]
                 exclude_matched_area = 'excludeMatchedAreaFromOutput' in action["actionData"]["detectorAttributes"]
-                for positive_example in action["actionData"]["positiveExamples"]:
-                    positive_example["mask"] = cv2.imread(dir_path + '/' + action["actionData"]["positiveExamples"][0]["mask"])
+                for example_index,positive_example in enumerate(action["actionData"]["positiveExamples"]):
+                    read_and_set_image(positive_example, action, "mask")
                     positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
-                    positive_example["containedAreaMask"] = cv2.imread(dir_path + '/' + action["actionData"]["positiveExamples"][0]["containedAreaMask"])
-                    positive_example["img"] = cv2.imread(dir_path + '/' + action["actionData"]["positiveExamples"][0]["img"])
-                    if include_contained_area and exclude_matched_area:
-                        positive_example["outputMask"] = positive_example["containedAreaMask"].copy()
-                    elif include_contained_area and not exclude_matched_area:
-                        positive_example["outputMask"] = cv2.bitwise_or(positive_example["mask"].copy(), positive_example["containedAreaMask"].copy())
-                    elif not include_contained_area and exclude_matched_area:
-                        positive_example["outputMask"] = cv2.bitwise_and(positive_example["mask"].copy(), positive_example["containedAreaMask"].copy())
-                    else:
-                        positive_example["outputMask"] = positive_example["mask"].copy()
-                    positive_example["outputMask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["outputMask"].copy(), cv2.COLOR_BGR2GRAY))
+                    read_and_set_image(positive_example, action, "containedAreaMask")
+                    read_and_set_image(positive_example, action, "img")
+                    positive_example = set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)
 
-
-
+                    if "scenemask" in action["actionData"]["positiveExamples"][0]:
+                        read_and_set_image(positive_example, action, "scenemask")
+                        positive_example["scenemask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["scenemask"].copy(), cv2.COLOR_BGR2GRAY))
+                        read_and_set_image(positive_example, action, "scenecontainedAreaMask")
+                        read_and_set_image(positive_example, action, "sceneimg")
+                        positive_example = set_output_mask(positive_example, 'scene', include_contained_area,exclude_matched_area)
+                    action["actionData"]["positiveExamples"][0] = positive_example
     with props_file_obj as props_file:
         props = json.load(props_file)
+
+    with inputs_file_obj as inputs_file:
+        # print('inputs 2 ', inputs_file.read())
+        inputs = json.load(inputs_file)
     return {
         'actionRows': action_rows,
         'props': props,
+        'inputs' : inputs
     }
 # self.use_library = use_library if use_library is not None \
 #             else (True if self.props['deploymentToLibrary'] == 'true' else False)
@@ -60,7 +86,8 @@ def parse_zip(script_name):
         with ZipFile(script_file_path) as script_zip:
             action_rows_file_obj = script_zip.open(script_path + '/actions/actionRows.json', 'r')
             props_file_obj = script_zip.open(script_path + '/props.json', 'r')
-            script_obj = parse_script_file(action_rows_file_obj,props_file_obj, dir_path)
+            inputs_file_obj = script_zip.open(script_path + '/inputs.json', 'r')
+            script_obj = parse_script_file(action_rows_file_obj, props_file_obj, inputs_file_obj, dir_path)
             use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
             if use_library_scripts:
                 print('mode use_library_scripts not supported for zip file, extract zip file to a directory')
@@ -78,9 +105,9 @@ def parse_zip(script_name):
                 include_file_path = '/'.join(file_path_split)
                 action_rows_file_obj = script_zip.open(include_file_path + '/actions/actionRows.json', 'r')
                 props_file_obj = script_zip.open(include_file_path + '/props.json', 'r')
-                #
+                inputs_file_obj = script_zip.open(include_file_path + '/inputs.json', 'r')
                 include_dir_path = '/'.join(dir_path.split('/')[:-1] + include_file_path.split('/'))
-                include_script_obj = parse_script_file(action_rows_file_obj, props_file_obj, include_dir_path)
+                include_script_obj = parse_script_file(action_rows_file_obj, props_file_obj, inputs_file_obj, include_dir_path)
                 include_script_obj['props']['script_name'] = include_script_name
                 include_script_obj['props']["dir_path"] = include_dir_path
                 script_obj['include'][include_script_name] = include_script_obj
@@ -88,10 +115,12 @@ def parse_zip(script_name):
         script_path = script_file_path
         action_rows_file_obj = open(script_path + '/actions/actionRows.json', 'r')
         props_file_obj = open(script_path + '/props.json', 'r')
-        script_obj = parse_script_file(action_rows_file_obj, props_file_obj, dir_path)
+        inputs_file_obj = open(script_path + '/inputs.json', 'r')
+        script_obj = parse_script_file(action_rows_file_obj, props_file_obj, inputs_file_obj, dir_path)
         use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
         action_rows_file_obj.close()
         props_file_obj.close()
+        inputs_file_obj.close()
 
         script_obj['props']["script_path"] = script_file_path
         script_obj['props']["script_name"] = script_path.split('/')[-1]
@@ -103,9 +132,12 @@ def parse_zip(script_name):
                 if use_library_scripts else include_file_path
             action_rows_file_obj = open(include_parse_file_path + '/actions/actionRows.json', 'r')
             props_file_obj = open(include_parse_file_path + '/props.json', 'r')
+            inputs_file_obj = open(include_parse_file_path + '/inputs.json', 'r')
             include_dir_path = include_file_path
-
-            include_script_obj = parse_script_file(action_rows_file_obj, props_file_obj, include_parse_file_path)
+            include_script_obj = parse_script_file(action_rows_file_obj, props_file_obj, inputs_file_obj, include_parse_file_path)
+            action_rows_file_obj.close()
+            props_file_obj.close()
+            inputs_file_obj.close()
             include_script_obj['props']['script_name'] = include_script_name.split('/')[-1]
             include_script_obj['props']["dir_path"] = include_dir_path
             script_obj['include'][include_script_name] = include_script_obj

@@ -46,7 +46,10 @@ class DetectObjectHelper:
             else:
                 update_dict['context']['run_queue'] = []
 
-        for match in matches[1:action["actionData"]["maxMatches"]]:
+        excess_matches = len(matches) - int(action['actionData']['maxMatches'])
+        if excess_matches > 0:
+            print('truncated {} excess matches'.format(excess_matches))
+        for match in matches[1:int(action["actionData"]["maxMatches"])]:
             switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
                 "state": {
                     action['actionData']['outputVarName']: [match]
@@ -58,7 +61,6 @@ class DetectObjectHelper:
                 )
             else:
                 update_dict['context']['run_queue'].append(switch_action)
-        print('run_queue : ', len(context['run_queue']) if context['run_queue'] is not None else None)
         if detect_run_type_normal:
             state[action['actionData']['outputVarName']] = [matches[0]]
         else:
