@@ -610,14 +610,16 @@ class adb_host:
             print(action["actionData"]["inputExpression"])
             if not action["actionData"]["inputExpression"] == "null" and action["actionData"]["inputExpression"] is not None:
                 source_point = eval(action["actionData"]["inputExpression"], state)
+                print('dragLocationSource : reading input expression ', action["actionData"]["inputExpression"])
             context["dragLocationSource"] = source_point
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "dragLocationTarget":
             source_point = context["dragLocationSource"]
             target_point = random.choice(action["actionData"]["pointList"])
             if not action["actionData"]["inputExpression"] == "null" and action["actionData"]["inputExpression"] is not None:
+                print('dragLocationTarget : reading input expression ', action["actionData"]["inputExpression"])
                 target_point = eval(action["actionData"]["inputExpression"], state)
-            
+            print('dragLocationTarget: dragging from ', source_point, ' to ', target_point)
             self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
             del context["dragLocationSource"]
             # print(source_point)
