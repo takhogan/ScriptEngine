@@ -49,7 +49,7 @@ class adb_host:
         self.xmax = 32726
         self.ymax = 32726
         self.click_path_generator = ClickPathGenerator(41.0, 71.0, self.xmax, self.ymax, 45, 0.4)
-        self.image_stitch_calculator_path = '../build/ImageStitchCalculator.exe'
+        self.image_stitch_calculator_path = './build/ImageStitchCalculator.exe'
         self.event_counter = 1
         #TODO CORRECT ABOVE
         self.distances_dist = {
@@ -348,7 +348,7 @@ class adb_host:
             click_command += footer_commands
         shell_process = subprocess.Popen(['adb', 'shell'], stdin=subprocess.PIPE)
         shell_process.communicate((''.join(click_command)).encode('utf-8'))
-        print((''.join(click_command)).encode('utf-8'))
+        # print((''.join(click_command)).encode('utf-8'))
         self.event_counter += 1
 
     def click_and_drag(self, source_x, source_y, target_x, target_y):
@@ -457,26 +457,38 @@ class adb_host:
 
     def handle_action(self, action, state, context, log_level, log_folder):
         logs_path = log_folder + str(context['script_counter']) + '-'
-        if action["actionName"] == "declareScene":
-            forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
-            if forward_peek_result is not None:
-                return forward_peek_result
+        # if action["actionName"] == "declareScene":
+        #     forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
+        #     if forward_peek_result is not None:
+        #         return forward_peek_result
+        #
+        #     # screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
+        #     screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, None)
+        #     if screencap_im_bgr is None:
+        #         screencap_im_bgr = self.screenshot()
+        #     print('detectorAttributes', action['actionData']['detectorAttributes'])
+        #     matches,ssim_coeff = DetectSceneHelper.get_match(
+        #         action,
+        #         screencap_im_bgr.copy(),
+        #         action["actionData"]["positiveExamples"][0]["img"],
+        #         action["actionData"]["positiveExamples"][0]["mask"],
+        #         action["actionData"]["positiveExamples"][0]["mask_single_channel"],
+        #         self.props["dir_path"],
+        #         logs_path,
+        #         output_cropping=action["actionData"]["maskLocation"] if
+        #         (action["actionData"]["maskLocation"] != 'null' and
+        #          "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
+        #          ) else None,
+        #     )
+        #     if ssim_coeff > action["actionData"]["threshold"]:
+        #         state[action["actionData"]["outputVarName"]] = matches
+        #         action_result = ScriptExecutionState.SUCCESS
+        #     else:
+        #         action_result = ScriptExecutionState.FAILURE
+        #     action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, {}, action_result, context)
+        #     return action_result, state, context
 
-            # screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
-            screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, None)
-            if screencap_im_bgr is None:
-                screencap_im_bgr = self.screenshot()
-
-            matches,ssim_coeff = DetectSceneHelper.get_match(action, screencap_im_bgr, self.props["dir_path"], logs_path)
-            if ssim_coeff > action["actionData"]["threshold"]:
-                state[action["actionData"]["outputVarName"]] = matches
-                action_result = ScriptExecutionState.SUCCESS
-            else:
-                action_result = ScriptExecutionState.FAILURE
-            action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, {}, action_result, context)
-            return action_result, state, context
-
-        elif action["actionName"] == "detectObject":
+        if action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
             forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
@@ -484,29 +496,61 @@ class adb_host:
                 return forward_peek_result
 
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
-            print('get_detect_result', match_point, screencap_im_bgr.shape if screencap_im_bgr is not None else 'none')
+            # print('get_detect_result', match_point, screencap_im_bgr.shape if screencap_im_bgr is not None else 'none')
+            check_image_scale = screencap_im_bgr is None
             screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, screencap_im_bgr)
             if screencap_im_bgr is None:
                 screencap_im_bgr = self.screenshot()
-            print('post transform: ', screencap_im_bgr.shape)
+            # print('post transform: ', screencap_im_bgr.shape)
 
             screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
             if self.props["scriptMode"] == "train":
-
                 cv2.imwrite(logs_path + str(action['actionGroup']) + '-search_img.png', screencap_search_bgr)
-            matches = self.image_matcher.template_match(
-                action,
-                screencap_im_bgr,
-                screencap_search_bgr,
-                action["actionData"]["positiveExamples"][0]["mask_single_channel"],
-                action["actionData"]["positiveExamples"][0]["outputMask"],
-                action["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
-                action['actionData']['detectorName'],
-                logs_path,
-                self.props["scriptMode"],
-                match_point,
-                threshold=float(action["actionData"]["threshold"])
-            )
+            is_detect_object_first_match = (action['actionData']['detectActionType'] == 'detectObject' and action['actionData']['matchMode'] == 'firstMatch')
+
+            if is_detect_object_first_match or\
+                action['actionData']['detectActionType'] == 'detectScene':
+                matches,ssim_coeff = DetectSceneHelper.get_match(
+                    action,
+                    screencap_im_bgr.copy(),
+                    action["actionData"]["positiveExamples"][0]["sceneimg"],
+                    action["actionData"]["positiveExamples"][0]["scenemask"],
+                    action["actionData"]["positiveExamples"][0]["scenemask_single_channel"],
+                    action["actionData"]["positiveExamples"][0]["mask_single_channel"],
+                    action["actionData"]["positiveExamples"][0]["outputMask"],
+                    self.props["dir_path"],
+                    logs_path,
+                    output_cropping=action["actionData"]["maskLocation"] if
+                    (action["actionData"]["maskLocation"] != 'null' and
+                     "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
+                    ) else None
+                )
+                if ssim_coeff < float(action["actionData"]["threshold"]):
+                    matches = []
+
+            if (action['actionData']['detectActionType'] == 'detectObject' and action['actionData']['matchMode'] == 'bestMatch') or \
+                    (is_detect_object_first_match and len(matches) == 0):
+                matches = self.image_matcher.template_match(
+                    action,
+                    screencap_im_bgr,
+                    screencap_search_bgr,
+                    action["actionData"]["positiveExamples"][0]["mask_single_channel"],
+                    action["actionData"]["positiveExamples"][0]["outputMask"],
+                    action["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
+                    action['actionData']['detectorName'],
+                    logs_path,
+                    self.props["scriptMode"],
+                    match_point,
+                    check_image_scale=check_image_scale,
+                    output_cropping=action["actionData"]["maskLocation"] if
+                    (action["actionData"]["maskLocation"] != 'null' and
+                     "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
+                     ) else None,
+                    threshold=float(action["actionData"]["threshold"]),
+                    use_color=action["actionData"]["useColor"] == "true" or action["actionData"]["useColor"]
+                )
+
+
             # exit(0)
             if len(matches) > 0:
                 state, context, update_dict = DetectObjectHelper.append_to_run_queue(
@@ -523,9 +567,9 @@ class adb_host:
         elif action["actionName"] == "clickAction":
             var_name = action["actionData"]["inputExpression"]
             point_choice,state,context = ClickActionHelper.get_point_choice(action, var_name, state, context)
-            point_choice = (
-            point_choice[0] * self.width / self.props['width'], point_choice[1] * self.height / self.props['height'])
-            print(point_choice)
+            # point_choice = (
+            # point_choice[0] * self.width / self.props['width'], point_choice[1] * self.height / self.props['height'])
+            print('clickAction-' + str(action["actionGroup"]), ' input: ', var_name, ' output : ', point_choice)
             delays = []
             if action["actionData"]["delayState"] == "active":
                 if action["actionData"]["distType"] == 'normal':
@@ -537,11 +581,12 @@ class adb_host:
                                                                                        "clickCount"] > 1 else [
                         truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]
 
+            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1])
                 time.sleep(delays[click_count])
 
-            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
+
             return ScriptExecutionState.SUCCESS, state, context
 
         elif action["actionName"] == "shellScript":
@@ -572,6 +617,7 @@ class adb_host:
             target_point = random.choice(action["actionData"]["pointList"])
             if not action["actionData"]["inputExpression"] == "null" and action["actionData"]["inputExpression"] is not None:
                 target_point = eval(action["actionData"]["inputExpression"], state)
+            
             self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
             del context["dragLocationSource"]
             # print(source_point)
@@ -710,10 +756,10 @@ class adb_host:
                     search_pattern_obj["stitcher_status"] = "STITCHER_OK"
                     search_pattern_obj["stitch"] = result_im
                     cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/' + str(step_index) + '-pano.png', result_im)
-                    print(subprocess.run([self.image_stitch_calculator_path,
-                                          pre_img_path, post_img_path, '-m',
-                                          draggable_area_path, draggable_area_path],
-                                          capture_output=True,shell=False).stdout)
+                    # print(subprocess.run([self.image_stitch_calculator_path,
+                    #                       pre_img_path, post_img_path, '-m',
+                    #                       draggable_area_path, draggable_area_path],
+                    #                       capture_output=True,shell=False).stdout)
                     break
                 elif err_code == cv2.STITCHER_ERR_NEED_MORE_IMGS:
                     search_pattern_obj["stitcher_status"] = "STITCHER_ERR_NEED_MORE_IMGS"
@@ -809,10 +855,10 @@ class adb_host:
                 if err_code == cv2.STITCHER_OK:
                     print('generating full panorama...')
                     cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/full-pano.png', result_im)
-                    print(subprocess.run([self.image_stitch_calculator_path] + \
-                                         greater_pano_paths + ['-m'] + \
-                                         [draggable_area_path] * len(greater_pano_paths),
-                                         capture_output=True, shell=False).stdout)
+                    # print(subprocess.run([self.image_stitch_calculator_path] + \
+                    #                      greater_pano_paths + ['-m'] + \
+                    #                      [draggable_area_path] * len(greater_pano_paths),
+                    #                      capture_output=True, shell=False).stdout)
                     pass
                 else:
                     print('failed to greater pano: ', err_code)
@@ -857,5 +903,6 @@ if __name__ == '__main__':
         "deploymentToLibrary": "true"
     }, None, '127.0.0.1:5555')
     adb_host.init_system()
-    adb_host.click(642.0, 598.0)
+    adb_host.click(633, 858)
+    # (633.3333333333333, 858.6666666666666),
     exit(0)

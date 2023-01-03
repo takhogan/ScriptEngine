@@ -3,6 +3,7 @@ import random
 import time
 from dateutil import tz
 import os
+import json
 
 
 import datetime
@@ -71,6 +72,8 @@ def run_script_sequence(script_sequence, sequences, timeout):
             print('running script ', script)
             load_and_run(script, extended_timeout, script_sequence['constants'])
 
+def parse_constant_def(script_sequence_def):
+    pass
 
 def parse_script_sequence_def(script_sequence_def):
     is_sequence_def = False
@@ -135,34 +138,67 @@ def parse_and_run_script_sequence_def(script_sequence_def, timeout):
         run_script_sequence(sequences['onDestroy'], sequences, timeout + datetime.timedelta(minutes=15))
 
 
-def update_running_scripts_file(scriptname):
-    if not os.path.exists(RUNNING_SCRIPTS_PATH):
+def update_running_scripts_file(scriptname, action):
+    if action == 'push':
+        running_scripts = []
+        if not os.path.exists(RUNNING_SCRIPTS_PATH):
+            with open(RUNNING_SCRIPTS_PATH, 'w') as running_scripts_file:
+                json.dump(running_scripts, running_scripts_file)
+        with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
+            running_scripts = json.load(running_script_file)
+            if len(running_scripts) == 0 or running_scripts[0] != scriptname:
+                running_scripts.append(scriptname)
         with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
-            print('running_scripts file created')
-            running_script_file.write(scriptname)
-    else:
-        print('running_scripts file removed')
-        os.remove(RUNNING_SCRIPTS_PATH)
+            json.dump(running_scripts, running_script_file)
+    elif action == 'pop':
+        if not os.path.exists(RUNNING_SCRIPTS_PATH):
+            return
+        else:
+            running_scripts = []
+            with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
+                running_scripts = json.load(running_script_file)
+                running_scripts.pop(0)
+            print('running_scripts ', running_scripts)
+            if len(running_scripts) == 0:
+                os.remove(RUNNING_SCRIPTS_PATH)
+            else:
+                with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
+                    json.dump(running_scripts, running_script_file)
 
 def load_and_run(script_name, timeout, constants=None, start_time=None):
     # if you want to open zip then you pass .zip in command line args
-    update_running_scripts_file(script_name)
+    update_running_scripts_file(script_name, 'push')
     script_object = parse_zip(script_name)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
     main_script = ScriptExecutor(script_object, timeout, state=constants, start_time=start_time)
     main_script.run(log_level='INFO')
-    update_running_scripts_file(script_name)
+    print('completed script ', script_name, datetime.datetime.now())
+    update_running_scripts_file(script_name, 'pop')
 
 
 
 if __name__=='__main__':
     script_name = sys.argv[1]
     start_time = None
-    if len(sys.argv) > 2:
-        start_time = str_timeout_to_datetime_timeout(sys.argv[2], src='deployment_server')
+    end_time = None
+    n_args = len(sys.argv)
+    constants = {}
+    if n_args > 2:
+        start_time_str = sys.argv[2]
+        start_time = str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')
+    else:
+        start_time = datetime.datetime.now()
+        start_time_str = start_time.strftime('%Y-%m-%d %H-%M-%S')
+    if n_args > 3:
+        end_time = str_timeout_to_datetime_timeout(sys.argv[3], src='deployment_server').replace(tzinfo=tz.tzlocal())
+    if n_args > 4:
+        for arg_index in range(4, n_args):
+            arg_split = sys.argv[arg_index].strip().split(':')
+            constants[arg_split[0]] = arg_split[1]
     load_and_run(
         script_name,
-        (start_time + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal()),
-        start_time=sys.argv[2]
+        (start_time + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal()) if end_time is None else end_time,
+        start_time=start_time_str,
+        constants=constants
     )

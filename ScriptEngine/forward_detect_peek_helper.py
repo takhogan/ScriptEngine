@@ -1,10 +1,22 @@
+from script_execution_state import ScriptExecutionState
+
 class ForwardDetectPeekHelper:
     def __init__(self):
         pass
 
     @staticmethod
     def load_forward_peek_result(action, state, context):
+        if 'detect_run_type' in action['actionData'] and\
+                action['actionData']['detect_run_type'] == 'result_precalculation' and \
+                'resuseScreenshotBetweenActions' not in action['actionData']['detectorAttributes']:
+            print('forward peek disabled for action ', action['actionGroup'])
+            del action['actionData']['screencap_im_bgr']
+            del action['actionData']['detect_run_type']
+            del action['actionData']['results_precalculated']
+            context['action'] = action
+            return ScriptExecutionState.SUCCESS, state, context
         if 'results_precalculated' in action['actionData'] and action['actionData']['results_precalculated']:
+            print('returning precalculated results')
             if 'state' in action["actionData"]["update_dict"]:
                 for key, value in action["actionData"]["update_dict"]["state"].items():
                     state[key] = value
@@ -15,6 +27,7 @@ class ForwardDetectPeekHelper:
             action['actionData']['screencap_im_bgr'] = None
             action['actionData']['results_precalculated'] = False
             action['actionData']['update_dict'] = None
+            del action['actionData']['detect_run_type']
             return return_tuple
         return None
 
@@ -25,7 +38,7 @@ class ForwardDetectPeekHelper:
             action['actionData']['results_precalculated'] = True
             action['actionData']['update_dict'] = update_dict
             action['actionData']['action_result'] = action_result
-            action['actionData']['detect_run_type'] = None
+            action['actionData']['detect_run_type'] = 'results_precalculated'
             context['action'] = action
         return action, context
 

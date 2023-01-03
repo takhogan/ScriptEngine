@@ -11,7 +11,9 @@ from progressbar import ProgressBar
 from waitress import serve
 
 from file_transfer_host_app import app#, cache
-from flask import Flask, request, redirect, jsonify, make_response, send_file, send_from_directory, render_template
+# from ScriptEngine.script_engine_constants import RUNNING_SCRIPTS_PATH
+RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
+from flask import Flask, request, redirect, Response, jsonify, make_response, send_file, send_from_directory, render_template
 from werkzeug.utils import secure_filename
 from flask_cors import CORS, cross_origin
 import shutil
@@ -23,6 +25,22 @@ import platform
 from utils.file_transfer_host_utils import os_normalize_path
 
 ALLOWED_EXTENSIONS = set(['zip'])
+
+DEFAULT_HTML_HEADER = '''
+    <head>
+    <style>
+      ul {
+        column-width: 300px;
+        column-gap: 20px;
+        column-count: 1;
+      }
+    </style>
+  </head>
+'''
+
+SERVER_CACHE = {
+    'LIBRARY_ZIP' : None
+}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -39,12 +57,17 @@ def log_request_info():
 
 
 #@cache.memoize()
-def get_library_zip(library_zip_path):
+def get_library_zip(library_zip_path, refresh_cache=True):
+    if not refresh_cache:
+        print('retrieving library zip from cache')
+        return BytesIO(SERVER_CACHE['LIBRARY_ZIP'].getvalue())
     stream = BytesIO()
     with open(library_zip_path, 'rb') as library_zip:
-        print('returning library package zip')
+        print('writing library zip to stream')
         stream.write(library_zip.read())
         stream.seek(0)
+        print('caching result')
+        SERVER_CACHE['LIBRARY_ZIP'] = BytesIO(stream.getvalue())
         return stream
 
 
@@ -73,15 +96,19 @@ def get_library():
 
     library_zip_path = app.config['TEMP_FOLDER'] + '\\library_zip.zip'
     script_files.sort()
+    refresh_cache = True
     if current_times.keys() == library_zip_changelog_dict.keys() and\
        all(current_times[script_file] == library_zip_changelog_dict[script_file] for script_file in script_files):
+        # refresh_cache = False
         print('library package unchanged')
     else:
         print('updating library package zip')
         with ZipFile(library_zip_path, 'w') as library_zip:
             for script_file in script_files:
                 library_zip.write(script_file)
-    stream = get_library_zip(library_zip_path)
+    stream = get_library_zip(library_zip_path, refresh_cache=refresh_cache)
+
+    print('sending library zip')
     return send_file(
         stream,
         as_attachment=False,
@@ -111,43 +138,86 @@ def get_library():
 
 @app.route('/run/<scriptname>', strict_slashes=False)
 def run_script(scriptname):
-    running_script_path = app.config['TEMP_FOLDER'] + '/running_script.txt'
-    if not os.path.exists(running_script_path):
-        start_time = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
-        script_log_folder = app.config['LOGFILE_FOLDER'] + scriptname + '-' + start_time + '\\'
-        log_file_name = script_log_folder + 'stdout.txt'
-        os.makedirs(script_log_folder, exist_ok=True)
-        print('logfolder', script_log_folder.split('ScriptEngine'))
-        def run_in_thread():
-            with open(log_file_name, 'w') as log_file:
-                shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
-                                                  'C:\\Users\\takho\\ScriptEngine\\ScriptEngine\\script_manager.py',
-                                                  scriptname,
-                                                  start_time], shell=True,
-                                                 stdout=log_file,
-                                                 stderr=log_file,
-                                                 cwd='C:\\Users\\takho\\ScriptEngine')
-            shell_process.wait()
-            return
+    if not os.path.exists(RUNNING_SCRIPTS_PATH):
+        timeout_val = request.args.get('timeout')
+        script_constants = request.args.getlist('args')
 
-        script_thread = threading.Thread(target=run_in_thread)
+        def initialize_script_manager_args(scriptname, timeout_val, script_constants):
+            start_time = datetime.datetime.now()
+            start_time_str = start_time.strftime('%Y-%m-%d %H-%M-%S')
+            script_log_folder = app.config['LOGFILE_FOLDER'] + scriptname + '-' + start_time_str + '\\'
+            os.makedirs(script_log_folder, exist_ok=True)
+            timeout_val_split = timeout_val.split('h')
+            end_time = start_time + datetime.timedelta(hours=int(timeout_val_split[0]),minutes=int(timeout_val_split[1][:-1]))
+            end_time_str = end_time.strftime('%Y-%m-%d %H-%M-%S')
+            return scriptname, start_time_str, end_time_str, script_constants, script_log_folder
+
+
+
+        def run_in_thread(scriptname, start_time_str, end_time_str, script_constants, script_log_folder):
+            print('running ', scriptname, 'from', start_time_str, 'to', end_time_str, 'with constants', script_constants)
+            log_file = open(script_log_folder + 'stdout.txt', 'w')
+            shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
+                                              'C:\\Users\\takho\\ScriptEngine\\ScriptEngine\\script_manager.py',
+                                              scriptname,
+                                              start_time_str,
+                                              end_time_str,
+                                              *script_constants], shell=True,
+                                             stdout=log_file,
+                                             stderr=log_file,
+                                             cwd='C:\\Users\\takho\\ScriptEngine')
+            shell_process.wait()
+            log_file.close()
+            print('completed ', scriptname, shell_process)
+            exit_code = shell_process.returncode
+            with open(script_log_folder + 'completed.txt', 'w') as completed_file:
+                completed_file.write(scriptname + ' completed at ' + str(datetime.datetime.now()))
+            if exit_code == 1:
+                return
+            if os.path.exists(RUNNING_SCRIPTS_PATH):
+                with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
+                    running_scripts = json.load(running_script_file)
+                    script_thread = threading.Thread(
+                        target=run_in_thread,
+                        args=initialize_script_manager_args(running_scripts[0],'0h30m',[])
+                    )
+                    script_thread.start()
+            return
+        script_manager_args = initialize_script_manager_args(scriptname, timeout_val, script_constants)
+        script_thread = threading.Thread(target=run_in_thread, args=script_manager_args)
         script_thread.start()
         # returns immediately after the thread starts
-        print(request.host.split(':')[0] + ':3848')
         return ('<p>' + scriptname + ' started! </p>' +\
-                    '<a href="http://' + request.host.split(':')[0] + ':3848"' + '> Click here for logs </a><br>' +\
+                    '<a href="http://' + request.host.split(':')[0] + ':3848/logs/' + scriptname +\
+                    '-' + script_manager_args[1] + '/"' + '> Click here for logs </a><br>' +\
                     '<a href="/capture"' + '> Click here to monitor </a><br>' +\
                     '<a href="/run"' + '> Click here to run another </a><br>' +\
                     '<a href="/reset"' + '> Click here to terminate </a><br>', 201)
     else:
-        with open(running_script_path, 'r') as running_script_file:
+        with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
             return ('<p>Please wait for script completion, script: ' + running_script_file.read() + ' still running!</p>' +\
-                        '<a href=/reset> Click here to terminate </a>', 400)
+                    '<a href=/enqueue/' + scriptname + '> Click here to enqueue </a><br>' +\
+                        '<a href=/reset> Click here to terminate </a><br>', 400)
+
+@app.route('/enqueue/<scriptname>', methods=['GET'], strict_slashes=False)
+def enqueue_script(scriptname):
+    if not os.path.exists(RUNNING_SCRIPTS_PATH):
+        return ('<p> nothing in que </p>' +\
+                '<a href="/run/{}"> Click here to run script </a>'.format(scriptname), 400)
+    else:
+        running_scripts = []
+        with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
+            running_scripts = json.load(running_script_file)
+        running_scripts.append(scriptname)
+        with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
+            json.dump(running_scripts, running_script_file)
+    return ('<p> Added ' + scriptname + ' to queue. Now running : ' + str(running_scripts) + '  </p>' +\
+            '<a href="/run"> Click here to run another </a>', 200)
 
 @app.route('/run', methods=['GET'], strict_slashes=False)
 def list_run_scripts():
     def buttonize(script_file):
-        return "<li><a href=\"/run/" + script_file.split('.')[0] + "\"/>" + script_file + "</a></li>"
+        return "<li><a href=\"/run/" + script_file.split('.')[0] + "?timeout=0h30m\"/>" + script_file + "</a></li>"
     script_files = subprocess.check_output([
         'dir',
         'C:\\Users\\takho\\ScriptEngine\\scripts\\scriptFolders',
@@ -159,7 +229,9 @@ def list_run_scripts():
         ], shell=True
     ).decode('utf-8').split('\r\n')
     script_files.sort()
-    script_file_buttons = '<br>'.join(list(map(buttonize, script_files)))
+    script_file_buttons = '<html>' + DEFAULT_HTML_HEADER + '<body><ul>' + ''.join(list(map(buttonize, script_files))) +\
+        '</ul></body></html>'
+    # script_file_buttons = '<br>'.join()
     return (script_file_buttons, 201)
 
 @app.route('/restart', methods=['GET'], strict_slashes=False)
@@ -175,9 +247,8 @@ def restart_server():
 
 @app.route('/reset', methods=['GET'], strict_slashes=False)
 def reset_running_scripts():
-    running_script_path = app.config['TEMP_FOLDER'] + '/running_script.txt'
-    if os.path.exists(running_script_path):
-        os.remove(running_script_path)
+    if os.path.exists(RUNNING_SCRIPTS_PATH):
+        os.remove(RUNNING_SCRIPTS_PATH)
     return ('<p>running scripts cleared</p>' + \
             '<a href=/run> Click here to run a script </a>', 201)
 
@@ -247,7 +318,7 @@ def capture():
         pil_img.save(img_io, 'JPEG', quality=70)
         img_io.seek(0)
         capture_response = make_response(send_file(img_io, mimetype='image/jpeg'))
-        capture_response.headers['Refresh'] = '5; url=/capture'
+        capture_response.headers['Refresh'] = '3; url=/capture'
         return capture_response
 
     screenshot = pyautogui.screenshot()

@@ -71,8 +71,9 @@ class python_host:
         elif action["actionName"] == "clickAction":
             var_name = action["actionData"]["inputExpression"]
             point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context)
-            point_choice = (point_choice[0] * self.width / self.props['width'],point_choice[1] * self.height / self.props['height'])
-            print('Click at point: ', point_choice)
+            # print('debug', point_choice, self.width, self.height, self.props['width'])
+            # point_choice = (point_choice[0] * self.width / self.props['width'],point_choice[1] * self.height / self.props['height'])
+            print('clickAction-' + str(action["actionGroup"]), ' input: ', var_name, ' output : ', point_choice)
             delays = []
             if action["actionData"]["delayState"] == "active":
                 if action["actionData"]["distType"] == 'normal':
@@ -82,11 +83,12 @@ class python_host:
                     maxes = (np.repeat(action["actionData"]["max"], action["actionData"]["clickCount"]) - mean) / stddev
                     delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev) if action["actionData"]["clickCount"] > 1 else [truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]
 
+            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
             for click_count in range(0, action["actionData"]["clickCount"]):
                 pyautogui.click(x=point_choice[0], y=point_choice[1], button=action['actionData']['mouseButton'])
                 time.sleep(delays[click_count])
 
-            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
+
 
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "mouseScrollAction":
@@ -107,6 +109,7 @@ class python_host:
                                 is_escaped_char = False
                                 if escaped_char in KEYBOARD_KEYS:
                                     pyautogui.press(escaped_char)
+                                    print('keyboard key ', escaped_char)
                                 else:
                                     print('keyboard expression eval : ', escaped_char, ':', eval(escaped_char, state.copy()))
                                     eval_expression = str(eval(escaped_char, state.copy()))
@@ -149,60 +152,100 @@ class python_host:
                     for keyPressKey in keyPressKeys:
                         pyautogui.keyUp(keyPressKey)
             return ScriptExecutionState.SUCCESS, state, context
-        elif action["actionName"] == "detectScene":
-            forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
-            if forward_peek_result is not None:
-                return forward_peek_result
-
-            # screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
-            screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action)
-            if screencap_im_bgr is None:
-                screencap_im_bgr = self.screenshot()
-
-            matches, ssim_coeff = DetectSceneHelper.get_match(action, screencap_im_bgr, self.props["dir_path"],
-                                                              logs_path)
-            if ssim_coeff > action["actionData"]["threshold"]:
-                state[action["actionData"]["outputVarName"]] = matches
-                action_result = ScriptExecutionState.SUCCESS
-            else:
-                action_result = ScriptExecutionState.FAILURE
-            action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, {}, action_result, context)
-            return action_result, state, context
+        # elif action["actionName"] == "detectScene":
+        #     forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
+        #     if forward_peek_result is not None:
+        #         return forward_peek_result
+        #
+        #     # screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
+        #     screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, None)
+        #     if screencap_im_bgr is None:
+        #         screencap_im_bgr = self.screenshot()
+        #
+        #     matches, ssim_coeff = DetectSceneHelper.get_match(
+        #         action,
+        #         screencap_im_bgr.copy(),
+        #         action["actionData"]["positiveExamples"][0]["img"],
+        #         action["actionData"]["positiveExamples"][0]["mask"],
+        #         action["actionData"]["positiveExamples"][0]["mask_single_channel"],
+        #         self.props["dir_path"],
+        #         logs_path,
+        #         output_cropping=action["actionData"]["maskLocation"] if
+        #         (action["actionData"]["maskLocation"] != 'null' and
+        #          "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
+        #          ) else None,
+        #     )
+        #     if ssim_coeff > action["actionData"]["threshold"]:
+        #         state[action["actionData"]["outputVarName"]] = matches
+        #         action_result = ScriptExecutionState.SUCCESS
+        #     else:
+        #         action_result = ScriptExecutionState.FAILURE
+        #     action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, {}, action_result, context)
+        #     return action_result, state, context
 
         elif action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
+
             forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
             if forward_peek_result is not None:
                 return forward_peek_result
 
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
-            screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action)
+            check_image_scale = screencap_im_bgr is None
+            screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, screencap_im_bgr)
             if screencap_im_bgr is None:
                 screencap_im_bgr = self.screenshot()
 
 
             screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
-            # screencap_search_bgr = cv2.cvtColor(screencap_search.copy(), cv2.COLOR_RGB2BGR)
             if self.props["scriptMode"] == "train":
                 cv2.imwrite(logs_path + str(action['actionGroup']) + '-search_img.png', screencap_search_bgr)
-            matches = self.image_matcher.template_match(
-                action,
-                screencap_im_bgr,
-                screencap_search_bgr,
-                action["actionData"]["positiveExamples"][0]["mask_single_channel"],
-                action["actionData"]["positiveExamples"][0]["outputMask"],
-                action["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
-                action['actionData']['detectorName'],
-                logs_path,
-                self.props["scriptMode"],
-                match_point,
-                output_cropping=action["actionData"]["maskLocation"] if
+            is_detect_object_first_match = (
+                        action['actionData']['detectActionType'] == 'detectObject' and action['actionData'][
+                    'matchMode'] == 'firstMatch')
+
+            if is_detect_object_first_match or \
+                    action['actionData']['detectActionType'] == 'detectScene':
+                matches, ssim_coeff = DetectSceneHelper.get_match(
+                    action,
+                    screencap_im_bgr.copy(),
+                    action["actionData"]["positiveExamples"][0]["sceneimg"],
+                    action["actionData"]["positiveExamples"][0]["scenemask"],
+                    action["actionData"]["positiveExamples"][0]["scenemask_single_channel"],
+                    action["actionData"]["positiveExamples"][0]["mask_single_channel"],
+                    action["actionData"]["positiveExamples"][0]["outputMask"],
+                    self.props["dir_path"],
+                    logs_path,
+                    output_cropping=action["actionData"]["maskLocation"] if
+                    (action["actionData"]["maskLocation"] != 'null' and
+                     "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
+                    ) else None
+                )
+
+            if (action['actionData']['detectActionType'] == 'detectObject' and action['actionData'][
+                'matchMode'] == 'bestMatch') or \
+                    (is_detect_object_first_match and ssim_coeff < action['actionData']['threshold']):
+                matches = self.image_matcher.template_match(
+                    action,
+                    screencap_im_bgr,
+                    screencap_search_bgr,
+                    action["actionData"]["positiveExamples"][0]["mask_single_channel"],
+                    action["actionData"]["positiveExamples"][0]["outputMask"],
+                    action["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
+                    action['actionData']['detectorName'],
+                    logs_path,
+                    self.props["scriptMode"],
+                    match_point,
+                    check_image_scale=check_image_scale,
+                    output_cropping=action["actionData"]["maskLocation"] if
                     (action["actionData"]["maskLocation"] != 'null' and
                      "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
                      ) else None,
-                threshold=float(action["actionData"]["threshold"])
-            )
+                    threshold=float(action["actionData"]["threshold"]),
+                    use_color=action["actionData"]["useColor"] == "true" or action["actionData"]["useColor"]
+                )
+
             if len(matches) > 0:
                 state, context, update_dict = DetectObjectHelper.append_to_run_queue(
                     action, state, context, matches,

@@ -10,3 +10,4 @@ class ScriptExecutionState(Enum):
     RETURN = auto(),
     OUT_OF_ATTEMPTS = auto(),
     FINISHED_FAILURE = auto(),
+    FINISHED_BRANCH = auto()
