@@ -457,36 +457,6 @@ class adb_host:
 
     def handle_action(self, action, state, context, log_level, log_folder):
         logs_path = log_folder + str(context['script_counter']) + '-'
-        # if action["actionName"] == "declareScene":
-        #     forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
-        #     if forward_peek_result is not None:
-        #         return forward_peek_result
-        #
-        #     # screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
-        #     screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, None)
-        #     if screencap_im_bgr is None:
-        #         screencap_im_bgr = self.screenshot()
-        #     print('detectorAttributes', action['actionData']['detectorAttributes'])
-        #     matches,ssim_coeff = DetectSceneHelper.get_match(
-        #         action,
-        #         screencap_im_bgr.copy(),
-        #         action["actionData"]["positiveExamples"][0]["img"],
-        #         action["actionData"]["positiveExamples"][0]["mask"],
-        #         action["actionData"]["positiveExamples"][0]["mask_single_channel"],
-        #         self.props["dir_path"],
-        #         logs_path,
-        #         output_cropping=action["actionData"]["maskLocation"] if
-        #         (action["actionData"]["maskLocation"] != 'null' and
-        #          "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
-        #          ) else None,
-        #     )
-        #     if ssim_coeff > action["actionData"]["threshold"]:
-        #         state[action["actionData"]["outputVarName"]] = matches
-        #         action_result = ScriptExecutionState.SUCCESS
-        #     else:
-        #         action_result = ScriptExecutionState.FAILURE
-        #     action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, {}, action_result, context)
-        #     return action_result, state, context
 
         if action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
@@ -585,7 +555,6 @@ class adb_host:
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1])
                 time.sleep(delays[click_count])
-
 
             return ScriptExecutionState.SUCCESS, state, context
 
