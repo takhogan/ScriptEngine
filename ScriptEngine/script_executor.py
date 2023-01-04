@@ -51,7 +51,8 @@ DELAY_EXEMPT_ACTIONS = {
 class ScriptExecutor:
     def __init__(self, script_obj, timeout, log_level='INFO', parent_folder='', start_time=None, context=None, state=None):
         self.props = script_obj['props']
-        self.props["start_time"] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S') if start_time is None else start_time
+        if start_time is None:
+            self.refresh_start_time()
         self.timeout = timeout
         self.props["timeout"] = timeout
         self.log_level = log_level
@@ -95,7 +96,12 @@ class ScriptExecutor:
         # print('context (1) : ', self.context["action_attempts"])
         self.status = ScriptExecutionState.FINISHED
 
-    def create_log_folders(self, parent_folder=''):
+    def refresh_start_time(self):
+        self.props["start_time"] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+
+    def create_log_folders(self, parent_folder='', refresh_start_time=False):
+        if refresh_start_time:
+            self.refresh_start_time()
         self.log_folder = (
             ('./logs/' if parent_folder == '' else parent_folder) + self.props['script_name'] + '-' + self.props['start_time']
         )
@@ -248,7 +254,10 @@ class ScriptExecutor:
                     return status, state, context
 
             # print('runMode: ', action["actionData"]["runMode"])
-            ref_script_executor.create_log_folders(self.log_folder)
+            ref_script_executor.create_log_folders(
+                parent_folder=self.log_folder,
+                refresh_start_time=True
+            )
             if action["actionData"]["runMode"] == "run":
                 ref_script_executor.run()
             elif action["actionData"]["runMode"] == "runOne":

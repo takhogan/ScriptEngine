@@ -289,3 +289,38 @@
 #     for deviation_chance_index in range(3, 8): #6
 #         deviation_chance = deviation_chance_index / 10
 #         simulate_path(deviation_degree, deviation_chance, 4)
+
+
+
+# OLD DETECT SCENE CODE
+
+# if action["actionName"] == "declareScene":
+        #     forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
+        #     if forward_peek_result is not None:
+        #         return forward_peek_result
+        #
+        #     # screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
+        #     screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, None)
+        #     if screencap_im_bgr is None:
+        #         screencap_im_bgr = self.screenshot()
+        #     print('detectorAttributes', action['actionData']['detectorAttributes'])
+        #     matches,ssim_coeff = DetectSceneHelper.get_match(
+        #         action,
+        #         screencap_im_bgr.copy(),
+        #         action["actionData"]["positiveExamples"][0]["img"],
+        #         action["actionData"]["positiveExamples"][0]["mask"],
+        #         action["actionData"]["positiveExamples"][0]["mask_single_channel"],
+        #         self.props["dir_path"],
+        #         logs_path,
+        #         output_cropping=action["actionData"]["maskLocation"] if
+        #         (action["actionData"]["maskLocation"] != 'null' and
+        #          "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
+        #          ) else None,
+        #     )
+        #     if ssim_coeff > action["actionData"]["threshold"]:
+        #         state[action["actionData"]["outputVarName"]] = matches
+        #         action_result = ScriptExecutionState.SUCCESS
+        #     else:
+        #         action_result = ScriptExecutionState.FAILURE
+        #     action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, {}, action_result, context)
+        #     return action_result, state, context
