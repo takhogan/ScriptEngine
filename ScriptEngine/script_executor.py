@@ -6,6 +6,7 @@ import datetime
 from dateutil import tz
 from PIL import Image
 import tesserocr
+import random
 import re
 
 import cv2
@@ -53,6 +54,8 @@ class ScriptExecutor:
         self.props = script_obj['props']
         if start_time is None:
             self.refresh_start_time()
+        else:
+            self.props['start_time'] = start_time
         self.timeout = timeout
         self.props["timeout"] = timeout
         self.log_level = log_level
@@ -64,7 +67,6 @@ class ScriptExecutor:
         self.adb_host = adb_host(self.props.copy(), self.python_host, '127.0.0.1:5555')
         # TODO IP shouldn't be hard coded
         self.include_scripts = script_obj['include']
-        self.create_log_folders(parent_folder)
         self.run_queue = []
 
         self.state = {
@@ -88,13 +90,15 @@ class ScriptExecutor:
             'out_of_attempts' : False,
             'out_of_attempts_action' : None,
             'object_handler_encountered' : False,
-            'run_queue' : None
+            'run_queue': None,
+            'actionOrder': 'sequential'
         }
         # print('update context : ', context["action_attempts"] if (context is not None and "action_attempts" in context) else 'none')
         if context is not None:
             self.context.update(context)
         # print('context (1) : ', self.context["action_attempts"])
         self.status = ScriptExecutionState.FINISHED
+        self.create_log_folders(parent_folder)
 
     def refresh_start_time(self):
         self.props["start_time"] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
@@ -102,10 +106,10 @@ class ScriptExecutor:
     def create_log_folders(self, parent_folder='', refresh_start_time=False):
         if refresh_start_time:
             self.refresh_start_time()
-        self.log_folder = (
-            ('./logs/' if parent_folder == '' else parent_folder) + self.props['script_name'] + '-' + self.props['start_time']
-        )
-        os.makedirs(self.log_folder, exist_ok=True)
+        self.log_folder = ('./logs/' if parent_folder == '' else parent_folder) +\
+              str(self.context['script_counter']).zfill(5) + '-' +\
+              self.props['script_name'] + '-' + self.props['start_time']
+
         os.makedirs(self.log_folder + '/search_patterns', exist_ok=True)
         self.log_folder += '/'
         self.logger = ScriptLogger(self.log_folder)
@@ -128,6 +132,7 @@ class ScriptExecutor:
 
     def log_action_details(self, action):
         print(
+            str(self.context['script_counter']).zfill(5) + ' ' + \
             self.props["script_name"] + ' ' + action["actionData"]["targetSystem"] + \
             ' action : ' + action["actionName"] + '-' + str(action["actionGroup"]) + \
             ' children: ' + str(list(map(lambda action: action["actionGroup"], self.get_children(action)))) + \
@@ -208,6 +213,12 @@ class ScriptExecutor:
                     script_name = eval(script_name[1:-1], self.state.copy())
                 ref_script = self.include_scripts[script_name]
                 ref_script['include'] = self.include_scripts
+                child_context["actionOrder"] = action["actionData"]["actionOrder"] if "actionOrder" in action["actionData"] else "sequential"
+                child_context["scriptMaxActionAttempts"] = action["actionData"]["scriptMaxActionAttempts"] if "scriptMaxActionAttempts" in action["actionData"] else ""
+                child_context["onOutOfActionAttempts"] = action["actionData"]["onOutOfActionAttempts"] if "onOutOfActionAttempts" in action["actionData"] else "returnFailure"
+
+                child_context["script_counter"] = self.context["script_counter"]
+
                 if is_error_handler or is_object_handler:
                     search_area_handler_state = {
                         "target_search_pattern": context["search_patterns"][
@@ -238,6 +249,7 @@ class ScriptExecutor:
             else:
                 action["actionData"]["initializedScript"].rewind(input_vars)
                 ref_script_executor = action["actionData"]["initializedScript"]
+                ref_script_executor.context["script_counter"] = self.context["script_counter"]
 
             if 'searchAreaObjectHandler' in child_context["script_attributes"]:
                 ref_script_executor.context["object_handler_encountered"] = False
@@ -267,9 +279,13 @@ class ScriptExecutor:
 
             parsed_output_vars = list(
                 filter(lambda output_vars: output_vars != '', action["actionData"]["outputVars"].split(",")))
+            print('CONTROL FLOW: parsing output vars ', parsed_output_vars)
             for output_var in parsed_output_vars:
-                state[output_var] = ref_script_executor.state[
+                output_var_val = ref_script_executor.state[
                     output_var] if output_var in ref_script_executor.state else None
+                state[output_var] = output_var_val
+                print("CONTROL FLOW: output var ", output_var,':', output_var_val)
+            self.context["script_counter"] = ref_script_executor.context["script_counter"]
 
             if is_object_handler:
                 status = ScriptExecutionState.RETURN
@@ -318,6 +334,7 @@ class ScriptExecutor:
         for childGroupLink in action["childGroups"]:
             if not childGroupLink["type"] == "outOfAttemptsHandler":
                 child_actions.append(self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]])
+
         return child_actions
 
     def forward_detect_peek(self):
@@ -332,7 +349,7 @@ class ScriptExecutor:
                     detect_types_by_target_system[target_system].append([action_index,action])
                 else:
                     detect_types_by_target_system[target_system] = [[action_index,action]]
-        print('performing forward peek')
+        print('CONTROL FLOW: performing forward peek')
         for target_system,actions in detect_types_by_target_system.items():
             if target_system == 'adb':
                 self.adb_host.init_system()
@@ -357,6 +374,7 @@ class ScriptExecutor:
                         action, self.state, self.context, self.log_level, self.log_folder
                     )
                     self.actions[action_index] = self.context['action']
+        print('CONTROL FLOW: Finished forward peek')
 
 
 
@@ -370,7 +388,6 @@ class ScriptExecutor:
         if self.context["branching_behavior"] == "firstMatch":
             pass
         elif self.context["branching_behavior"] == "attemptAllBranches" and len(self.actions) > 1:
-            print('building isolated branch environments')
             state_copy = self.state.copy()
             context_copy = self.context.copy()
             for action in self.actions[1:]:
@@ -391,6 +408,10 @@ class ScriptExecutor:
                 )
             self.actions = [self.actions[0]]
             n_actions = 1
+
+        if self.context["actionOrder"] == "random":
+            print("shuffling")
+            random.shuffle(self.actions)
 
         for action_index in range(0, n_actions):
             self.context["action_index"] = action_index
@@ -431,7 +452,7 @@ class ScriptExecutor:
                 is_return = True
                 continue
             else:
-                print('encountered error in script and returning ', self.status)
+                print('CONTROL FLOW: encountered error in script and returning ', self.status)
                 self.context['child_actions'] = None
                 self.status = ScriptExecutionState.ERROR
                 return
@@ -443,27 +464,43 @@ class ScriptExecutor:
             self.status = ScriptExecutionState.RETURN
 
     def check_if_done(self):
-        print('check_if_done', len(self.run_queue), len(self.actions))
+        print('CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches")
         if datetime.datetime.now().astimezone(tz.tzlocal()) > self.timeout:
-            print('script timeout - ', datetime.datetime.now())
+            print('CONTROL FLOW: script timeout - ', datetime.datetime.now())
             return True
-        with open(RUNNING_SCRIPTS_PATH, 'r') as temp_file:
-            if not len(temp_file.read()) > 0:
-                print('received terminate request')
-                return True
+        terminate_request = False
+        if os.path.exists(RUNNING_SCRIPTS_PATH):
+            with open(RUNNING_SCRIPTS_PATH, 'r') as temp_file:
+                if not len(temp_file.read()) > 0:
+                    terminate_request = True
+        else:
+            terminate_request = True
+        if terminate_request:
+            print('CONTROL FLOW: received terminate request')
+            return True
+
+        if "scriptMaxActionAttempts" in self.context and\
+                len(str(self.context["scriptMaxActionAttempts"])) > 0 and\
+                len(self.context["action_attempts"]) > 0 and\
+                max(self.context["action_attempts"]) > int(self.context["scriptMaxActionAttempts"]):
+            self.status = ScriptExecutionState.FAILURE
+            print("CONTROL FLOW: Action attempts", self.context["action_attempts"], "exceeded scriptMaxActionAttempts of", self.context["scriptMaxActionAttempts"])
+            return True
         if len(self.actions) == 0 and len(self.run_queue) == 0:
-            print('finished script')
+            print('CONTROL FLOW: Reached end of script')
             self.status = ScriptExecutionState.FINISHED
             return True
         if len(self.actions) == 0 and len(self.run_queue) > 0:
-            print('finished branch, moving to next')
+            print('CONTROL FLOW: Finished branch, moving to next')
             self.status = ScriptExecutionState.FINISHED_BRANCH
             self.actions.append(self.run_queue.pop())
         return False
 
     def parse_inputs(self):
+        print('CONTROL FLOW: parsing_inputs ', self.inputs)
         for [var_name, input_expression, default_value] in self.inputs:
-            if (default_value or default_value == "true") and (var_name in self.state and self.state[var_name] is not None):
+            if (len(input_expression) == 0) or \
+               ((default_value or default_value == "true") and (var_name in self.state and self.state[var_name] is not None)):
                 continue
             self.state[var_name] = eval(input_expression, self.state.copy())
 
@@ -497,7 +534,7 @@ class ScriptExecutor:
     def run_to_failure(self, log_level=None, parse_inputs=True):
         if parse_inputs:
             self.parse_inputs()
-        print("runMode: runToFailure ", "branchingBehavior: ", self.context["branching_behavior"])
+        print("CONTROL FLOW: Running script with runMode: runToFailure ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
@@ -529,7 +566,7 @@ class ScriptExecutor:
     def run_one(self, log_level=None, parse_inputs=True):
         if parse_inputs:
             self.parse_inputs()
-        print("runMode: runOne ", "branchingBehavior: ", self.context["branching_behavior"])
+        print("CONTROL FLOW: Running script with runMode: runOne ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
@@ -539,6 +576,9 @@ class ScriptExecutor:
             # this exists because otherwise the runOne would always run because the context switch is always successful
             state_copy = self.state.copy()
             context_copy = self.context.copy()
+            if self.context["actionOrder"] == "random":
+                print("shuffling")
+                random.shuffle(self.actions)
             for action in self.actions:
                 branches.append(
                     [generate_context_switch_action([{
@@ -563,10 +603,10 @@ class ScriptExecutor:
             self.actions = branch
             if is_attempt_all_branches:
                 self.execute_actions()
-            print('runOne : first pass')
+            print('CONTROL FLOW: Running script with runOne, performing first pass')
             self.execute_actions()
             if self.status == ScriptExecutionState.STARTING:
-                print('runOne : first pass successful, switching to run mode run')
+                print('CONTROL FLOW: Running script with runOne, first pass successful, switching to run mode run')
                 self.run(log_level, parse_inputs=False)
                 if not is_attempt_all_branches:
                     break
@@ -591,7 +631,7 @@ class ScriptExecutor:
 
     def run(self, log_level=None, parse_inputs=True):
         self.parse_inputs()
-        print("runMode: run ", "branchingBehavior: ", self.context["branching_behavior"])
+        print("CONTROL FLOW: Running script with runMode: run ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING

@@ -18,6 +18,7 @@ class SystemHostController:
         self.props = props
 
     def handle_action(self, action, state, context, log_level, log_folder):
+        log_file_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
         def sanitize_input(statement_input):
             operator_pattern = r'[()+-/*%=<>!^|&~]'
             word_operator_pattern = r'( is )|( in )|( not )|( and )|( or )'
@@ -48,12 +49,14 @@ class SystemHostController:
                 status = ScriptExecutionState.SUCCESS
                 return status, state, context
 
-            print('inputExpression : ', action["actionData"]["inputExpression"])
+            print('inputExpression : ', action["actionData"]["inputExpression"], end = '')
             # print(' state (4) ', state)
+            expression = None
             if action["actionData"]["inputParser"] == 'eval':
                 expression = eval(action["actionData"]["inputExpression"], state.copy())
             elif action["actionData"]["inputParser"] == "jsonload":
                 expression = json.loads(action["actionData"]["inputExpression"])
+            print(' : result : ', expression)
             # print(' state (5) ', state)
             # print(' expression : ', expression, ', ', type(expression))
             if '[' in action["actionData"]["outputVarName"] and ']' in action["actionData"]["outputVarName"]:
@@ -94,13 +97,17 @@ class SystemHostController:
                     'sentence': '7',
                     'page': '3'
                 }
-                log_file_path = log_folder + str(context['script_counter'])
+
                 search_im, match_pt = DetectObjectHelper.get_detect_area(action, state)
                 image_to_text_input = cv2.cvtColor(search_im.copy(), cv2.COLOR_BGR2GRAY)
                 if action["actionData"]["increaseContrast"]:
                     image_to_text_input = cv2.equalizeHist(image_to_text_input)
                 if action["actionData"]["invertColors"]:
                     image_to_text_input = cv2.bitwise_not(image_to_text_input)
+
+                im_height = image_to_text_input.shape[0]
+                if im_height < 40:
+                    image_to_text_input = cv2.resize(image_to_text_input, None, fx=int(70 / im_height), fy=int(70 / im_height), interpolation=cv2.INTER_CUBIC)
                 cv2.imwrite(log_file_path + '-image_to_text.png', image_to_text_input)
                 tesseract_params = [
                     [
@@ -120,8 +127,8 @@ class SystemHostController:
                     ]
 
                 outputs = []
-                with tesserocr.PyTessBaseAPI() as api:
-                    for [psm_value, character_white_list] in tesseract_params:
+                for [psm_value, character_white_list] in tesseract_params:
+                    with tesserocr.PyTessBaseAPI() as api:
                         api.SetImage(Image.fromarray(image_to_text_input))
                         api.SetVariable("psm", psm_value)
                         if len(character_white_list) > 0:
@@ -129,17 +136,17 @@ class SystemHostController:
                         # may want to consider bgr to rgb conversion
                         output_text = api.GetUTF8Text().strip()
                         outputs.append(output_text)
-                print('running with options --psm ',
-                      TARGET_TYPE_TO_PSM[action['actionData']['targetType']],
-                      '--characterWhiteList ',
-                      character_white_list if len(character_white_list) > 0 else 'none')
+                        print('running with options --psm ',
+                              psm_value,
+                              '--characterWhiteList ',
+                              character_white_list if len(character_white_list) > 0 else 'none', 'output : ', output_text)
                 with open(log_file_path + '-output.txt', 'w') as log_file:
                     log_file.write(outputs[0])
                 if is_image_to_text_debug_mode:
                     for output_index,output in enumerate(outputs[1:]):
                         with open(log_file_path + '-output-debug-psm-' + tesseract_params[output_index + 1][0] + '.txt', 'w') as log_file:
                             log_file.write(output)
-                print('output_text : ', outputs[0])
+                print('main output_text : ', outputs[0])
                 state[action["actionData"]["outputVarName"]] = outputs[0]
                 status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "contextSwitchAction":

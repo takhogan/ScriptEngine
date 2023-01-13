@@ -56,8 +56,8 @@ class ImageMatcher:
             exit(0)
 
         h, w = screencap_outputmask_gray.shape[0:2]
-        cv2.imwrite(logs_path + str(detectObject['actionGroup']) + 'matching_overlay.png', result_im_bgr)
-        cv2.imwrite(logs_path + str(detectObject['actionGroup']) + 'match_result.png', match_result * 255)
+        cv2.imwrite(logs_path + 'matching_overlay.png', result_im_bgr)
+        cv2.imwrite(logs_path + 'match_result.png', match_result * 255)
         n_matches = len(matches)
         print('matches : ', [match for match,score,match_area in matches], match_point)
         return [{
@@ -100,11 +100,21 @@ class ImageMatcher:
         print('useImageRescaledToScreenOnly : ', detectObject["actionData"]["useImageRescaledToScreenOnly"], use_resized_im_only)
         if not use_resized_im_only:
             try:
+                # print(cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr.shape, 'screencap_im_bgr')
+                # print(cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr.shape, 'screencap_search_bgr')
+                # print(screencap_mask_gray.shape, 'screencap_mask_gray shape')
+                # print(screencap_mask_gray, 'screencap_mask_gray')
                 match_result = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr,
                     cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
                     cv2.TM_CCOEFF_NORMED,result=None,
                     mask=screencap_mask_gray if use_mask else None)
+                # cv2.imshow('screencap_im_bgr', cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr)
+                # cv2.waitKey(0)
+                # cv2.imshow('screencap_search_bgr', cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr)
+                # cv2.waitKey(0)
+                # cv2.imshow('screencap_mask_gray', screencap_mask_gray)
+                # cv2.waitKey(0)
                 # print('first_match : ', threshold_match_results(match_result), use_color, use_mask)
             except cv2.error as e:
                 is_match_error = True
@@ -238,7 +248,7 @@ class ImageMatcher:
             print('a not valid')
         best_match_str = str(best_match)
         print('n matches : ', len(matches), ' best match : ', best_match_pt, best_match_str)
-        with open(logs_path + '-best-' + best_match_str + '-' + str(detectObject["actionGroup"]) + '.txt', 'w') as log_file:
+        with open(logs_path + '-best-' + best_match_str + '.txt', 'w') as log_file:
             log_file.write('n matches : ' + str(len(matches)))
         result_im_bgr = screencap_im_bgr
         matches.sort(reverse=True, key=lambda match: match[1])
@@ -255,7 +265,7 @@ class ImageMatcher:
         if thresholded_match_results[0].size == 0 and best_match_pt is not None:
             box_w, box_h = adjust_box_to_bounds(best_match_pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
             cv2.rectangle(result_im_bgr, best_match_pt, (best_match_pt[0] + box_w, best_match_pt[1] + box_h), (0, 0, 128), 2)
-
+        print('box_w, box_h', box_w, box_h)
         return matches, match_result, result_im_bgr
 
     # def produce_logistic_matches(self, screencap_im, screencap_search, screencap_mask, logs_path, assets_folder, threshold=0.7):

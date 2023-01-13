@@ -11,6 +11,7 @@ class ClickActionHelper:
     def get_point_choice(action, var_name, state, context):
         point_choice = random.choice(action["actionData"]["pointList"]) if action["actionData"]["pointList"] else (None, None)
         if var_name is not None and len(var_name) > 0:
+            print('clickaction-' + str(action["actionGroup"]), ' reading from ', var_name)
             input_points = eval(var_name, state)
             # print('input_points: ', input_points, var_name, state)
             if len(input_points) > 0:
@@ -35,6 +36,8 @@ class ClickActionHelper:
                         input_point["point"][0] + shape_xs[point_choice_index],
                         input_point["point"][1] + shape_ys[point_choice_index]
                     )
+            else:
+                print('clickaction-' + str(action["actionGroup"]), ' no points in input')
                     # print('point_choice : ', shape_xs, ', ', shape_ys, ', ', point_choice_index, ', ', point_choice)
         # print('point_choice : ', point_choice)
         return point_choice, state, context
