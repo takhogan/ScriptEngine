@@ -52,6 +52,7 @@ def parse_script_file(action_rows_file_obj, props_file_obj, inputs_file_obj, dir
                 for example_index,positive_example in enumerate(action["actionData"]["positiveExamples"]):
                     read_and_set_image(positive_example, action, "mask")
                     positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
+                    print(action["actionName"] + "-" + str(action["actionGroup"]), positive_example["mask_single_channel"].shape)
                     read_and_set_image(positive_example, action, "containedAreaMask")
                     read_and_set_image(positive_example, action, "img")
                     positive_example = set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)

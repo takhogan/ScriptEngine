@@ -79,7 +79,7 @@ class adb_host:
     def init_system(self, reinitialize=False):
         source_im = None
         if reinitialize or self.width is None or self.height is None:
-            get_device_list = lambda: subprocess.run(self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True)
+            get_device_list = lambda: subprocess.run(self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True, timeout=30)
             devices_output = bytes.decode(get_device_list().stdout, 'utf-8')
             if not 'started' in devices_output:
                 devices_output = bytes.decode(get_device_list().stdout, 'utf-8')
@@ -456,8 +456,7 @@ class adb_host:
         self.event_counter += 1
 
     def handle_action(self, action, state, context, log_level, log_folder):
-        logs_path = log_folder + str(context['script_counter']) + '-'
-
+        logs_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
         if action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
@@ -475,7 +474,7 @@ class adb_host:
 
             screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
             if self.props["scriptMode"] == "train":
-                cv2.imwrite(logs_path + str(action['actionGroup']) + '-search_img.png', screencap_search_bgr)
+                cv2.imwrite(logs_path + '-search_img.png', screencap_search_bgr)
             is_detect_object_first_match = (action['actionData']['detectActionType'] == 'detectObject' and action['actionData']['matchMode'] == 'firstMatch')
 
             if is_detect_object_first_match or\
@@ -497,6 +496,13 @@ class adb_host:
                 )
                 if ssim_coeff < float(action["actionData"]["threshold"]):
                     matches = []
+                    if action['actionData']['detectActionType'] == 'detectScene':
+                        print('detectObject-' + str(action["actionGroup"]) + ' FAILED, detect mode detect scene, match % : ' + str(ssim_coeff))
+                    else:
+                        print('detectObject-' + str(action["actionGroup"]) + ' first match failed, detect mode detect object, match % : ', str(ssim_coeff))
+                else:
+                    print('detectObject-' + str(action["actionGroup"]) + ' SUCCESS, detect mode detect scene, match % :' + str(ssim_coeff))
+
 
             if (action['actionData']['detectActionType'] == 'detectObject' and action['actionData']['matchMode'] == 'bestMatch') or \
                     (is_detect_object_first_match and len(matches) == 0):
@@ -576,8 +582,9 @@ class adb_host:
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "dragLocationSource":
             source_point = random.choice(action["actionData"]["pointList"])
-            print(action["actionData"]["inputExpression"])
-            if not action["actionData"]["inputExpression"] == "null" and action["actionData"]["inputExpression"] is not None:
+            print('dragLocationSource : input expression : ', action["actionData"]["inputExpression"])
+            drag_input = action["actionData"]["inputExpression"]
+            if drag_input is not None and len(drag_input) > 0:
                 source_point = eval(action["actionData"]["inputExpression"], state)
                 print('dragLocationSource : reading input expression ', action["actionData"]["inputExpression"])
             context["dragLocationSource"] = source_point
@@ -585,8 +592,9 @@ class adb_host:
         elif action["actionName"] == "dragLocationTarget":
             source_point = context["dragLocationSource"]
             target_point = random.choice(action["actionData"]["pointList"])
-            if not action["actionData"]["inputExpression"] == "null" and action["actionData"]["inputExpression"] is not None:
-                print('dragLocationTarget : reading input expression ', action["actionData"]["inputExpression"])
+            drag_input = action["actionData"]["inputExpression"]
+            if drag_input is not None and len(drag_input) > 0:
+                print('dragLocationTarget : input expression : ', action["actionData"]["inputExpression"])
                 target_point = eval(action["actionData"]["inputExpression"], state)
             print('dragLocationTarget: dragging from ', source_point, ' to ', target_point)
             self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])

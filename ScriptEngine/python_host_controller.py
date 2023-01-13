@@ -61,7 +61,7 @@ class python_host:
 
     def handle_action(self, action, state, context, log_level, log_folder):
         # print('inside host', self.width, self.height)
-        logs_path = log_folder + str(context['script_counter']) + '-' + action["actionName"] + '-'
+        logs_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
         if action["actionName"] == "shellScript":
             return ScriptExecutionState.SUCCESS, self.run_script(action, state), context
         elif action["actionName"] == "sleepStatement":
@@ -98,6 +98,7 @@ class python_host:
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "keyboardAction":
             if action["actionData"]["keyboardActionType"] == "keyPress":
+                print('keyboard-expression-' + str(action["actionGroup"]) + ' : ', action["actionData"]["keyboardActionType"])
                 if action["actionData"]["isHotKey"] == 'isHotKey':
                     pyautogui.hotkey(*action["actionData"]["keyboardExpression"].split(","))
                 else:
@@ -109,9 +110,7 @@ class python_host:
                                 is_escaped_char = False
                                 if escaped_char in KEYBOARD_KEYS:
                                     pyautogui.press(escaped_char)
-                                    print('keyboard key ', escaped_char)
                                 else:
-                                    print('keyboard expression eval : ', escaped_char, ':', eval(escaped_char, state.copy()))
                                     eval_expression = str(eval(escaped_char, state.copy()))
                                     for eval_expression_char in eval_expression:
                                         pyautogui.press(eval_expression_char)
@@ -200,7 +199,7 @@ class python_host:
 
             screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
             if self.props["scriptMode"] == "train":
-                cv2.imwrite(logs_path + str(action['actionGroup']) + '-search_img.png', screencap_search_bgr)
+                cv2.imwrite(logs_path + '-search_img.png', screencap_search_bgr)
             is_detect_object_first_match = (
                         action['actionData']['detectActionType'] == 'detectObject' and action['actionData'][
                     'matchMode'] == 'firstMatch')

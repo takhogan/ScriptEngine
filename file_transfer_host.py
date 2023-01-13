@@ -145,7 +145,7 @@ def run_script(scriptname):
         def initialize_script_manager_args(scriptname, timeout_val, script_constants):
             start_time = datetime.datetime.now()
             start_time_str = start_time.strftime('%Y-%m-%d %H-%M-%S')
-            script_log_folder = app.config['LOGFILE_FOLDER'] + scriptname + '-' + start_time_str + '\\'
+            script_log_folder = app.config['LOGFILE_FOLDER'] + '0'.zfill(5) + '-' + scriptname + '-' + start_time_str + '\\'
             os.makedirs(script_log_folder, exist_ok=True)
             timeout_val_split = timeout_val.split('h')
             end_time = start_time + datetime.timedelta(hours=int(timeout_val_split[0]),minutes=int(timeout_val_split[1][:-1]))
@@ -156,18 +156,17 @@ def run_script(scriptname):
 
         def run_in_thread(scriptname, start_time_str, end_time_str, script_constants, script_log_folder):
             print('running ', scriptname, 'from', start_time_str, 'to', end_time_str, 'with constants', script_constants)
-            log_file = open(script_log_folder + 'stdout.txt', 'w')
-            shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
-                                              'C:\\Users\\takho\\ScriptEngine\\ScriptEngine\\script_manager.py',
-                                              scriptname,
-                                              start_time_str,
-                                              end_time_str,
-                                              *script_constants], shell=True,
-                                             stdout=log_file,
-                                             stderr=log_file,
-                                             cwd='C:\\Users\\takho\\ScriptEngine')
-            shell_process.wait()
-            log_file.close()
+            with open(script_log_folder + 'stdout.txt', 'w') as log_file:
+                shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
+                                                  'C:\\Users\\takho\\ScriptEngine\\ScriptEngine\\script_manager.py',
+                                                  scriptname,
+                                                  start_time_str,
+                                                  end_time_str,
+                                                  *script_constants], shell=True,
+                                                 stdout=log_file,
+                                                 stderr=log_file,
+                                                 cwd='C:\\Users\\takho\\ScriptEngine')
+                shell_process.wait()
             print('completed ', scriptname, shell_process)
             exit_code = shell_process.returncode
             with open(script_log_folder + 'completed.txt', 'w') as completed_file:
@@ -188,7 +187,7 @@ def run_script(scriptname):
         script_thread.start()
         # returns immediately after the thread starts
         return ('<p>' + scriptname + ' started! </p>' +\
-                    '<a href="http://' + request.host.split(':')[0] + ':3848/logs/' + scriptname +\
+                    '<a href="http://' + request.host.split(':')[0] + ':3848/logs/' + '0'.zfill(5) + '-' + scriptname +\
                     '-' + script_manager_args[1] + '/"' + '> Click here for logs </a><br>' +\
                     '<a href="/capture"' + '> Click here to monitor </a><br>' +\
                     '<a href="/run"' + '> Click here to run another </a><br>' +\
@@ -213,6 +212,18 @@ def enqueue_script(scriptname):
             json.dump(running_scripts, running_script_file)
     return ('<p> Added ' + scriptname + ' to queue. Now running : ' + str(running_scripts) + '  </p>' +\
             '<a href="/run"> Click here to run another </a>', 200)
+
+
+@app.route('/queue', methods=['GET'], strict_slashes=False)
+def show_queue():
+    if not os.path.exists(RUNNING_SCRIPTS_PATH):
+        return ('<p> nothing in que </p>' +\
+                '<a href="/run"> Click here to run script </a>', 200)
+    else:
+        with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
+            running_scripts = json.load(running_script_file)
+        return ('<p> Now running : ' + str(running_scripts) + '  </p>' + \
+                '<a href="/run"> Click here to run a script </a>', 200)
 
 @app.route('/run', methods=['GET'], strict_slashes=False)
 def list_run_scripts():
