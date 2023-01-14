@@ -30,8 +30,9 @@
       <excludeFolder url="file://$MODULE_DIR$/venv310" />
       <excludeFolder url="file://$MODULE_DIR$/venv3" />
       <excludeFolder url="file://$MODULE_DIR$/venv_host_server" />
+      <excludeFolder url="file://$MODULE_DIR$/venv_scheduling_server" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="Python 3.10 (ScriptEngine) (3)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PackageRequirementsSettings">

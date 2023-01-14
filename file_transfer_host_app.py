@@ -59,3 +59,10 @@ with open(WHITELIST_PATH, 'r') as white_list_file:
     whitelist = {key for key,value in whitelist_json.items() if value == 'T'}
 print('whitelist :', whitelist)
 app.config['WHITELIST_IPS'] = whitelist
+
+# subprocess.Popen([
+#     'C:\\Users\\takho\\ScriptEngine\\venv_scheduling_server\\Scripts\\python',
+#     'C:\\Users\\takho\\ScriptEngine\\script_scheduler.py'],
+#     cwd='C:\\Users\\takho\\ScriptEngine',
+#     shell=True
+# )

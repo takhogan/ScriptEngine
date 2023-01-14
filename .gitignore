@@ -5,12 +5,13 @@ figs/
 logs/
 data/
 venv/
+venv_host_server/
+venv_scheduling_server/
 scripts/
 tmp/
 viber_credentials.json
 assets/credentials.json
 assets/token.json
 __pycache__/
-venv_host_server/
 token.json
 credentials.json

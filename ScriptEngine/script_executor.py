@@ -125,10 +125,15 @@ class ScriptExecutor:
             self.state.update(input_vars)
         # print('state (2) : ', self.state)
 
-    def set_branch(self, action, state, context):
-        self.state.update(state)
-        self.context.update(context)
-        self.actions = [action]
+    def parse_inputs(self):
+        print(self.props['script_name'] + ' CONTROL FLOW: parsing_inputs ', self.inputs)
+        for [var_name, input_expression, default_value] in self.inputs:
+            if (len(input_expression) == 0) or \
+               ((default_value or default_value == "true") and (var_name in self.state and self.state[var_name] is not None)):
+                continue
+            eval_result = eval(input_expression, self.state.copy())
+            self.state[var_name] = eval_result
+            print(self.props['script_name'] + ' CONTROL FLOW:   Parsing Input: ', var_name, " Value: ", eval_result)
 
     def log_action_details(self, action):
         print(
@@ -139,6 +144,47 @@ class ScriptExecutor:
             ' attempts: ' + str(self.context["action_attempts"]) + \
             ' outOfAttempts: ' + str(self.context["out_of_attempts"])
         )
+
+
+    def forward_detect_peek(self):
+        detect_types_by_target_system = {}
+        for action_index,action in enumerate(self.actions):
+            if action['actionName'] in DETECT_TYPES_SET:
+                # if len(action['actionData']['inputExpression']) > 0:
+                #     pass
+                # else:
+                target_system = action['actionData']['targetSystem']
+                if target_system in detect_types_by_target_system:
+                    detect_types_by_target_system[target_system].append([action_index,action])
+                else:
+                    detect_types_by_target_system[target_system] = [[action_index,action]]
+        print(self.props['script_name'] + ' CONTROL FLOW: performing forward peek')
+        for target_system,actions in detect_types_by_target_system.items():
+            if target_system == 'adb':
+                self.adb_host.init_system()
+                screenshot = self.adb_host.screenshot()
+                for [action_index,action] in actions:
+                    self.log_action_details(action)
+                    action['actionData']['screencap_im_bgr'] = screenshot
+                    action['actionData']['detect_run_type'] = 'result_precalculation'
+                    action['actionData']['results_precalculated'] = False
+                    self.status, self.state, self.context = self.adb_host.handle_action(
+                        action, self.state, self.context, self.log_level, self.log_folder
+                    )
+                    self.actions[action_index] = self.context['action']
+            elif target_system == 'python':
+                screenshot = self.python_host.screenshot()
+                for [action_index,action] in actions:
+                    self.log_action_details(action)
+                    action['actionData']['screencap_im_bgr'] = screenshot
+                    action['actionData']['detect_run_type'] = 'result_precalculation'
+                    action['actionData']['results_precalculated'] = False
+                    self.status, self.state, self.context = self.python_host.handle_action(
+                        action, self.state, self.context, self.log_level, self.log_folder
+                    )
+                    self.actions[action_index] = self.context['action']
+        print(self.props['script_name'] + ' CONTROL FLOW: Finished forward peek')
+
 
     def handle_action(self, action):
         self.log_action_details(action)
@@ -278,13 +324,14 @@ class ScriptExecutor:
                 ref_script_executor.run_to_failure()
 
             parsed_output_vars = list(
-                filter(lambda output_vars: output_vars != '', action["actionData"]["outputVars"].split(",")))
-            print('CONTROL FLOW: parsing output vars ', parsed_output_vars)
+                filter(lambda output_vars: output_vars != '', action["actionData"]["outputVars"].split(","))
+            )
+            print(self.props['script_name'] + ' CONTROL FLOW: parsing output vars ', parsed_output_vars)
             for output_var in parsed_output_vars:
                 output_var_val = ref_script_executor.state[
                     output_var] if output_var in ref_script_executor.state else None
                 state[output_var] = output_var_val
-                print("CONTROL FLOW: output var ", output_var,':', output_var_val)
+                print(self.props['script_name'] + " CONTROL FLOW: output var ", output_var,':', output_var_val)
             self.context["script_counter"] = ref_script_executor.context["script_counter"]
 
             if is_object_handler:
@@ -337,45 +384,66 @@ class ScriptExecutor:
 
         return child_actions
 
-    def forward_detect_peek(self):
-        detect_types_by_target_system = {}
-        for action_index,action in enumerate(self.actions):
-            if action['actionName'] in DETECT_TYPES_SET:
-                # if len(action['actionData']['inputExpression']) > 0:
-                #     pass
-                # else:
-                target_system = action['actionData']['targetSystem']
-                if target_system in detect_types_by_target_system:
-                    detect_types_by_target_system[target_system].append([action_index,action])
-                else:
-                    detect_types_by_target_system[target_system] = [[action_index,action]]
-        print('CONTROL FLOW: performing forward peek')
-        for target_system,actions in detect_types_by_target_system.items():
-            if target_system == 'adb':
-                self.adb_host.init_system()
-                screenshot = self.adb_host.screenshot()
-                for [action_index,action] in actions:
-                    self.log_action_details(action)
-                    action['actionData']['screencap_im_bgr'] = screenshot
-                    action['actionData']['detect_run_type'] = 'result_precalculation'
-                    action['actionData']['results_precalculated'] = False
-                    self.status, self.state, self.context = self.adb_host.handle_action(
-                        action, self.state, self.context, self.log_level, self.log_folder
-                    )
-                    self.actions[action_index] = self.context['action']
-            elif target_system == 'python':
-                screenshot = self.python_host.screenshot()
-                for [action_index,action] in actions:
-                    self.log_action_details(action)
-                    action['actionData']['screencap_im_bgr'] = screenshot
-                    action['actionData']['detect_run_type'] = 'result_precalculation'
-                    action['actionData']['results_precalculated'] = False
-                    self.status, self.state, self.context = self.python_host.handle_action(
-                        action, self.state, self.context, self.log_level, self.log_folder
-                    )
-                    self.actions[action_index] = self.context['action']
-        print('CONTROL FLOW: Finished forward peek')
+    def handle_out_of_attempts_check(self):
+        out_of_attempts_handler,out_of_attempts_link = self.get_out_of_attempts_handler(self.context['parent_action'])
+        # print('handler : ', out_of_attempts_handler)
+        if out_of_attempts_handler is not None:
+            self.context["out_of_attempts_action"] = {
+                "action" : out_of_attempts_handler,
+                "link" : out_of_attempts_link
+            }
+        else:
+            self.context["out_of_attempts"] = False
+            return
+        if self.context["action_attempts"][0] > self.context["out_of_attempts_action"]["link"]["typePayload"]:
+            self.actions = [self.context["out_of_attempts_action"]["action"]]
+            self.context["action_attempts"] = [0]
+            self.context["action_index"] = 0
+            self.context["out_of_attempts"] = True
+        else:
+            self.context["out_of_attempts"] = False
 
+    def check_if_done(self):
+        print(self.props['script_name'] + ' CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches")
+        if datetime.datetime.now().astimezone(tz.tzlocal()) > self.timeout:
+            print(self.props['script_name'] + ' CONTROL FLOW: script timeout - ', datetime.datetime.now())
+            return True
+        terminate_request = False
+        if os.path.exists(RUNNING_SCRIPTS_PATH):
+            with open(RUNNING_SCRIPTS_PATH, 'r') as temp_file:
+                if not len(temp_file.read()) > 0:
+                    terminate_request = True
+        else:
+            terminate_request = True
+        if terminate_request:
+            print(self.props['script_name'] + ' CONTROL FLOW: received terminate request')
+            return True
+
+        if "scriptMaxActionAttempts" in self.context and\
+                len(str(self.context["scriptMaxActionAttempts"])) > 0 and\
+                len(self.context["action_attempts"]) > 0 and\
+                max(self.context["action_attempts"]) > int(self.context["scriptMaxActionAttempts"]):
+            self.status = ScriptExecutionState.FAILURE
+            print(self.props['script_name'] + " CONTROL FLOW: Action attempts", self.context["action_attempts"], "exceeded scriptMaxActionAttempts of", self.context["scriptMaxActionAttempts"])
+            return True
+        if len(self.actions) == 0 and len(self.run_queue) == 0:
+            print(self.props['script_name'] + ' CONTROL FLOW: Reached end of script')
+            self.status = ScriptExecutionState.FINISHED
+            return True
+        if len(self.actions) == 0 and len(self.run_queue) > 0:
+            print(self.props['script_name'] + ' CONTROL FLOW: Finished branch, moving to next')
+            self.status = ScriptExecutionState.FINISHED_BRANCH
+            self.start_new_branch()
+        return False
+
+
+    def should_continue_on_failure(self):
+        if self.context["run_type"] == "runOne" and self.context["run_depth"] == 1:
+            return False
+        elif self.context["run_type"] == "runToFailure":
+            return False
+        else:
+            return True
 
 
     #if it is handle all branches then you take the first branch and for the rest you create a context switch action
@@ -452,7 +520,7 @@ class ScriptExecutor:
                 is_return = True
                 continue
             else:
-                print('CONTROL FLOW: encountered error in script and returning ', self.status)
+                print(self.props['script_name'] + ' CONTROL FLOW: encountered error in script and returning ', self.status)
                 self.context['child_actions'] = None
                 self.status = ScriptExecutionState.ERROR
                 return
@@ -463,78 +531,11 @@ class ScriptExecutor:
             self.context["parent_action"] = None
             self.status = ScriptExecutionState.RETURN
 
-    def check_if_done(self):
-        print('CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches")
-        if datetime.datetime.now().astimezone(tz.tzlocal()) > self.timeout:
-            print('CONTROL FLOW: script timeout - ', datetime.datetime.now())
-            return True
-        terminate_request = False
-        if os.path.exists(RUNNING_SCRIPTS_PATH):
-            with open(RUNNING_SCRIPTS_PATH, 'r') as temp_file:
-                if not len(temp_file.read()) > 0:
-                    terminate_request = True
-        else:
-            terminate_request = True
-        if terminate_request:
-            print('CONTROL FLOW: received terminate request')
-            return True
-
-        if "scriptMaxActionAttempts" in self.context and\
-                len(str(self.context["scriptMaxActionAttempts"])) > 0 and\
-                len(self.context["action_attempts"]) > 0 and\
-                max(self.context["action_attempts"]) > int(self.context["scriptMaxActionAttempts"]):
-            self.status = ScriptExecutionState.FAILURE
-            print("CONTROL FLOW: Action attempts", self.context["action_attempts"], "exceeded scriptMaxActionAttempts of", self.context["scriptMaxActionAttempts"])
-            return True
-        if len(self.actions) == 0 and len(self.run_queue) == 0:
-            print('CONTROL FLOW: Reached end of script')
-            self.status = ScriptExecutionState.FINISHED
-            return True
-        if len(self.actions) == 0 and len(self.run_queue) > 0:
-            print('CONTROL FLOW: Finished branch, moving to next')
-            self.status = ScriptExecutionState.FINISHED_BRANCH
-            self.actions.append(self.run_queue.pop())
-        return False
-
-    def parse_inputs(self):
-        print('CONTROL FLOW: parsing_inputs ', self.inputs)
-        for [var_name, input_expression, default_value] in self.inputs:
-            if (len(input_expression) == 0) or \
-               ((default_value or default_value == "true") and (var_name in self.state and self.state[var_name] is not None)):
-                continue
-            self.state[var_name] = eval(input_expression, self.state.copy())
-
-    def handle_out_of_attempts_check(self):
-        out_of_attempts_handler,out_of_attempts_link = self.get_out_of_attempts_handler(self.context['parent_action'])
-        # print('handler : ', out_of_attempts_handler)
-        if out_of_attempts_handler is not None:
-            self.context["out_of_attempts_action"] = {
-                "action" : out_of_attempts_handler,
-                "link" : out_of_attempts_link
-            }
-        else:
-            self.context["out_of_attempts"] = False
-            return
-        if self.context["action_attempts"][0] > self.context["out_of_attempts_action"]["link"]["typePayload"]:
-            self.actions = [self.context["out_of_attempts_action"]["action"]]
-            self.context["action_attempts"] = [0]
-            self.context["action_index"] = 0
-            self.context["out_of_attempts"] = True
-        else:
-            self.context["out_of_attempts"] = False
-
-    def should_continue_on_failure(self):
-        if self.context["run_type"] == "runOne" and self.context["run_depth"] == 1:
-            return False
-        elif self.context["run_type"] == "runToFailure":
-            return False
-        else:
-            return True
 
     def run_to_failure(self, log_level=None, parse_inputs=True):
         if parse_inputs:
             self.parse_inputs()
-        print("CONTROL FLOW: Running script with runMode: runToFailure ", "branchingBehavior: ", self.context["branching_behavior"])
+        print(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: runToFailure ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
@@ -547,7 +548,7 @@ class ScriptExecutor:
                 self.actions = []
                 # if there are actions in the run queue, there are additional actions to check for failure
                 if len(self.run_queue) > 0:
-                    self.actions.append(self.run_queue.pop())
+                    self.start_new_branch()
                     self.status = ScriptExecutionState.STARTING
                     continue
                 else:
@@ -558,6 +559,7 @@ class ScriptExecutor:
         # if at least one branch reached the end the script is a success
         if overall_status == ScriptExecutionState.SUCCESS:
             self.status = ScriptExecutionState.FINISHED
+        self.on_script_completion()
 
 
 
@@ -566,7 +568,7 @@ class ScriptExecutor:
     def run_one(self, log_level=None, parse_inputs=True):
         if parse_inputs:
             self.parse_inputs()
-        print("CONTROL FLOW: Running script with runMode: runOne ", "branchingBehavior: ", self.context["branching_behavior"])
+        print(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: runOne ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
@@ -577,7 +579,6 @@ class ScriptExecutor:
             state_copy = self.state.copy()
             context_copy = self.context.copy()
             if self.context["actionOrder"] == "random":
-                print("shuffling")
                 random.shuffle(self.actions)
             for action in self.actions:
                 branches.append(
@@ -603,10 +604,10 @@ class ScriptExecutor:
             self.actions = branch
             if is_attempt_all_branches:
                 self.execute_actions()
-            print('CONTROL FLOW: Running script with runOne, performing first pass')
+            print(self.props['script_name'] + ' CONTROL FLOW: Running script with runOne, performing first pass')
             self.execute_actions()
             if self.status == ScriptExecutionState.STARTING:
-                print('CONTROL FLOW: Running script with runOne, first pass successful, switching to run mode run')
+                print(self.props['script_name'] + ' CONTROL FLOW: Running script with runOne, first pass successful, switching to run mode run')
                 self.run(log_level, parse_inputs=False)
                 if not is_attempt_all_branches:
                     break
@@ -616,7 +617,7 @@ class ScriptExecutor:
                 self.actions = []
                 if len(self.run_queue) > 1:
                     if self.check_if_done():
-                        return
+                        break
                     # because the first action will be a context switch action
                     self.execute_actions()
                     self.run_one(parse_inputs=False)
@@ -627,11 +628,12 @@ class ScriptExecutor:
         # if you reached the end on one of the branches
         if overall_status == ScriptExecutionState.SUCCESS:
             self.status = ScriptExecutionState.FINISHED
+        self.on_script_completion()
         #TODO In theory you should load in the state and context of the successful branch
 
     def run(self, log_level=None, parse_inputs=True):
         self.parse_inputs()
-        print("CONTROL FLOW: Running script with runMode: run ", "branchingBehavior: ", self.context["branching_behavior"])
+        print(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: run ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
@@ -644,6 +646,13 @@ class ScriptExecutor:
                 overall_status = ScriptExecutionState.SUCCESS
         if overall_status == ScriptExecutionState.SUCCESS:
             self.status = ScriptExecutionState.FINISHED
+        self.on_script_completion()
+
+    def on_script_completion(self):
+        pass
+
+    def start_new_branch(self):
+        self.actions.append(self.run_queue.pop())
 
 
 
