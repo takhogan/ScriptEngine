@@ -13,8 +13,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from ScriptEngine import parse_and_run_script_sequence_def
-
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 CALENDAR_NAME = 'ScriptScheduler'
@@ -157,9 +155,10 @@ def check_and_execute_active_tasks(service, calendar_id, running_scripts):
     print(now, '-', now_plus_five, ' running scripts: ', list(running_scripts))
 
 def run():
+    print("Starting script scheduling service")
     service,calendar_id = initialize_service()
     running_scripts = {}
-
+    print("Completed script scheduler setup, entering scheduler loop")
     while True:
         check_and_execute_active_tasks(service, calendar_id, running_scripts)
         time.sleep(60)

@@ -36,20 +36,30 @@ def script_to_string(script_name, action_rows):
         if not childGroupLink["type"] == "outOfAttemptsHandler":
             return action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]]
         return None
-    def dfs(action, depth):
+    def dfs(action, depth, visited, unpack_childLink=True):
         string = ' ' * depth + str(action["actionName"]) + "-" + str(action["actionGroup"]) + '\n'
         for childGroupLink in action["childGroups"]:
-            child = childGroupLink_to_child(childGroupLink)
+            if unpack_childLink:
+                child = childGroupLink_to_child(childGroupLink)
+            else:
+                child = childGroupLink
+
             if child is None:
                 continue
-            string += dfs(child, depth + 1)
+            elif child["actionGroup"] in visited:
+                continue
+            else:
+                visited.add(child["actionGroup"])
+            string += dfs(child, depth + 1, visited)
         return string
-    return dfs({
-        "actionName" : "script",
-        "actionGroup" : script_name,
-        "childGroups" : action_rows
-    }, 0)
-
+    if len(action_rows) > 0:
+        return dfs({
+            "actionName" : "script",
+            "actionGroup" : script_name,
+            "childGroups" : action_rows[0]["actions"]
+        }, 0, set(), unpack_childLink=False)
+    else:
+        return "script-" + script_name
 def parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_file_obj, dir_path):
     print('SCRIPT LOAD: loading script ', script_name)
     def read_and_set_image(example, action, img_type):

@@ -25,9 +25,13 @@ class SystemHostController:
             statement_strip = re.sub(operator_pattern, ' ', statement_input)
             statement_strip = re.sub(word_operator_pattern, ' ', statement_strip)
             statement_strip = re.sub(word_operator_pattern, ' ', statement_strip)
-            statement_strip = list(map(lambda term: str(term) + ': ' + str(eval(term, state_copy)),
-                                       filter(lambda term: (len(term) > 0) and "'" not in term and "\"" not in term,
-                                              statement_strip.split(' '))))
+            statement_strip = list(filter(lambda term: (len(term) > 0) and "'" not in term and "\"" not in term, statement_strip.split(' ')))
+            for term_index,term in enumerate(statement_strip):
+                if term.isidentifier() and term not in state_copy:
+                    term_str = str(term) + ': N/A'
+                else:
+                    term_str = str(term) + ': ' + str(eval(term, state_copy))
+                statement_strip[term_index] = term_str
             return statement_strip
         if action["actionName"] == "conditionalStatement":
             state_copy = state.copy()

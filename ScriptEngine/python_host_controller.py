@@ -98,7 +98,9 @@ class python_host:
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "keyboardAction":
             if action["actionData"]["keyboardActionType"] == "keyPress":
-                print('keyboard-expression-' + str(action["actionGroup"]) + ' : ', action["actionData"]["keyboardActionType"])
+                print('keyboard-expression-' + str(action["actionGroup"]), ' : ',
+                      action["actionData"]["keyboardActionType"], ' : ',
+                      action["actionData"]["keyboardExpression"])
                 if action["actionData"]["isHotKey"] == 'isHotKey':
                     pyautogui.hotkey(*action["actionData"]["keyboardExpression"].split(","))
                 else:
