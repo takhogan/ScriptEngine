@@ -160,8 +160,10 @@ class SystemHostController:
                 for key, value in action["actionData"]["update_dict"]["state"].items():
                     state[key] = value
             if 'context' in action["actionData"]["update_dict"]:
+                success_states = context["success_states"]
                 for key, value in action["actionData"]["update_dict"]["context"].items():
                     context[key] = value
+                context["success_states"] = success_states
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "sendMessageAction":
             if action["actionData"]["messagingProvider"] == "viber":

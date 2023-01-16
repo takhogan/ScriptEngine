@@ -1,9 +1,11 @@
+import atexit
 import json
 import subprocess
 
 from flask import Flask
 from flask_cors import CORS
 import os
+import socket
 import platform
 
 
@@ -18,12 +20,19 @@ CORS(app)
 # cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 app.config['PLATFORM'] = platform.system()
+app.config['SUBPROCESSES'] = []
 
 LOGFILE_FOLDER = '.\\logs\\'
 os.makedirs(LOGFILE_FOLDER, exist_ok=True)
 app.config['LOGFILE_FOLDER'] = LOGFILE_FOLDER
 
-subprocess.Popen(['python', '-m', 'http.server', '3848'], cwd='C:\\Users\\takho\\ScriptEngine\\')
+SCRIPT_SERVER_PORT = 3849
+FILE_SERVER_PORT = SCRIPT_SERVER_PORT - 1
+app.config["SCRIPT_SERVER_PORT"] = SCRIPT_SERVER_PORT
+
+app.config['SUBPROCESSES'].append(
+    subprocess.Popen(['python', '-m', 'http.server', str(FILE_SERVER_PORT)], cwd='C:\\Users\\takho\\ScriptEngine\\')
+)
 UPLOAD_FOLDER = os_normalize_path('.\\scripts')
 TEMP_FOLDER = os_normalize_path('.\\tmp')
 ASSETS_FOLDER = os_normalize_path('.\\assets')
@@ -60,9 +69,22 @@ with open(WHITELIST_PATH, 'r') as white_list_file:
 print('whitelist :', whitelist)
 app.config['WHITELIST_IPS'] = whitelist
 
-# subprocess.Popen([
-#     'C:\\Users\\takho\\ScriptEngine\\venv_scheduling_server\\Scripts\\python',
-#     'C:\\Users\\takho\\ScriptEngine\\script_scheduler.py'],
-#     cwd='C:\\Users\\takho\\ScriptEngine',
-#     shell=True
-# )
+app.config['SUBPROCESSES'].append(
+    subprocess.Popen([
+        'C:\\Users\\takho\\ScriptEngine\\venv_scheduling_server\\Scripts\\python',
+        'C:\\Users\\takho\\ScriptEngine\\script_scheduler.py',
+        socket.gethostbyname(socket.gethostname()),
+        str(SCRIPT_SERVER_PORT)],
+        cwd='C:\\Users\\takho\\ScriptEngine',
+        shell=True
+    )
+)
+
+def on_server_shutdown():
+    for server_subprocess in app.config['SUBPROCESSES']:
+        if platform.system() == 'Windows':
+            server_subprocess.kill()
+        else:
+            server_subprocess.terminate()
+
+atexit.register(on_server_shutdown)

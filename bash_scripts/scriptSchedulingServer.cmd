@@ -1,1 +1,1 @@
-start cmd /k "chdir C:\Users\takho\ScriptEngine && C:\Users\takho\ScriptEngine\venv\Scripts\activate && python C:\Users\takho\ScriptEngine\script_scheduler.py
+start cmd /k "chdir C:\Users\takho\ScriptEngine && C:\Users\takho\ScriptEngine\venv_scheduling_server\Scripts\activate && python C:\Users\takho\ScriptEngine\script_scheduler.py

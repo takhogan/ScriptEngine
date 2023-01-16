@@ -50,7 +50,7 @@ DELAY_EXEMPT_ACTIONS = {
 
 
 class ScriptExecutor:
-    def __init__(self, script_obj, timeout, log_level='INFO', parent_folder='', start_time=None, context=None, state=None):
+    def __init__(self, script_obj, timeout, log_level='INFO', parent_folder='', start_time=None, context=None, state=None, create_log_folders=True):
         self.props = script_obj['props']
         if start_time is None:
             self.refresh_start_time()
@@ -91,14 +91,16 @@ class ScriptExecutor:
             'out_of_attempts_action' : None,
             'object_handler_encountered' : False,
             'run_queue': None,
-            'actionOrder': 'sequential'
+            'actionOrder': 'sequential',
+            'success_states': None
         }
         # print('update context : ', context["action_attempts"] if (context is not None and "action_attempts" in context) else 'none')
         if context is not None:
             self.context.update(context)
         # print('context (1) : ', self.context["action_attempts"])
         self.status = ScriptExecutionState.FINISHED
-        self.create_log_folders(parent_folder)
+        if create_log_folders:
+            self.create_log_folders(parent_folder)
 
     def refresh_start_time(self):
         self.props["start_time"] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
@@ -121,6 +123,7 @@ class ScriptExecutor:
         self.actions = self.action_rows[0]["actions"]
         self.status = ScriptExecutionState.FINISHED
         self.context["action_attempts"] = [0] * len(self.actions)
+        self.context["success_states"] = None
         if input_vars is not None:
             self.state.update(input_vars)
         # print('state (2) : ', self.state)
@@ -281,7 +284,8 @@ class ScriptExecutor:
                         self.log_level,
                         parent_folder=self.log_folder,
                         context=child_context,
-                        state=input_vars
+                        state=input_vars,
+                        create_log_folders=False
                     )
                 else:
                     ref_script_executor = ScriptExecutor(
@@ -290,7 +294,8 @@ class ScriptExecutor:
                         self.log_level,
                         parent_folder=self.log_folder,
                         context=child_context,
-                        state=input_vars
+                        state=input_vars,
+                        create_log_folders=False
                     )
             else:
                 action["actionData"]["initializedScript"].rewind(input_vars)
@@ -649,9 +654,15 @@ class ScriptExecutor:
         self.on_script_completion()
 
     def on_script_completion(self):
-        pass
+        if self.context["success_states"] is not None:
+            self.state = self.context["success_states"][-1]
 
     def start_new_branch(self):
+        if self.status == ScriptExecutionState.FINISHED_BRANCH:
+            if self.context["success_states"] is None:
+                self.context["success_states"] = [self.state.copy()]
+            else:
+                self.context["success_states"] += [self.state.copy()]
         self.actions.append(self.run_queue.pop())
 
 

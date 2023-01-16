@@ -422,7 +422,6 @@ def static_proxy(path):
 
 if __name__ == "__main__":
     # app.run(host="0.0.0.0", port="3849")
-    PORT = "3849"
     if len(sys.argv) > 1:
         PORT = sys.argv[1]
-    serve(app, host="0.0.0.0", port=PORT)
+    serve(app, host="0.0.0.0", port=app.config["SCRIPT_SERVER_PORT"])
