@@ -81,14 +81,18 @@ class adb_host:
         if reinitialize or self.width is None or self.height is None:
             get_device_list = lambda: subprocess.run(self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True, timeout=30)
             devices_output = bytes.decode(get_device_list().stdout, 'utf-8')
+            print('adb devices')
             if not 'started' in devices_output:
                 devices_output = bytes.decode(get_device_list().stdout, 'utf-8')
             run_kill_command = lambda: subprocess.run(self.adb_path + ' kill-server', cwd="/", shell=True)
+            run_start_command = lambda: subprocess.run(self.adb_path + ' start-server', cwd="/", shell=True)
             if 'offline' in devices_output:
                 run_kill_command()
+                run_start_command()
                 get_device_list()
             if 'emulator' in devices_output and '127.0.0.1:5555' in devices_output:
                 run_kill_command()
+                run_start_command()
                 get_device_list()
             emualator_active = (
                 'emulator' in devices_output or

@@ -259,6 +259,8 @@ class ScriptScheduler:
 
                     if script_name not in running_scripts:
                         return True
+                else:
+                    return True
                 time.sleep(60)
             return False
 
@@ -272,7 +274,7 @@ class ScriptScheduler:
         ) + self.constants_to_url_params(constants)
 
         print('Script Scheduler invoking script: ', request_url)
-        requests.get(request_url)
+        print(requests.get(request_url).text)
         script_loaded = await_script_load(script_name)
         if script_loaded:
             await_script_completion(script_name)
