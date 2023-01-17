@@ -259,6 +259,7 @@ class ImageMatcher:
                 box_width - x_overshoot if x_overshoot > 0 else box_width,
                 box_height - y_overshoot if y_overshoot > 0 else box_height
             )
+        box_w = box_h = -1
         for pt in zip(*thresholded_match_results[::-1]):
             box_w, box_h = adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
             cv2.rectangle(result_im_bgr, pt, (pt[0] + box_w, pt[1] + box_h), (0, 0, 255), 2)

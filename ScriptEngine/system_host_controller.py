@@ -161,9 +161,11 @@ class SystemHostController:
                     state[key] = value
             if 'context' in action["actionData"]["update_dict"]:
                 success_states = context["success_states"]
+                script_counter = context["script_counter"]
                 for key, value in action["actionData"]["update_dict"]["context"].items():
                     context[key] = value
                 context["success_states"] = success_states
+                context["script_counter"] = script_counter
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "sendMessageAction":
             if action["actionData"]["messagingProvider"] == "viber":
@@ -185,7 +187,7 @@ class SystemHostController:
             if action["actionData"]["exitProgram"]:
                 print('exiting program')
                 exit(0)
-            status = ScriptExecutionState.FINISHED
+            status = ScriptExecutionState.FINISHED_FAILURE
         else:
             status = ScriptExecutionState.ERROR
             print("action unimplemented ")

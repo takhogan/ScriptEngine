@@ -501,7 +501,7 @@ class ScriptExecutor:
             self.actions[action_index] = self.handle_action(action)
             # print('post handle : ', action)
             self.context["action_attempts"][action_index] += 1
-            if self.status == ScriptExecutionState.FINISHED:
+            if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_FAILURE:
                 self.context['parent_action'] = action
                 self.context['child_actions'] = None
                 self.actions = []
@@ -545,7 +545,10 @@ class ScriptExecutor:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
         overall_status = ScriptExecutionState.FAILURE
-        while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR and self.status != ScriptExecutionState.FAILURE:
+        while self.status != ScriptExecutionState.FINISHED and\
+                self.status != ScriptExecutionState.ERROR and\
+                self.status != ScriptExecutionState.FAILURE and\
+                self.status != ScriptExecutionState.FINISHED_FAILURE:
             self.execute_actions()
             if self.check_if_done():
                 break
@@ -643,7 +646,9 @@ class ScriptExecutor:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
         overall_status = ScriptExecutionState.FAILURE
-        while self.status != ScriptExecutionState.FINISHED and self.status != ScriptExecutionState.ERROR:
+        while self.status != ScriptExecutionState.FINISHED and\
+                self.status != ScriptExecutionState.FINISHED_FAILURE and\
+                self.status != ScriptExecutionState.ERROR:
             self.execute_actions()
             if self.check_if_done():
                 break
