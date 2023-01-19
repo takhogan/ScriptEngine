@@ -4,6 +4,7 @@ import multiprocessing
 import os.path
 import random
 import requests
+import socket
 import sys
 import time
 
@@ -28,6 +29,7 @@ class ScriptScheduler:
 
     def __init__(self, host_server_ip):
         self.host_server_ip = host_server_ip
+        self.host_name = socket.gethostname()
     def str_timeout_to_datetime_timeout(self, timeout, src=None):
         if not isinstance(timeout, str):
             return timeout
@@ -333,6 +335,12 @@ class ScriptScheduler:
                         main_sequence['commands'][def_statement[0]] = def_statement[1]
                 else:
                     main_sequence['sequence'].append(line)
+        if 'targetHost' in main_sequence['commands']:
+            if main_sequence['commands']['targetHost'] == self.host_name:
+                pass
+            else:
+                print('Exiting event. Server host name is: ', self.host_name, '. Target host for script was ', main_sequence['commands']['targetHost'])
+                exit(0)
         return main_sequence,sequences
 
     def parse_and_run_script_sequence_def(self, script_sequence_def, timeout):
