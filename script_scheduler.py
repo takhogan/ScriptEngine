@@ -134,7 +134,7 @@ class ScriptScheduler:
 
         return service,calendar_id
 
-    def check_and_execute_active_tasks(self, service, calendar_id, running_scripts):
+    def check_and_execute_active_tasks(self, service, calendar_id, scheduled_events):
         now_datetime = datetime.datetime.utcnow()
         now_plus_five_datetime = now_datetime + datetime.timedelta(minutes=5)
 
@@ -164,29 +164,32 @@ class ScriptScheduler:
 
         if not events:
             pass
-            # print('No events found.')
         else:
             event = events[0]
 
-            if event['summary'] not in running_scripts:
+            if event['summary'] not in scheduled_events:
                 print(self.clean_description(event['description']))
                 event_process = multiprocessing.Process(
                     target=self.parse_and_run_script_sequence_def,
                     args=(self.clean_description(event['description']), event['end']['dateTime'])
                 )
                 event_process.start()
-                running_scripts[event['summary']] = {}
+                scheduled_events[event['summary']] = {}
                 pass
         # event['summary']
 
         event_list = set(map(lambda event: event['summary'], events))
         delete_events = []
-        for event in running_scripts.keys():
+        for event in scheduled_events.keys():
             if event not in event_list:
                 delete_events.append(event)
         for event in delete_events:
-            del running_scripts[event]
-        print(now, '-', now_plus_five, ' running scripts: ', list(running_scripts))
+            del scheduled_events[event]
+        request_url = "http://{}/queue".format(
+            self.host_server_ip
+        )
+        running_scripts_str = requests.get(request_url).text
+        print(now, '-', now_plus_five, ' active scheduled events: ', list(scheduled_events), ' running scripts: ', running_scripts_str)
 
     def run_script_sequence(self, script_sequence, sequences, timeout):
         def get_command_tuple_val(command_val):

@@ -43,13 +43,13 @@ def script_to_string(script_name, action_rows):
                 child = childGroupLink_to_child(childGroupLink)
             else:
                 child = childGroupLink
-
             if child is None:
                 continue
-            elif child["actionGroup"] in visited:
+            link_key = str(action["actionGroup"]) + "-" + str(child["actionGroup"])
+            if link_key in visited:
                 continue
             else:
-                visited.add(child["actionGroup"])
+                visited.add(link_key)
             string += dfs(child, depth + 1, visited)
         return string
     if len(action_rows) > 0:
