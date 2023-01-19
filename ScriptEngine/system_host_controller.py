@@ -154,18 +154,19 @@ class SystemHostController:
                 state[action["actionData"]["outputVarName"]] = outputs[0]
                 status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "contextSwitchAction":
+            success_states = context["success_states"] if "success_states" in context else None
+            script_counter = context["script_counter"]
             state = action["actionData"]["state"].copy()
             context = action["actionData"]["context"].copy()
             if 'state' in action["actionData"]["update_dict"]:
                 for key, value in action["actionData"]["update_dict"]["state"].items():
                     state[key] = value
             if 'context' in action["actionData"]["update_dict"]:
-                success_states = context["success_states"]
-                script_counter = context["script_counter"]
                 for key, value in action["actionData"]["update_dict"]["context"].items():
                     context[key] = value
+            if success_states is not None:
                 context["success_states"] = success_states
-                context["script_counter"] = script_counter
+            context["script_counter"] = script_counter
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "sendMessageAction":
             if action["actionData"]["messagingProvider"] == "viber":
@@ -181,7 +182,7 @@ class SystemHostController:
                 del creds
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "exceptionAction":
-            print(action["actionData"]["exceptionMessage"])
+            print('exceptionAction-' + str(action["actionGroup"]), ' message: ', action["actionData"]["exceptionMessage"])
             if action["actionData"]["takeScreenshot"]:
                 pass
             if action["actionData"]["exitProgram"]:

@@ -79,37 +79,37 @@ class adb_host:
     def init_system(self, reinitialize=False):
         source_im = None
         if reinitialize or self.width is None or self.height is None:
+            print('ADB CONTROLLER: initializing/reinitializing adb')
             get_device_list = lambda: subprocess.run(self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True, timeout=30)
-            devices_output = bytes.decode(get_device_list().stdout, 'utf-8')
-            print('adb devices')
+            get_device_list_output = lambda: bytes.decode(get_device_list().stdout, 'utf-8')
+            devices_output = get_device_list_output()
+            print('ADB CONTROLLER: listing devices')
             if not 'started' in devices_output:
-                devices_output = bytes.decode(get_device_list().stdout, 'utf-8')
+                devices_output = get_device_list_output()
             run_kill_command = lambda: subprocess.run(self.adb_path + ' kill-server', cwd="/", shell=True)
             run_start_command = lambda: subprocess.run(self.adb_path + ' start-server', cwd="/", shell=True)
-            if 'offline' in devices_output:
+            if 'offline' in devices_output or\
+                'emulator' in devices_output and '127.0.0.1:5555' in devices_output:
+                print('ADB CONTROLLER: problem found in devices output : ', devices_output, ' restarting adb')
                 run_kill_command()
                 run_start_command()
-                get_device_list()
-            if 'emulator' in devices_output and '127.0.0.1:5555' in devices_output:
-                run_kill_command()
-                run_start_command()
-                get_device_list()
+                devices_output = get_device_list_output()
             emualator_active = (
                 'emulator' in devices_output or
                 '127.0.0.1:5555' in devices_output
             )
             run_connect_command = lambda: subprocess.run(self.adb_path + ' connect ' + self.adb_ip, cwd="/", shell=True)
             if not emualator_active:
-                print('connecting to')
+                print('ADB CONTROLLER: connecting to adb device')
                 run_connect_command()
-
-
+            devices_output = get_device_list_output()
+            print('ADB CONTROLLER: devices output post troubleshooting: ', devices_output)
             get_im_command = subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True, capture_output=True)
             bytes_im = BytesIO(get_im_command.stdout)
             try:
                 source_im = np.array(Image.open(bytes_im))
             except UnidentifiedImageError:
-                print('get_im_command: ', get_im_command)
+                print('ADB CONTROLLER: Unable to restart ADB, get_im_command: ', get_im_command)
                 exit(1)
             self.width = source_im.shape[1]
             self.height = source_im.shape[0]

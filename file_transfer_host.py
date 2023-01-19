@@ -214,36 +214,52 @@ def enqueue_script(scriptname):
             '<a href="/run"> Click here to run another </a>', 200)
 
 
+def get_running_scripts():
+    if not os.path.exists(RUNNING_SCRIPTS_PATH):
+        return 'None'
+
+    with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
+        running_scripts = json.load(running_script_file)
+        return str(running_scripts)
+    return 'None'
+
 @app.route('/queue', methods=['GET'], strict_slashes=False)
 def show_queue():
-    if not os.path.exists(RUNNING_SCRIPTS_PATH):
-        return ('<p> nothing in que </p>' +\
-                '<a href="/run"> Click here to run script </a>', 200)
-    else:
-        with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
-            running_scripts = json.load(running_script_file)
-        return ('<p> Now running : ' + str(running_scripts) + '  </p>' + \
-                '<a href="/run"> Click here to run a script </a>', 200)
+    return (get_running_scripts(), 200)
+
+@app.route('/dashboard', methods=['GET'], strict_slashes=False)
+def show_dashboard():
+    capture_img = "<img style=\"width:100%;max-width:600px;\" src=\"/capture\"><br>"
+    running_scripts = get_running_scripts() + "<a href=\"/reset\"/> Clear </a>"  + '<br>'
+    file_server = '<a href="http://' + request.host.split(':')[0] + ':3848/> File Server </a><br>'
+    runnable_scripts = get_runnable_scripts()
+    return (capture_img + running_scripts + file_server + runnable_scripts, 200)
+
+
+def get_runnable_scripts():
+    def buttonize(script_file):
+        return "<li><a href=\"/run/" + script_file.split('.')[0] + "?timeout=0h30m\"/>" + script_file + "</a></li>"
+
+    script_files = subprocess.check_output([
+                                               'dir',
+                                               'C:\\Users\\takho\\ScriptEngine\\scripts\\scriptFolders',
+                                               '/b',
+                                               '/a-d'] if platform.system() == 'Windows' else [
+        'ls'
+    ] if platform.system() == 'Darwin' else [
+
+    ], shell=True
+                                           ).decode('utf-8').split('\r\n')
+    script_files.sort()
+    script_file_buttons = '<html>' + DEFAULT_HTML_HEADER + '<body><ul>' + ''.join(list(map(buttonize, script_files))) + \
+                          '</ul></body></html>'
+    return script_file_buttons
 
 @app.route('/run', methods=['GET'], strict_slashes=False)
 def list_run_scripts():
-    def buttonize(script_file):
-        return "<li><a href=\"/run/" + script_file.split('.')[0] + "?timeout=0h30m\"/>" + script_file + "</a></li>"
-    script_files = subprocess.check_output([
-        'dir',
-        'C:\\Users\\takho\\ScriptEngine\\scripts\\scriptFolders',
-        '/b',
-        '/a-d'] if platform.system() == 'Windows' else [
-            'ls'
-        ] if platform.system() == 'Darwin' else [
 
-        ], shell=True
-    ).decode('utf-8').split('\r\n')
-    script_files.sort()
-    script_file_buttons = '<html>' + DEFAULT_HTML_HEADER + '<body><ul>' + ''.join(list(map(buttonize, script_files))) +\
-        '</ul></body></html>'
     # script_file_buttons = '<br>'.join()
-    return (script_file_buttons, 201)
+    return (get_runnable_scripts(), 201)
 
 @app.route('/restart', methods=['GET'], strict_slashes=False)
 def restart_server():

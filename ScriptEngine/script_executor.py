@@ -265,7 +265,6 @@ class ScriptExecutor:
                 child_context["actionOrder"] = action["actionData"]["actionOrder"] if "actionOrder" in action["actionData"] else "sequential"
                 child_context["scriptMaxActionAttempts"] = action["actionData"]["scriptMaxActionAttempts"] if "scriptMaxActionAttempts" in action["actionData"] else ""
                 child_context["onOutOfActionAttempts"] = action["actionData"]["onOutOfActionAttempts"] if "onOutOfActionAttempts" in action["actionData"] else "returnFailure"
-
                 child_context["script_counter"] = self.context["script_counter"]
 
                 if is_error_handler or is_object_handler:
@@ -300,6 +299,9 @@ class ScriptExecutor:
             else:
                 action["actionData"]["initializedScript"].rewind(input_vars)
                 ref_script_executor = action["actionData"]["initializedScript"]
+                print(self.props['script_name'], 'with script counter', self.context["script_counter"],
+                      'sending script_counter')
+
                 ref_script_executor.context["script_counter"] = self.context["script_counter"]
 
             if 'searchAreaObjectHandler' in child_context["script_attributes"]:
@@ -433,7 +435,10 @@ class ScriptExecutor:
             return True
         if len(self.actions) == 0 and len(self.run_queue) == 0:
             print(self.props['script_name'] + ' CONTROL FLOW: Reached end of script')
-            self.status = ScriptExecutionState.FINISHED
+            if self.status == ScriptExecutionState.FINISHED_FAILURE:
+                pass
+            else:
+                self.status = ScriptExecutionState.FINISHED
             return True
         if len(self.actions) == 0 and len(self.run_queue) > 0:
             print(self.props['script_name'] + ' CONTROL FLOW: Finished branch, moving to next')
