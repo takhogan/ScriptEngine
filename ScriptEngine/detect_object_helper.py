@@ -45,11 +45,14 @@ class DetectObjectHelper:
                 context["run_queue"] = []
             else:
                 update_dict['context']['run_queue'] = []
-
-        excess_matches = len(matches) - int(action['actionData']['maxMatches'])
+        if str(action['actionData']['maxMatches']).isdigit():
+            max_matches = int(action['actionData']['maxMatches'])
+        else:
+            max_matches = eval(action['actionData']['maxMatches'], state.copy())
+        excess_matches = len(matches) - max_matches
         if excess_matches > 0:
             print('truncated {} excess matches'.format(excess_matches))
-        for match in matches[1:int(action["actionData"]["maxMatches"])]:
+        for match in matches[1:max_matches]:
             switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
                 "state": {
                     action['actionData']['outputVarName']: [match]
