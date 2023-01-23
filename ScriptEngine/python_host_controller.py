@@ -274,8 +274,12 @@ class python_host:
                 print('log type unimplemented ' + action["actionData"]["logType"])
                 exit(0)
         elif action["actionName"] == "timeAction":
-            state[action["actionData"]["outputVarName"]] = datetime.datetime.now()
-            # self.state[action["actionData"]["outputVarName"]] = expression
+            time_val = None
+            if action["actionData"]["timezone"] == "local":
+                time_val = datetime.datetime.now()
+            elif action["actionData"]["timezone"] == "utc":
+                time_val = datetime.datetime.utcnow()
+            state[action["actionData"]["outputVarName"]] = time_val
             return ScriptExecutionState.SUCCESS, state, context
         else:
             print('unimplemented method! ' + action["actionName"])

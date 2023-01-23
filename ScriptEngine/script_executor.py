@@ -411,10 +411,11 @@ class ScriptExecutor:
             self.context["out_of_attempts"] = False
 
     def check_if_done(self):
+        end_branch = False
         print(self.props['script_name'] + ' CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches")
         if datetime.datetime.now().astimezone(tz.tzlocal()) > self.timeout:
             print(self.props['script_name'] + ' CONTROL FLOW: script timeout - ', datetime.datetime.now())
-            return True
+            return end_branch,True
         terminate_request = False
         if os.path.exists(RUNNING_SCRIPTS_PATH):
             with open(RUNNING_SCRIPTS_PATH, 'r') as temp_file:
@@ -424,7 +425,7 @@ class ScriptExecutor:
             terminate_request = True
         if terminate_request:
             print(self.props['script_name'] + ' CONTROL FLOW: received terminate request')
-            return True
+            return end_branch,True
 
         if "scriptMaxActionAttempts" in self.context and\
                 len(str(self.context["scriptMaxActionAttempts"])) > 0 and\
@@ -432,19 +433,23 @@ class ScriptExecutor:
                 max(self.context["action_attempts"]) > int(self.context["scriptMaxActionAttempts"]):
             self.status = ScriptExecutionState.FAILURE
             print(self.props['script_name'] + " CONTROL FLOW: Action attempts", self.context["action_attempts"], "exceeded scriptMaxActionAttempts of", self.context["scriptMaxActionAttempts"])
-            return True
+            return end_branch,True
         if len(self.actions) == 0 and len(self.run_queue) == 0:
             print(self.props['script_name'] + ' CONTROL FLOW: Reached end of script')
             if self.status == ScriptExecutionState.FINISHED_FAILURE:
                 pass
             else:
                 self.status = ScriptExecutionState.FINISHED
-            return True
+            return end_branch,True
         if len(self.actions) == 0 and len(self.run_queue) > 0:
             print(self.props['script_name'] + ' CONTROL FLOW: Finished branch, moving to next')
-            self.status = ScriptExecutionState.FINISHED_BRANCH
+            if self.status == ScriptExecutionState.FINISHED_FAILURE:
+                pass
+            else:
+                self.status = ScriptExecutionState.FINISHED_BRANCH
             self.start_new_branch()
-        return False
+            return True,False
+        return end_branch,False
 
 
     def should_continue_on_failure(self):
@@ -463,6 +468,9 @@ class ScriptExecutor:
             self.forward_detect_peek()
         n_actions = len(self.actions)
         is_return = False
+        if self.context["actionOrder"] == "random":
+            print("shuffling")
+            random.shuffle(self.actions)
         if self.context["branching_behavior"] == "firstMatch":
             pass
         elif self.context["branching_behavior"] == "attemptAllBranches" and len(self.actions) > 1:
@@ -487,9 +495,7 @@ class ScriptExecutor:
             self.actions = [self.actions[0]]
             n_actions = 1
 
-        if self.context["actionOrder"] == "random":
-            print("shuffling")
-            random.shuffle(self.actions)
+
 
         for action_index in range(0, n_actions):
             self.context["action_index"] = action_index
@@ -555,7 +561,8 @@ class ScriptExecutor:
                 self.status != ScriptExecutionState.FAILURE and\
                 self.status != ScriptExecutionState.FINISHED_FAILURE:
             self.execute_actions()
-            if self.check_if_done():
+            end_branch,end_script = self.check_if_done()
+            if end_script:
                 break
             if self.status == ScriptExecutionState.FAILURE:
                 self.actions = []
@@ -569,6 +576,8 @@ class ScriptExecutor:
                     break
             elif self.status == ScriptExecutionState.FINISHED_BRANCH:
                 overall_status = ScriptExecutionState.SUCCESS
+            if end_branch:
+                self.status = ScriptExecutionState.FINISHED_BRANCH
         # if at least one branch reached the end the script is a success
         if overall_status == ScriptExecutionState.SUCCESS:
             self.status = ScriptExecutionState.FINISHED
@@ -586,13 +595,13 @@ class ScriptExecutor:
             self.log_level = log_level
         self.status = ScriptExecutionState.STARTING
         branches = []
+        if self.context["actionOrder"] == "random":
+            random.shuffle(self.actions)
         is_attempt_all_branches = self.context["branching_behavior"] == "attemptAllBranches"
         if is_attempt_all_branches:
             # this exists because otherwise the runOne would always run because the context switch is always successful
             state_copy = self.state.copy()
             context_copy = self.context.copy()
-            if self.context["actionOrder"] == "random":
-                random.shuffle(self.actions)
             for action in self.actions:
                 branches.append(
                     [generate_context_switch_action([{
@@ -629,7 +638,8 @@ class ScriptExecutor:
             else:
                 self.actions = []
                 if len(self.run_queue) > 1:
-                    if self.check_if_done():
+                    end_branch, end_script = self.check_if_done()
+                    if end_script:
                         break
                     # because the first action will be a context switch action
                     self.execute_actions()
@@ -655,10 +665,13 @@ class ScriptExecutor:
                 self.status != ScriptExecutionState.FINISHED_FAILURE and\
                 self.status != ScriptExecutionState.ERROR:
             self.execute_actions()
-            if self.check_if_done():
+            end_branch,end_script = self.check_if_done()
+            if end_script:
                 break
             if self.status == ScriptExecutionState.FINISHED_BRANCH:
                 overall_status = ScriptExecutionState.SUCCESS
+            if end_branch:
+                self.status = ScriptExecutionState.FINISHED_BRANCH
         if overall_status == ScriptExecutionState.SUCCESS:
             self.status = ScriptExecutionState.FINISHED
         self.on_script_completion()
@@ -674,6 +687,7 @@ class ScriptExecutor:
             else:
                 self.context["success_states"] += [self.state.copy()]
         self.actions.append(self.run_queue.pop())
+        self.context["action_attempts"] = len(self.actions) * [0]
 
 
 

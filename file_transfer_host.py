@@ -42,6 +42,10 @@ SERVER_CACHE = {
     'LIBRARY_ZIP' : None
 }
 
+COMPONENTS = {
+    'DASHBOARD BUTTON' : '<a href="/dashboard"' + '> Click here to run another </a><br>'
+}
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -190,7 +194,7 @@ def run_script(scriptname):
                     '<a href="http://' + request.host.split(':')[0] + ':3848/logs/' + '0'.zfill(5) + '-' + scriptname +\
                     '-' + script_manager_args[1] + '/"' + '> Click here for logs </a><br>' +\
                     '<a href="/capture"' + '> Click here to monitor </a><br>' +\
-                    '<a href="/run"' + '> Click here to run another </a><br>' +\
+                    COMPONENTS['DASHBOARD BUTTON'] +\
                     '<a href="/reset"' + '> Click here to terminate </a><br>', 201)
     else:
         with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
@@ -211,7 +215,9 @@ def enqueue_script(scriptname):
         with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
             json.dump(running_scripts, running_script_file)
     return ('<p> Added ' + scriptname + ' to queue. Now running : ' + str(running_scripts) + '  </p>' +\
-            '<a href="/run"> Click here to run another </a>', 200)
+            COMPONENTS['DASHBOARD BUTTON'], 200)
+
+
 
 
 def get_running_scripts():
@@ -231,7 +237,7 @@ def show_queue():
 def show_dashboard():
     capture_img = "<img style=\"width:100%;max-width:600px;\" src=\"/capture\"><br>"
     running_scripts = get_running_scripts() + "<a href=\"/reset\"/> Clear </a>"  + '<br>'
-    file_server = '<a href="http://' + request.host.split(':')[0] + ':3848/> File Server </a><br>'
+    file_server = '<a href=\"http://' + request.host.split(':')[0] + ':3848/\"> File Server </a><br>'
     runnable_scripts = get_runnable_scripts()
     return (capture_img + running_scripts + file_server + runnable_scripts, 200)
 
@@ -261,6 +267,18 @@ def list_run_scripts():
     # script_file_buttons = '<br>'.join()
     return (get_runnable_scripts(), 201)
 
+def get_log_folders():
+    script_files = subprocess.check_output([
+       'dir',
+       'C:\\Users\\takho\\ScriptEngine\\scripts\\logs',
+       '/O-D',
+       '/AD'] if platform.system() == 'Windows' else [
+        'ls'
+    ] if platform.system() == 'Darwin' else [
+
+    ], shell=True
+    ).decode('utf-8').split('\r\n')
+
 @app.route('/restart', methods=['GET'], strict_slashes=False)
 def restart_server():
     # subprocess.Popen([os_normalize_path('bash_scripts\\scriptDeploymentServer.cmd')],
@@ -277,7 +295,7 @@ def reset_running_scripts():
     if os.path.exists(RUNNING_SCRIPTS_PATH):
         os.remove(RUNNING_SCRIPTS_PATH)
     return ('<p>running scripts cleared</p>' + \
-            '<a href=/run> Click here to run a script </a>', 201)
+            COMPONENTS["DASHBOARD BUTTON"], 201)
 
 @app.route('/img-paths', methods=['GET'], strict_slashes=False)
 def get_img_paths():

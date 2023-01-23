@@ -10,6 +10,8 @@ from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
 from script_execution_state import ScriptExecutionState
 from script_engine_constants import *
+from script_engine_utils import generate_context_switch_action
+
 
 
 
@@ -19,7 +21,7 @@ class SystemHostController:
 
     def handle_action(self, action, state, context, log_level, log_folder):
         log_file_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
-        def sanitize_input(statement_input):
+        def sanitize_input(statement_input, state):
             operator_pattern = r'[()+-/*%=<>!^|&~]'
             word_operator_pattern = r'( is )|( in )|( not )|( and )|( or )'
             statement_strip = re.sub(operator_pattern, ' ', statement_input)
@@ -27,15 +29,15 @@ class SystemHostController:
             statement_strip = re.sub(word_operator_pattern, ' ', statement_strip)
             statement_strip = list(filter(lambda term: (len(term) > 0) and "'" not in term and "\"" not in term, statement_strip.split(' ')))
             for term_index,term in enumerate(statement_strip):
-                if term.isidentifier() and term not in state_copy:
+                if term.isidentifier() and term not in state:
                     term_str = str(term) + ': N/A'
                 else:
-                    term_str = str(term) + ': ' + str(eval(term, state_copy))
+                    term_str = str(term) + ': ' + str(eval(term, state))
                 statement_strip[term_index] = term_str
             return statement_strip
         if action["actionName"] == "conditionalStatement":
             state_copy = state.copy()
-            statement_strip = sanitize_input(action["actionData"]["condition"])
+            statement_strip = sanitize_input(action["actionData"]["condition"], state_copy)
             print('condition : ', action["actionData"]["condition"], statement_strip)
             if eval('(' + action["actionData"]["condition"] + ')', state_copy):
                 print('condition success!')
@@ -156,8 +158,10 @@ class SystemHostController:
         elif action["actionName"] == "contextSwitchAction":
             success_states = context["success_states"] if "success_states" in context else None
             script_counter = context["script_counter"]
-            state = action["actionData"]["state"].copy()
-            context = action["actionData"]["context"].copy()
+            if action["actionData"]["state"] is not None:
+                state = action["actionData"]["state"].copy()
+            if action["actionData"]["context"] is not None:
+                context = action["actionData"]["context"].copy()
             if 'state' in action["actionData"]["update_dict"]:
                 for key, value in action["actionData"]["update_dict"]["state"].items():
                     state[key] = value
@@ -189,6 +193,32 @@ class SystemHostController:
                 print('exiting program')
                 exit(0)
             status = ScriptExecutionState.FINISHED_FAILURE
+        elif action["actionName"] == "forLoopAction":
+            print('CONTROL FLOW: initiating forLoopAction-' + str(action["actionGroup"]))
+            if context["run_queue"] is None:
+                context["run_queue"] = []
+            first_loop = True
+            state_copy = state.copy()
+            in_variable = eval(action["actionData"]["inVariables"], state_copy)
+            print('inVariable : ', action["actionData"]["inVariables"], ' value: ', in_variable)
+            for_variable_list = action["actionData"]["forVariables"].split(',')
+            for for_variables in in_variable:
+                state_update_dict = {
+                    var_name:for_variables[var_index] for var_index,var_name in enumerate(for_variable_list)
+                } if len(for_variable_list) > 1 else {
+                    for_variable_list[0]:for_variables
+                }
+                if first_loop:
+                    state.update(state_update_dict)
+                    first_loop = False
+                    continue
+                switch_action = generate_context_switch_action(action["childGroups"], None, None, {
+                    "state": state_update_dict
+                })
+                context["run_queue"].append(
+                    switch_action
+                )
+            status = ScriptExecutionState.SUCCESS
         else:
             status = ScriptExecutionState.ERROR
             print("action unimplemented ")

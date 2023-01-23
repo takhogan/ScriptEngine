@@ -103,6 +103,14 @@ class adb_host:
                 print('ADB CONTROLLER: connecting to adb device')
                 run_connect_command()
             devices_output = get_device_list_output()
+            emualator_active = (
+                    'emulator' in devices_output or
+                    '127.0.0.1:5555' in devices_output
+            )
+            if not emualator_active:
+                print('ADB CONTROLLER: failed to connect, connecting again in 30 seconds')
+                time.sleep(30)
+                run_connect_command()
             print('ADB CONTROLLER: devices output post troubleshooting: ', devices_output)
             get_im_command = subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True, capture_output=True)
             bytes_im = BytesIO(get_im_command.stdout)
@@ -350,8 +358,8 @@ class adb_host:
                                self.commands["action_terminate_command"],
                                ')']
             click_command += footer_commands
-        shell_process = subprocess.Popen(['adb', 'shell'], stdin=subprocess.PIPE)
-        shell_process.communicate((''.join(click_command)).encode('utf-8'))
+        shell_process = subprocess.Popen(['adb', 'shell'], stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        print('ADB CONTROLLER : sending click command ', shell_process.communicate((''.join(click_command)).encode('utf-8')))
         # print((''.join(click_command)).encode('utf-8'))
         self.event_counter += 1
 
