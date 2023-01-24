@@ -335,6 +335,15 @@ def get_img_paths():
     return logs_obj
     # return jsonify(logs_obj)
 
+
+@app.route('/github-push', methods=['GET'], strict_slashes=False)
+def github_push():
+    add_output = subprocess.check_output('git add .')
+    commit_output = subprocess.check_output('git commit . -m \"server triggered commit ' + str(datetime.datetime.now()) + '\"')
+    push_output = subprocess.check_output('git push')
+    return ('add: ' + add_output + '\n' +\
+            'commit: ' + commit_output + '\n' +\
+            'push: ' + push_output + '\n')
 @app.route('/github-pull', methods=['GET'], strict_slashes=False)
 def github_pull():
     return (subprocess.check_output('git pull'), 201)
