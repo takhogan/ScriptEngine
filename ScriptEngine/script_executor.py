@@ -468,15 +468,17 @@ class ScriptExecutor:
             self.forward_detect_peek()
         n_actions = len(self.actions)
         is_return = False
+        action_indices = list(range(0, len(self.actions)))
         if self.context["actionOrder"] == "random":
             print("shuffling")
-            random.shuffle(self.actions)
+            random.shuffle(action_indices)
         if self.context["branching_behavior"] == "firstMatch":
             pass
-        elif self.context["branching_behavior"] == "attemptAllBranches" and len(self.actions) > 1:
+        elif self.context["branching_behavior"] == "attemptAllBranches" and n_actions > 1:
             state_copy = self.state.copy()
             context_copy = self.context.copy()
-            for action in self.actions[1:]:
+            for action_index in action_indices[1:]:
+                action = self.actions[action_index]
                 self.run_queue.append(
                     generate_context_switch_action([{
                         'srcGroup': None,
@@ -492,14 +494,15 @@ class ScriptExecutor:
                         'typePayload': None
                     }], state_copy, context_copy, {})
                 )
-            self.actions = [self.actions[0]]
+            self.actions = [self.actions[action_indices[0]]]
+            action_indices = [0]
             n_actions = 1
 
 
 
         for action_index in range(0, n_actions):
             self.context["action_index"] = action_index
-            action = self.actions[action_index]
+            action = self.actions[action_indices[action_index]]
             child_actions = self.get_children(action)
             self.context['child_actions'] = child_actions
 
@@ -509,7 +512,7 @@ class ScriptExecutor:
                 self.context["object_handler_encountered"] = True
 
             # print('pre handle: ', action)
-            self.actions[action_index] = self.handle_action(action)
+            self.actions[action_indices[action_index]] = self.handle_action(action)
             # print('post handle : ', action)
             self.context["action_attempts"][action_index] += 1
             if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_FAILURE:
