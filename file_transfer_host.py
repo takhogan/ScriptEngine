@@ -341,9 +341,9 @@ def github_push():
     add_output = subprocess.check_output('git add .')
     commit_output = subprocess.check_output('git commit . -m \"server triggered commit ' + str(datetime.datetime.now()) + '\"')
     push_output = subprocess.check_output('git push')
-    return ('add: ' + add_output + '\n' +\
-            'commit: ' + commit_output + '\n' +\
-            'push: ' + push_output + '\n')
+    return ('add: ' + add_output.decode('utf-8') + '\n' +\
+            'commit: ' + commit_output.decode('utf-8') + '\n' +\
+            'push: ' + push_output.decode('utf-8') + '\n')
 @app.route('/github-pull', methods=['GET'], strict_slashes=False)
 def github_pull():
     return (subprocess.check_output('git pull'), 201)
