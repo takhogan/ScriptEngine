@@ -82,6 +82,7 @@ class ScriptExecutor:
             'child_actions': None,
             'script_attributes': set(),
             'script_counter': 0,
+            'script_timer' : datetime.datetime.now(),
             'run_depth' : 0,
             'branching_behavior' : 'firstMatch',
             'run_type' : 'run',
@@ -139,13 +140,19 @@ class ScriptExecutor:
             print(self.props['script_name'] + ' CONTROL FLOW:   Parsing Input: ', var_name, " Value: ", eval_result)
 
     def log_action_details(self, action):
+        now = datetime.datetime.now()
+        elapsed = now - self.context['script_timer']
+        self.context['script_timer'] = now
+
         print(
-            str(self.context['script_counter']).zfill(5) + ' ' + \
+            'LOG,' +\
+            str(self.context['script_counter']).zfill(5) + ',' + \
             self.props["script_name"] + ' ' + action["actionData"]["targetSystem"] + \
-            ' action : ' + action["actionName"] + '-' + str(action["actionGroup"]) + \
-            ' children: ' + str(list(map(lambda action: action["actionGroup"], self.get_children(action)))) + \
-            ' attempts: ' + str(self.context["action_attempts"]) + \
-            ' outOfAttempts: ' + str(self.context["out_of_attempts"])
+            ', action : ,' + action["actionName"] + '-' + str(action["actionGroup"]) + \
+            ', children: ,' + str(list(map(lambda action: action["actionGroup"], self.get_children(action)))) + \
+            ', attempts: ,' + str(self.context["action_attempts"]) + \
+            ', outOfAttempts: ,' + str(self.context["out_of_attempts"]) +\
+            ', elapsed: ,' + str(elapsed)
         )
 
 
@@ -266,6 +273,7 @@ class ScriptExecutor:
                 child_context["scriptMaxActionAttempts"] = action["actionData"]["scriptMaxActionAttempts"] if "scriptMaxActionAttempts" in action["actionData"] else ""
                 child_context["onOutOfActionAttempts"] = action["actionData"]["onOutOfActionAttempts"] if "onOutOfActionAttempts" in action["actionData"] else "returnFailure"
                 child_context["script_counter"] = self.context["script_counter"]
+                child_context["script_timer"] = self.context["script_timer"]
 
                 if is_error_handler or is_object_handler:
                     search_area_handler_state = {
@@ -299,10 +307,9 @@ class ScriptExecutor:
             else:
                 action["actionData"]["initializedScript"].rewind(input_vars)
                 ref_script_executor = action["actionData"]["initializedScript"]
-                print(self.props['script_name'], 'with script counter', self.context["script_counter"],
-                      'sending script_counter')
 
                 ref_script_executor.context["script_counter"] = self.context["script_counter"]
+                ref_script_executor.context["script_timer"] = self.context["script_timer"]
 
             if 'searchAreaObjectHandler' in child_context["script_attributes"]:
                 ref_script_executor.context["object_handler_encountered"] = False
@@ -340,6 +347,7 @@ class ScriptExecutor:
                 state[output_var] = output_var_val
                 print(self.props['script_name'] + " CONTROL FLOW: output var ", output_var,':', output_var_val)
             self.context["script_counter"] = ref_script_executor.context["script_counter"]
+            self.context["script_timer"] = ref_script_executor.context["script_timer"]
 
             if is_object_handler:
                 status = ScriptExecutionState.RETURN
