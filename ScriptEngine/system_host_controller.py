@@ -158,6 +158,7 @@ class SystemHostController:
         elif action["actionName"] == "contextSwitchAction":
             success_states = context["success_states"] if "success_states" in context else None
             script_counter = context["script_counter"]
+            script_timer = context["script_timer"]
             if action["actionData"]["state"] is not None:
                 state = action["actionData"]["state"].copy()
             if action["actionData"]["context"] is not None:
@@ -171,6 +172,7 @@ class SystemHostController:
             if success_states is not None:
                 context["success_states"] = success_states
             context["script_counter"] = script_counter
+            context["script_timer"] = script_timer
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "sendMessageAction":
             if action["actionData"]["messagingProvider"] == "viber":

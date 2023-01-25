@@ -102,23 +102,35 @@ class adb_host:
             if not emualator_active:
                 print('ADB CONTROLLER: connecting to adb device')
                 run_connect_command()
-            devices_output = get_device_list_output()
-            emualator_active = (
-                    'emulator' in devices_output or
-                    '127.0.0.1:5555' in devices_output
-            )
-            if not emualator_active:
-                print('ADB CONTROLLER: failed to connect, connecting again in 30 seconds')
-                time.sleep(30)
-                run_connect_command()
-            print('ADB CONTROLLER: devices output post troubleshooting: ', devices_output)
-            get_im_command = subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True, capture_output=True)
+            get_im_command = subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True,
+                                            capture_output=True)
+            screencap_succesful = False
             bytes_im = BytesIO(get_im_command.stdout)
             try:
                 source_im = np.array(Image.open(bytes_im))
+                screencap_succesful = True
             except UnidentifiedImageError:
-                print('ADB CONTROLLER: Unable to restart ADB, get_im_command: ', get_im_command)
-                exit(1)
+                print('ADB CONTROLLER: Unable to connect to ADB, restarting ADB, get_im_command: ', get_im_command)
+                run_kill_command()
+                run_start_command()
+            if not screencap_succesful:
+                devices_output = get_device_list_output()
+                emualator_active = (
+                        'emulator' in devices_output or
+                        '127.0.0.1:5555' in devices_output
+                )
+                if not emualator_active:
+                    print('ADB CONTROLLER: failed to connect, connecting again in 30 seconds')
+                    time.sleep(30)
+                    run_connect_command()
+                print('ADB CONTROLLER: devices output post troubleshooting: ', devices_output)
+                get_im_command = subprocess.run(self.adb_path + ' exec-out screencap -p', cwd="/", shell=True, capture_output=True)
+                bytes_im = BytesIO(get_im_command.stdout)
+                try:
+                    source_im = np.array(Image.open(bytes_im))
+                except UnidentifiedImageError:
+                    print('ADB CONTROLLER: Unable to restart ADB, get_im_command: ', get_im_command)
+                    exit(1)
             self.width = source_im.shape[1]
             self.height = source_im.shape[0]
         if is_null(self.props['width']):
