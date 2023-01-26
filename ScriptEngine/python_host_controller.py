@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import datetime
+import os
 
 import pandas as pd
 
@@ -46,7 +47,9 @@ class python_host:
 
     def run_script(self, action, state):
         # print('run_script: ', action)
-        if action["actionData"]["awaitScript"]:
+        if action["actionData"]["openInNewWindow"]:
+            os.system("start cmd /K " + action["actionData"]["shellScript"])
+        elif action["actionData"]["awaitScript"]:
             outputs = subprocess.run(action["actionData"]["shellScript"], cwd="/", shell=True, capture_output=True)
             state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
             # print('output : ', outputs, 'state : ', state)

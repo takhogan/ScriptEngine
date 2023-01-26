@@ -283,7 +283,7 @@ class ScriptScheduler:
         print('Script Scheduler invoking script: ', request_url)
         request_result = requests.get(request_url).text
         print(request_result)
-        
+
         script_loaded = await_script_load(script_name)
         if script_loaded:
             await_script_completion(script_name)
