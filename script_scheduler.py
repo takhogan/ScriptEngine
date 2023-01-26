@@ -114,6 +114,7 @@ class ScriptScheduler:
                         (datetime.datetime.utcnow() + datetime.timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%S") + 'Z'
                     )
                 )
+                refresh_process.daemon = True
                 refresh_process.start()
                 flow = InstalledAppFlow.from_client_secrets_file(
                     'assets/credentials.json', SCOPES)
@@ -138,14 +139,14 @@ class ScriptScheduler:
 
     def check_and_execute_active_tasks(self, service, calendar_id, scheduled_events):
         now_datetime = datetime.datetime.utcnow()
-        now_plus_five_datetime = now_datetime + datetime.timedelta(minutes=5)
+        now_minus_five_datetime = now_datetime - datetime.timedelta(minutes=5)
 
         now = now_datetime.isoformat() + 'Z'
-        now_plus_five = now_plus_five_datetime.isoformat() + 'Z'
+        now_minus_five = now_minus_five_datetime.isoformat() + 'Z'
         try:
             events_result = service.events().list(calendarId=calendar_id,
-                                                  timeMin=now,
-                                                  timeMax=now_plus_five,
+                                                  timeMin=now_minus_five,
+                                                  timeMax=now,
                                                   singleEvents=True,
                                                   timeZone='UTC',
                                                   orderBy='startTime').execute()
@@ -153,8 +154,8 @@ class ScriptScheduler:
             print(r_error)
             self.initialize_service()
             events_result = service.events().list(calendarId=calendar_id,
-                                                  timeMin=now,
-                                                  timeMax=now_plus_five,
+                                                  timeMin=now_minus_five,
+                                                  timeMax=now,
                                                   singleEvents=True,
                                                   timeZone='UTC',
                                                   orderBy='startTime').execute()
@@ -167,17 +168,18 @@ class ScriptScheduler:
         if not events:
             pass
         else:
-            event = events[0]
-
-            if event['summary'] not in scheduled_events:
-                print(self.clean_description(event['description']))
-                event_process = multiprocessing.Process(
-                    target=self.parse_and_run_script_sequence_def,
-                    args=(self.clean_description(event['description']), event['end']['dateTime'])
-                )
-                event_process.start()
-                scheduled_events[event['summary']] = {}
-                pass
+            for event in events:
+                if event['summary'] not in scheduled_events:
+                    event_plan = self.clean_description(event['description']) if 'description' in event else ''
+                    print(event_plan)
+                    event_process = multiprocessing.Process(
+                        target=self.parse_and_run_script_sequence_def,
+                        args=(event_plan, event['end']['dateTime'])
+                    )
+                    event_process.daemon = True
+                    event_process.start()
+                    scheduled_events[event['summary']] = {}
+                    pass
         # event['summary']
 
         event_list = set(map(lambda event: event['summary'], events))
@@ -191,7 +193,7 @@ class ScriptScheduler:
             self.host_server_ip
         )
         running_scripts_str = requests.get(request_url).text
-        print(now, '-', now_plus_five, ' active scheduled events: ', list(scheduled_events), ' running scripts: ', running_scripts_str)
+        print(now_minus_five, '-', now, ' active scheduled events: ', list(scheduled_events), ' running scripts: ', running_scripts_str)
 
     def run_script_sequence(self, script_sequence, sequences, timeout):
         def get_command_tuple_val(command_val):
@@ -279,7 +281,9 @@ class ScriptScheduler:
         ) + self.constants_to_url_params(constants)
 
         print('Script Scheduler invoking script: ', request_url)
-        print(requests.get(request_url).text)
+        request_result = requests.get(request_url).text
+        print(request_result)
+        
         script_loaded = await_script_load(script_name)
         if script_loaded:
             await_script_completion(script_name)
@@ -336,7 +340,7 @@ class ScriptScheduler:
                 else:
                     main_sequence['sequence'].append(line)
         if 'targetHost' in main_sequence['commands']:
-            if main_sequence['commands']['targetHost'] == self.host_name:
+            if self.host_name in main_sequence['commands']['targetHost'].split(','):
                 pass
             else:
                 print('Exiting event. Server host name is: ', self.host_name, '. Target host for script was ', main_sequence['commands']['targetHost'])

@@ -1,1 +1,1 @@
-scalene C:\Users\takho\ScriptEngine\ScriptEngine\script_manager.py BlueStacks_WAO_FastFarmTasks
+venv\Scripts\scalene C:\Users\takho\ScriptEngine\ScriptEngine\script_manager.py BlueStacks_WAO_FromCityViewToLandView
