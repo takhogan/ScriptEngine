@@ -8,7 +8,8 @@ class ForwardDetectPeekHelper:
     def load_forward_peek_result(action, state, context):
         if 'detect_run_type' in action['actionData'] and\
                 action['actionData']['detect_run_type'] == 'result_precalculation' and \
-                'resuseScreenshotBetweenActions' not in action['actionData']['detectorAttributes']:
+                (action['actionData']["resuseScreenshotBetweenActions"] if
+                'resuseScreenshotBetweenActions' in action['actionData'] else False):
             print('forward peek disabled for action ', action['actionGroup'])
             del action['actionData']['screencap_im_bgr']
             del action['actionData']['detect_run_type']
