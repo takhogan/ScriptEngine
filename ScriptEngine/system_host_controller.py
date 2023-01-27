@@ -55,14 +55,14 @@ class SystemHostController:
                 status = ScriptExecutionState.SUCCESS
                 return status, state, context
 
-            print('inputExpression : ', action["actionData"]["inputExpression"], end = '')
+            print('variableAssignment' + str(action["actionGroup"]),'inputExpression : ', action["actionData"]["inputExpression"], end = '')
             # print(' state (4) ', state)
             expression = None
             if action["actionData"]["inputParser"] == 'eval':
                 expression = eval(action["actionData"]["inputExpression"], state.copy())
             elif action["actionData"]["inputParser"] == "jsonload":
                 expression = json.loads(action["actionData"]["inputExpression"])
-            print(' : result : ', expression)
+            print('variableAssignment' + str(action["actionGroup"]),' : result : ', expression)
             # print(' state (5) ', state)
             # print(' expression : ', expression, ', ', type(expression))
             if '[' in action["actionData"]["outputVarName"] and ']' in action["actionData"]["outputVarName"]:
@@ -202,7 +202,7 @@ class SystemHostController:
             first_loop = True
             state_copy = state.copy()
             in_variable = eval(action["actionData"]["inVariables"], state_copy)
-            print('inVariable : ', action["actionData"]["inVariables"], ' value: ', in_variable)
+            print('forLoopAction-' + str(action["actionGroup"]), ' inVariable : ', action["actionData"]["inVariables"], ' value: ', in_variable)
             for_variable_list = action["actionData"]["forVariables"].split(',')
             for for_variables in in_variable:
                 state_update_dict = {
@@ -210,6 +210,7 @@ class SystemHostController:
                 } if len(for_variable_list) > 1 else {
                     for_variable_list[0]:for_variables
                 }
+                print('forLoopAction-' + str(action["actionGroup"]), ' forVariables : ', for_variable_list, ' values: ', for_variables)
                 if first_loop:
                     state.update(state_update_dict)
                     first_loop = False
@@ -217,9 +218,9 @@ class SystemHostController:
                 switch_action = generate_context_switch_action(action["childGroups"], None, None, {
                     "state": state_update_dict
                 })
-                context["run_queue"].append(
+                context["run_queue"] = [
                     switch_action
-                )
+                ] + context["run_queue"]
             status = ScriptExecutionState.SUCCESS
         else:
             status = ScriptExecutionState.ERROR
