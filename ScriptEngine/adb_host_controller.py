@@ -906,6 +906,6 @@ if __name__ == '__main__':
         "deploymentToLibrary": "true"
     }, None, '127.0.0.1:5555')
     adb_host.init_system()
-    adb_host.click(633, 858)
+    adb_host.click(200, 200)
     # (633.3333333333333, 858.6666666666666),
     exit(0)
