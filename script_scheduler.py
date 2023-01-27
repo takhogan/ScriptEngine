@@ -151,16 +151,15 @@ class ScriptScheduler:
                                                   timeZone='UTC',
                                                   orderBy='startTime').execute()
         except RefreshError as r_error:
-            print(r_error)
+            print('ENCOUNTERED TOKEN ERROR WHILE FETCHING TASKS : ',r_error)
             self.initialize_service()
-            events_result = service.events().list(calendarId=calendar_id,
-                                                  timeMin=now_minus_five,
-                                                  timeMax=now,
-                                                  singleEvents=True,
-                                                  timeZone='UTC',
-                                                  orderBy='startTime').execute()
+            return
         except ConnectionResetError as cr_error:
-            print(cr_error)
+            print('ENCOUNTERED CONNECTION ERROR WHILE FETCHING TASKS : ',cr_error)
+            time.sleep(60)
+            return
+        except socket.gaierror as gaierror:
+            print('ENCOUNTERED SOCKET ERROR WHILE FETCHING TASKS : ',gaierror)
             time.sleep(60)
             return
         events = events_result.get('items', [])
