@@ -49,6 +49,7 @@ class python_host:
         # print('run_script: ', action)
         if action["actionData"]["openInNewWindow"]:
             os.system("start cmd /K " + action["actionData"]["shellScript"])
+            return state
         elif action["actionData"]["awaitScript"]:
             outputs = subprocess.run(action["actionData"]["shellScript"], cwd="/", shell=True, capture_output=True)
             state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')

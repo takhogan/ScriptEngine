@@ -241,9 +241,16 @@ class ScriptScheduler:
                 self.load_and_run(script, extended_timeout, script_sequence['constants'])
 
     def load_and_run(self,script_name, timeout, constants=None):
-        def await_script_load(script_name):
+        def await_script_load(script_name, is_await_queue, request_url):
             MAX_CHECK_COUNT = 10
-            for _ in range(0, MAX_CHECK_COUNT):
+            check_count = 0
+            while True:
+                if is_await_queue:
+                    requests.get(request_url)
+                elif check_count > MAX_CHECK_COUNT:
+                    break
+                else:
+                    check_count += 1
                 print('Awaiting script load ', script_name)
                 if os.path.exists(RUNNING_SCRIPTS_PATH):
                     running_scripts = []
@@ -252,7 +259,10 @@ class ScriptScheduler:
 
                     if script_name in running_scripts:
                         return True
-                time.sleep(2)
+                if is_await_queue:
+                    time.sleep(60)
+                else:
+                    time.sleep(2)
             print('Script load timed out')
             return False
 
@@ -282,9 +292,13 @@ class ScriptScheduler:
 
         print('Script Scheduler invoking script: ', request_url)
         request_result = requests.get(request_url).text
+        is_await_queue = False
+        if 'Please wait for script completion' in request_result:
+            #enqueue it later
+            is_await_queue = True
         print(request_result)
 
-        script_loaded = await_script_load(script_name)
+        script_loaded = await_script_load(script_name, is_await_queue, request_url)
         if script_loaded:
             await_script_completion(script_name)
 
