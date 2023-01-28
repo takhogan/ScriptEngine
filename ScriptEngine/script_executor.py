@@ -8,6 +8,7 @@ from PIL import Image
 import tesserocr
 import random
 import re
+import glob
 
 import cv2
 
@@ -23,7 +24,6 @@ from system_host_controller import SystemHostController
 
 import time
 import os
-import datetime
 import pytesseract
 import requests
 
@@ -135,7 +135,12 @@ class ScriptExecutor:
             if (len(input_expression) == 0) or \
                ((default_value or default_value == "true") and (var_name in self.state and self.state[var_name] is not None)):
                 continue
-            eval_result = eval(input_expression, self.state.copy())
+            state_copy = self.state.copy()
+            state_copy.update({
+                'glob' : glob,
+                'datetime' : datetime
+            })
+            eval_result = eval(input_expression, state_copy)
             self.state[var_name] = eval_result
             print(self.props['script_name'] + ' CONTROL FLOW:   Parsing Input: ', var_name, " Value: ", eval_result)
 

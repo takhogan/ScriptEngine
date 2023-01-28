@@ -48,14 +48,18 @@ class python_host:
     def run_script(self, action, state):
         # print('run_script: ', action)
         if action["actionData"]["openInNewWindow"]:
-            os.system("start cmd /K " + action["actionData"]["shellScript"])
+            run_command = "start cmd /K " + action["actionData"]["shellScript"]
+            print('shellScript-' + str(action["actionGroup"]), ' opening in new window run command : ', run_command)
+            os.system(run_command)
             return state
         elif action["actionData"]["awaitScript"]:
+            print('shellScript-' + str(action["actionGroup"]), ' running command ', action["actionData"]["shellScript"], ' and awaiting output')
             outputs = subprocess.run(action["actionData"]["shellScript"], cwd="/", shell=True, capture_output=True)
             state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
             # print('output : ', outputs, 'state : ', state)
             return state
         else:
+            print('shellScript-' + str(action["actionGroup"]), ' starting process ', action["actionData"]['shellScript'], ' without awaiting output')
             proc = subprocess.Popen(action["actionData"]["shellScript"], cwd="/", shell=True)
             return state
 
