@@ -33,7 +33,8 @@ class SystemHostController:
                 if term.isidentifier() and term not in state:
                     term_str = str(term) + ': N/A'
                 else:
-                    term_str = str(term) + ': ' + str(eval(term, state))
+                    term_eval = eval(term, state)
+                    term_str = str(term) + ': ' + str(term_eval) + ': ' + str(type(term_eval))
                 statement_strip[term_index] = term_str
             return statement_strip
         if action["actionName"] == "conditionalStatement":
