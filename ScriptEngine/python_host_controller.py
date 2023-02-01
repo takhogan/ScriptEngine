@@ -78,7 +78,7 @@ class python_host:
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "clickAction":
             var_name = action["actionData"]["inputExpression"]
-            point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context)
+            point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
             # print('debug', point_choice, self.width, self.height, self.props['width'])
             # point_choice = (point_choice[0] * self.width / self.props['width'],point_choice[1] * self.height / self.props['height'])
             print('clickAction-' + str(action["actionGroup"]), ' input: ', var_name, ' output : ', point_choice)
