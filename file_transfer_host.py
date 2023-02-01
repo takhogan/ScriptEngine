@@ -233,13 +233,22 @@ def get_running_scripts():
 def show_queue():
     return (get_running_scripts(), 200)
 
+def get_space_remaining():
+    bytes_free = subprocess.check_output('dir|find "bytes free"', shell=True).decode('utf-8')
+    bytes_free_split = bytes_free.split(' ')
+    # print(bytes_free_split)
+    # bytes_free_val = int(bytes_free_split[3])
+    # bytes_free = str(round(bytes_free_val / 1000000000, 2)) + 'GB free'
+    return '<p>' + bytes_free +'</p><br>'
+
 @app.route('/dashboard', methods=['GET'], strict_slashes=False)
 def show_dashboard():
     capture_img = "<img style=\"width:100%;max-width:600px;\" src=\"/capture\"><br>"
     running_scripts = get_running_scripts() + "<a href=\"/reset\"/> Clear </a>"  + '<br>'
     file_server = '<a href=\"http://' + request.host.split(':')[0] + ':3848/\"> File Server </a><br>'
+    space_remaining = get_space_remaining()
     runnable_scripts = get_runnable_scripts()
-    return (capture_img + running_scripts + file_server + runnable_scripts, 200)
+    return (capture_img + running_scripts + file_server + space_remaining + runnable_scripts, 200)
 
 
 def get_runnable_scripts():

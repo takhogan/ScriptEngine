@@ -8,8 +8,22 @@ class ClickActionHelper:
         pass
 
     @staticmethod
-    def get_point_choice(action, var_name, state, context):
-        point_choice = random.choice(action["actionData"]["pointList"]) if action["actionData"]["pointList"] else (None, None)
+    def get_point_choice(action, var_name, state, context, screen_width, screen_height):
+        point_choice = (None, None)
+        if action["actionData"]["pointList"]:
+            point_choice = random.choice(action["actionData"]["pointList"])
+            input_params_valid = len(str(action["actionData"]["sourceScreenWidth"])) > 0 and\
+                action["actionData"]["sourceScreenWidth"] > 0 and\
+                len(str(action["actionData"]["sourceScreenHeight"])) > 0 and\
+                action["actionData"]["sourceScreenHeight"] > 0
+
+            if input_params_valid and (action["actionData"]["sourceScreenWidth"] != screen_width) and\
+                    (action["actionData"]["sourceScreenHeight"] != screen_height):
+                print('clickaction rescaling: ', screen_width, action["actionData"]["sourceScreenWidth"], screen_height, action["actionData"]["sourceScreenHeight"])
+                point_choice = (
+                    ((screen_width / action["actionData"]["sourceScreenWidth"])) * point_choice[0],
+                    ((screen_height / action["actionData"]["sourceScreenHeight"]) * point_choice[1])
+                )
         if var_name is not None and len(var_name) > 0:
             print('clickaction-' + str(action["actionGroup"]), ' reading from ', var_name)
             input_points = eval(var_name, state)
