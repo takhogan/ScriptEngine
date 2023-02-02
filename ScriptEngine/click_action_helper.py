@@ -13,9 +13,9 @@ class ClickActionHelper:
         if action["actionData"]["pointList"]:
             point_choice = random.choice(action["actionData"]["pointList"])
             input_params_valid = len(str(action["actionData"]["sourceScreenWidth"])) > 0 and\
-                action["actionData"]["sourceScreenWidth"] > 0 and\
+                int(action["actionData"]["sourceScreenWidth"]) > 0 and\
                 len(str(action["actionData"]["sourceScreenHeight"])) > 0 and\
-                action["actionData"]["sourceScreenHeight"] > 0
+                int(action["actionData"]["sourceScreenHeight"]) > 0
 
             if input_params_valid and (action["actionData"]["sourceScreenWidth"] != screen_width) and\
                     (action["actionData"]["sourceScreenHeight"] != screen_height):
