@@ -3,6 +3,8 @@ import json
 import multiprocessing
 import os.path
 import random
+
+import httplib2.error
 import requests
 import socket
 import sys
@@ -156,10 +158,17 @@ class ScriptScheduler:
             return
         except ConnectionResetError as cr_error:
             print('ENCOUNTERED CONNECTION ERROR WHILE FETCHING TASKS : ',cr_error)
+            print('Waiting 60 seconds')
             time.sleep(60)
             return
         except socket.gaierror as gaierror:
             print('ENCOUNTERED SOCKET ERROR WHILE FETCHING TASKS : ',gaierror)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return
+        except httplib2.error.ServerNotFoundError as sr_error:
+            print('Calendar Server Not Found Error : ', sr_error)
+            print('Waiting 60 seconds')
             time.sleep(60)
             return
         events = events_result.get('items', [])
