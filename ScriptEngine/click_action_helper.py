@@ -19,10 +19,11 @@ class ClickActionHelper:
 
             if input_params_valid and (action["actionData"]["sourceScreenWidth"] != screen_width) and\
                     (action["actionData"]["sourceScreenHeight"] != screen_height):
+
                 print('clickaction rescaling: ', screen_width, action["actionData"]["sourceScreenWidth"], screen_height, action["actionData"]["sourceScreenHeight"])
                 point_choice = (
-                    ((screen_width / action["actionData"]["sourceScreenWidth"])) * point_choice[0],
-                    ((screen_height / action["actionData"]["sourceScreenHeight"]) * point_choice[1])
+                    int(((screen_width / float(action["actionData"]["sourceScreenWidth"]))) * point_choice[0]),
+                    int(((screen_height / float(action["actionData"]["sourceScreenHeight"])) * point_choice[1]))
                 )
         if var_name is not None and len(var_name) > 0:
             print('clickaction-' + str(action["actionGroup"]), ' reading from ', var_name)
