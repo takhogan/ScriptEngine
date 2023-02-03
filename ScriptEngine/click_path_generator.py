@@ -51,7 +51,9 @@ class ClickPathGenerator:
     def map_delta_val(delta, increment, is_delta_x):
         intermediate_point_odds = 0 # random.random()
         floored_map_val_index = random.randint(0, 1)
-        discretized_delta = int(delta / increment)
+        delta_over_increment = delta / increment
+        delta_over_increment = 0 if np.isnan(delta_over_increment) else delta_over_increment
+        discretized_delta = int(delta_over_increment)
         # delta_acc = delta - discretized_delta
         mapped_delta = discretized_delta * increment
         floored_mapped_delta = int(mapped_delta)
