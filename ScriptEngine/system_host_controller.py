@@ -6,6 +6,8 @@ import cv2
 import json
 import time
 import glob
+import datetime
+import os
 
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
@@ -226,6 +228,11 @@ class SystemHostController:
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "codeBlock":
             state_copy = state.copy()
+            state_copy.update({
+                'glob': glob,
+                'datetime': datetime,
+                'os' : os
+            })
             statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
             print('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"], statement_strip)
             eval(action["actionData"]["codeBlock"], state_copy)
