@@ -8,6 +8,7 @@ import time
 import glob
 import datetime
 import os
+import shutil
 
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
@@ -231,7 +232,8 @@ class SystemHostController:
             state_copy.update({
                 'glob': glob,
                 'datetime': datetime,
-                'os' : os
+                'os' : os,
+                'shutil' : shutil
             })
             # statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
             print('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"])
