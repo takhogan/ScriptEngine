@@ -58,6 +58,7 @@ class ImageMatcher:
         h, w = screencap_outputmask_gray.shape[0:2]
         cv2.imwrite(logs_path + 'matching_overlay.png', result_im_bgr)
         cv2.imwrite(logs_path + 'match_result.png', match_result * 255)
+        cv2.imwrite(logs_path + 'output_mask.png', screencap_outputmask_gray)
         n_matches = len(matches)
         print('matches : ', [match for match,score,match_area in matches], match_point)
         return [{
