@@ -233,8 +233,8 @@ class SystemHostController:
                 'datetime': datetime,
                 'os' : os
             })
-            statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
-            print('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"], statement_strip)
+            # statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
+            print('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"])
             eval(action["actionData"]["codeBlock"], state_copy)
             status = ScriptExecutionState.SUCCESS
         else:
