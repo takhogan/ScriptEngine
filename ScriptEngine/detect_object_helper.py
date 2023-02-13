@@ -11,6 +11,7 @@ class DetectObjectHelper:
         match_point = None
         var_name = action["actionData"]["inputExpression"]
         if var_name is not None and len(var_name) > 0:
+            print('detectObject-' + str(action["actionGroup"]), ' fetching variable ', var_name, 'from state')
             input_area = eval(var_name, state)
             if len(input_area) > 0:
                 # potentially for loop here
@@ -29,6 +30,8 @@ class DetectObjectHelper:
                             input_area["point"][0],
                             input_area["point"][1]
                         )
+        else:
+            print('detectObject-' + str(action["actionGroup"]), ' no input expression')
         return screencap_im_bgr, match_point
 
     @staticmethod

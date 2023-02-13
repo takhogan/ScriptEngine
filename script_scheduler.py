@@ -3,6 +3,7 @@ import json
 import multiprocessing
 import os.path
 import random
+import ssl
 
 import httplib2.error
 import requests
@@ -101,6 +102,7 @@ class ScriptScheduler:
             creds = Credentials.from_authorized_user_file('assets/token.json', SCOPES)
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
+            print('loaded creds were not valid, starting refresh')
             needs_refresh = True
             if creds and creds.expired and creds.refresh_token:
                 try:
@@ -109,11 +111,13 @@ class ScriptScheduler:
                 except RefreshError:
                     pass
             if needs_refresh:
+                print('calling refresh script')
                 refresh_process = multiprocessing.Process(
                     target=self.parse_and_run_script_sequence_def,
                     args=(
                         self.clean_description(REFRESH_GOOGLE_TOKEN_SCRIPT),
-                        (datetime.datetime.utcnow() + datetime.timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%S") + 'Z'
+                        (datetime.datetime.utcnow() + datetime.timedelta(minutes=10)).strftime(
+                            "%Y-%m-%dT%H:%M:%S") + 'Z'
                     )
                 )
                 refresh_process.daemon = True
@@ -126,6 +130,7 @@ class ScriptScheduler:
             # Save the credentials for the next run
             with open('assets/token.json', 'w') as token:
                 token.write(creds.to_json())
+        print('running with creds')
         service = build('calendar', 'v3', credentials=creds)
 
         try:
@@ -153,21 +158,27 @@ class ScriptScheduler:
                                                   timeZone='UTC',
                                                   orderBy='startTime').execute()
         except RefreshError as r_error:
-            print('ENCOUNTERED TOKEN ERROR WHILE FETCHING TASKS : ',r_error)
+            print('Encountered Token error while calling calendar API: ',r_error)
+            print('Renewing Token')
             self.initialize_service()
             return
         except ConnectionResetError as cr_error:
-            print('ENCOUNTERED CONNECTION ERROR WHILE FETCHING TASKS : ',cr_error)
+            print('Encountered Connection Reset error while calling calendar API : ',cr_error)
             print('Waiting 60 seconds')
             time.sleep(60)
             return
         except socket.gaierror as gaierror:
-            print('ENCOUNTERED SOCKET ERROR WHILE FETCHING TASKS : ',gaierror)
+            print('Encountered Socket error while calling calendar API : ',gaierror)
             print('Waiting 60 seconds')
             time.sleep(60)
             return
         except httplib2.error.ServerNotFoundError as sr_error:
-            print('Calendar Server Not Found Error : ', sr_error)
+            print('Encountered Server Not Found error while calling calendar API : ', sr_error)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return
+        except ssl.SSLEOFError as ssl_error:
+            print('Encountered SSL Error while calling calendar API : ', ssl_error)
             print('Waiting 60 seconds')
             time.sleep(60)
             return

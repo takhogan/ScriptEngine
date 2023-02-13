@@ -224,6 +224,12 @@ class SystemHostController:
                     switch_action
                 ] + context["run_queue"]
             status = ScriptExecutionState.SUCCESS
+        elif action["actionName"] == "codeBlock":
+            state_copy = state.copy()
+            statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
+            print('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"], statement_strip)
+            eval(action["actionData"]["codeBlock"], state_copy)
+            status = ScriptExecutionState.SUCCESS
         else:
             status = ScriptExecutionState.ERROR
             print("action unimplemented ")
