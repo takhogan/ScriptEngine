@@ -225,9 +225,12 @@ def get_running_scripts():
         return 'None'
 
     with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
-        running_scripts = json.load(running_script_file)
+        try:
+            running_scripts = json.load(running_script_file)
+        except json.JSONDecodeError:
+            clear_running_scripts()
+            running_scripts = 'None'
         return str(running_scripts)
-    return 'None'
 
 @app.route('/queue', methods=['GET'], strict_slashes=False)
 def show_queue():
@@ -299,10 +302,12 @@ def restart_server():
     return ('<p> not restarting server </p>' +\
             '<a href=/run> Click here to run a script </a>', 201)
 
-@app.route('/reset', methods=['GET'], strict_slashes=False)
-def reset_running_scripts():
+def clear_running_scripts():
     if os.path.exists(RUNNING_SCRIPTS_PATH):
         os.remove(RUNNING_SCRIPTS_PATH)
+@app.route('/reset', methods=['GET'], strict_slashes=False)
+def reset_running_scripts():
+    clear_running_scripts()
     return ('<p>running scripts cleared</p>' + \
             COMPONENTS["DASHBOARD BUTTON"], 201)
 

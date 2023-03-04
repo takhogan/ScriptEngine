@@ -671,7 +671,8 @@ class ScriptExecutor:
         #TODO In theory you should load in the state and context of the successful branch
 
     def run(self, log_level=None, parse_inputs=True):
-        self.parse_inputs()
+        if parse_inputs:
+            self.parse_inputs()
         print(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: run ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level

@@ -19,9 +19,13 @@ class DetectSceneHelper:
             screencap_outputmask_bgr,
             dir_path,
             logs_path,
+            check_image_scale=True,
             output_cropping=None):
         mask_size = np.count_nonzero(scene_screencap_mask_single_channel)
-        if screencap_im_bgr.shape != scene_screencap_mask.shape:
+        original_height,original_width = screencap_im_bgr.shape[0],screencap_im_bgr.shape[1]
+        print('og height width ', screencap_im_bgr.shape)
+        needs_rescale = screencap_im_bgr.shape != scene_screencap_mask.shape
+        if needs_rescale:
             screencap_im_bgr = cv2.resize(
                 screencap_im_bgr,
                 (scene_screencap_mask.shape[1], scene_screencap_mask.shape[0]),
@@ -55,10 +59,23 @@ class DetectSceneHelper:
         cv2.imwrite(action_logs_path + '-screencap-masked.png', screencap_masked)
         cv2.imwrite(action_logs_path + '-screencap-compare.png', screencap_compare)
         #TODO if the input is resized the coordinates will not be resized so there may be clicks in the wrong place
+        output_mask_single_channel = sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].copy()
+        if needs_rescale:
+            width_translation = original_width / int(sceneAction["actionData"]["sourceScreenWidth"])
+            height_translation = original_height / int(sceneAction["actionData"]["sourceScreenHeight"])
+            location_val = (location_val[0] * width_translation, location_val[1] * height_translation)
+            # print('output shape', output_mask_single_channel.shape, (original_height, original_width))
+            # output_mask_single_channel = cv2.resize(
+            #     output_mask_single_channel,
+            #     (original_height, original_width),
+            #     interpolation=cv2.INTER_AREA
+            # )
+
+
         return [{
             'input_type': 'shape',
             'point': location_val,
-            'shape': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
+            'shape': output_mask_single_channel,
             'matched_area': match_img_bgr,
             'height': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].shape[0],
             'width': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].shape[1],
