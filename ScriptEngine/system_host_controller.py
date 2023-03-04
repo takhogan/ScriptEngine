@@ -36,7 +36,11 @@ class SystemHostController:
                 if term.isidentifier() and term not in state:
                     term_str = str(term) + ': N/A'
                 else:
-                    term_eval = eval(term, state)
+                    try:
+                        term_eval = eval(term, state)
+                    except (TypeError,KeyError) as p_err:
+                        print(p_err)
+                        term_eval = None
                     term_str = str(term) + ': ' + str(term_eval) + ': ' + str(type(term_eval))
                 statement_strip[term_index] = term_str
             return statement_strip

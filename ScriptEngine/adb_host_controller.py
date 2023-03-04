@@ -513,6 +513,7 @@ class adb_host:
                     action["actionData"]["positiveExamples"][0]["outputMask"],
                     self.props["dir_path"],
                     logs_path,
+                    check_image_scale=check_image_scale,
                     output_cropping=action["actionData"]["maskLocation"] if
                     (action["actionData"]["maskLocation"] != 'null' and
                      "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
