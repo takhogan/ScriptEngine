@@ -30,8 +30,10 @@ SCRIPT_SERVER_PORT = 3849
 FILE_SERVER_PORT = SCRIPT_SERVER_PORT - 1
 app.config["SCRIPT_SERVER_PORT"] = SCRIPT_SERVER_PORT
 
+BASE_FOLDER = os.getcwd()
+
 app.config['SUBPROCESSES'].append(
-    subprocess.Popen(['python', '-m', 'http.server', str(FILE_SERVER_PORT)], cwd='C:\\Users\\takho\\ScriptEngine\\')
+    subprocess.Popen(['python', '-m', 'http.server', str(FILE_SERVER_PORT)], cwd=BASE_FOLDER)
 )
 UPLOAD_FOLDER = os_normalize_path('.\\scripts')
 TEMP_FOLDER = os_normalize_path('.\\tmp')
@@ -69,16 +71,18 @@ with open(WHITELIST_PATH, 'r') as white_list_file:
 print('whitelist :', whitelist)
 app.config['WHITELIST_IPS'] = whitelist
 
-app.config['SUBPROCESSES'].append(
-    subprocess.Popen([
-        'C:\\Users\\takho\\ScriptEngine\\venv_scheduling_server\\Scripts\\python',
-        'C:\\Users\\takho\\ScriptEngine\\script_scheduler.py',
-        socket.gethostbyname(socket.gethostname()),
-        str(SCRIPT_SERVER_PORT)],
-        cwd='C:\\Users\\takho\\ScriptEngine',
-        shell=True
-    )
-)
+# app.config['SUBPROCESSES'].append(
+#     subprocess.Popen([
+#         BASE_FOLDER + (
+#             '\\venv_scheduling_server\\Scripts\\python' if app.config['PLATFORM'] == 'Windows' else
+#             '/venv_scheduling_server/bin/python'),
+#         BASE_FOLDER + os_normalize_path('\\script_scheduler.py'),
+#         socket.gethostbyname(socket.gethostname()),
+#         str(SCRIPT_SERVER_PORT)],
+#         cwd=BASE_FOLDER,
+#         shell=True
+#     )
+# )
 
 def on_server_shutdown():
     for server_subprocess in app.config['SUBPROCESSES']:

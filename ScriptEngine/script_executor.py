@@ -233,6 +233,12 @@ class ScriptExecutor:
 
     def handle_script_reference(self, action, state, context):
         if action["actionName"] == 'scriptReference':
+
+            if 'paused_script' in self.context:
+
+                del self.context['paused_script']
+                pass
+
             is_new_script = "initializedScript" not in action["actionData"] or action["actionData"][
                 "initializedScript"] is None
             if is_new_script:
@@ -341,6 +347,10 @@ class ScriptExecutor:
                 ref_script_executor.run_one()
             elif action["actionData"]["runMode"] == "runToFailure":
                 ref_script_executor.run_to_failure()
+
+            if 'paused_script' in ref_script_executor.context:
+                self.context['paused_script'] = ''#paused script file name
+                #probably set status to something special
 
             parsed_output_vars = list(
                 filter(lambda output_vars: output_vars != '', action["actionData"]["outputVars"].split(","))

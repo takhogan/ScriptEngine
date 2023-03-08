@@ -7,12 +7,14 @@ from io import BytesIO
 import glob
 from zipfile import ZipFile
 
-from progressbar import ProgressBar
+# from progressbar import ProgressBar
 from waitress import serve
 
 from file_transfer_host_app import app#, cache
 # from ScriptEngine.script_engine_constants import RUNNING_SCRIPTS_PATH
 RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
+RUNNING_EVENTS_PATH = './tmp/running_events.json'
+
 from flask import Flask, request, redirect, Response, jsonify, make_response, send_file, send_from_directory, render_template
 from werkzeug.utils import secure_filename
 from flask_cors import CORS, cross_origin
@@ -143,13 +145,19 @@ def get_library():
 @app.route('/run/<scriptname>', strict_slashes=False)
 def run_script(scriptname):
     if not os.path.exists(RUNNING_SCRIPTS_PATH):
-        timeout_val = request.args.get('timeout')
-        script_constants = request.args.getlist('args')
+        if 'timeout' in request.args:
+            timeout_val = request.args.get('timeout')
+        else:
+            timeout_val = '0h30m'
+        if 'args' in request.args:
+            script_constants = request.args.getlist('args')
+        else:
+            script_constants = []
 
         def initialize_script_manager_args(scriptname, timeout_val, script_constants):
             start_time = datetime.datetime.now()
             start_time_str = start_time.strftime('%Y-%m-%d %H-%M-%S')
-            script_log_folder = app.config['LOGFILE_FOLDER'] + '0'.zfill(5) + '-' + scriptname + '-' + start_time_str + '\\'
+            script_log_folder = os_normalize_path(app.config['LOGFILE_FOLDER'] + '0'.zfill(5) + '-' + scriptname + '-' + start_time_str + '\\')
             os.makedirs(script_log_folder, exist_ok=True)
             timeout_val_split = timeout_val.split('h')
             end_time = start_time + datetime.timedelta(hours=int(timeout_val_split[0]),minutes=int(timeout_val_split[1][:-1]))
@@ -161,21 +169,35 @@ def run_script(scriptname):
         def run_in_thread(scriptname, start_time_str, end_time_str, script_constants, script_log_folder):
             print('running ', scriptname, 'from', start_time_str, 'to', end_time_str, 'with constants', script_constants)
             with open(script_log_folder + 'stdout.txt', 'w') as log_file:
-                shell_process = subprocess.Popen(['C:\\Users\\takho\\ScriptEngine\\venv\\Scripts\\python',
-                                                  'C:\\Users\\takho\\ScriptEngine\\ScriptEngine\\script_manager.py',
-                                                  scriptname,
-                                                  start_time_str,
-                                                  end_time_str,
-                                                  *script_constants], shell=True,
-                                                 stdout=log_file,
-                                                 stderr=log_file,
-                                                 cwd='C:\\Users\\takho\\ScriptEngine')
+                shell_process = subprocess.Popen([
+                        (
+                            'venv\\Scripts\\python' if platform.system() == 'Windows' else
+                            'venv/bin/python3'
+                        ),
+                        os_normalize_path('ScriptEngine\\script_manager.py'),
+                        scriptname,
+                        start_time_str,
+                        end_time_str,
+                        *script_constants
+                    ],
+                    # shell=True,
+                    stdout=log_file,
+                    stderr=log_file,
+                    cwd=os.getcwd()
+                )
                 shell_process.wait()
-            print('completed ', scriptname, shell_process)
             exit_code = shell_process.returncode
+            print('log folder: ', script_log_folder)
+            print(os.getcwd() + os_normalize_path('\\ScriptEngine\\script_manager.py'), os.getcwd() + (
+                        'venv\\Scripts\\python' if platform.system() == 'Windows' else
+                        'venv/bin/python3'
+                    ))
+            print('completed ', scriptname, 'with return code', exit_code)
             with open(script_log_folder + 'completed.txt', 'w') as completed_file:
                 completed_file.write(scriptname + ' completed at ' + str(datetime.datetime.now()))
             if exit_code == 1:
+                return
+            elif exit_code == 478:
                 return
             if os.path.exists(RUNNING_SCRIPTS_PATH):
                 with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
@@ -195,12 +217,12 @@ def run_script(scriptname):
                     '-' + script_manager_args[1] + '/"' + '> Click here for logs </a><br>' +\
                     '<a href="/capture"' + '> Click here to monitor </a><br>' +\
                     COMPONENTS['DASHBOARD BUTTON'] +\
-                    '<a href="/reset"' + '> Click here to terminate </a><br>', 201)
+                    '<a href="/reset_scripts"' + '> Click here to terminate </a><br>', 201)
     else:
         with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
             return ('<p>Please wait for script completion, script: ' + running_script_file.read() + ' still running!</p>' +\
                     '<a href=/enqueue/' + scriptname + '> Click here to enqueue </a><br>' +\
-                        '<a href=/reset> Click here to terminate </a><br>', 400)
+                        '<a href=/reset_scripts> Click here to terminate </a><br>', 400)
 
 @app.route('/enqueue/<scriptname>', methods=['GET'], strict_slashes=False)
 def enqueue_script(scriptname):
@@ -232,12 +254,27 @@ def get_running_scripts():
             running_scripts = 'None'
         return str(running_scripts)
 
+def get_running_events():
+    if not os.path.exists(RUNNING_EVENTS_PATH):
+        return 'None'
+
+    with open(RUNNING_EVENTS_PATH, 'r') as running_events_file:
+        try:
+            running_events = json.load(running_events_file)
+        except json.JSONDecodeError:
+            clear_running_events()
+            running_events = 'None'
+        return str(running_events)
+
 @app.route('/queue', methods=['GET'], strict_slashes=False)
 def show_queue():
     return (get_running_scripts(), 200)
 
 def get_space_remaining():
-    bytes_free = subprocess.check_output('dir|find "bytes free"', shell=True).decode('utf-8')
+    if app.config['PLATFORM'] == 'Windows':
+        bytes_free = subprocess.check_output('dir|find "bytes free"', shell=True).decode('utf-8')
+    else:
+        bytes_free = 'Bytes free command unimplemented'
     bytes_free_split = bytes_free.split(' ')
     # print(bytes_free_split)
     # bytes_free_val = int(bytes_free_split[3])
@@ -247,27 +284,33 @@ def get_space_remaining():
 @app.route('/dashboard', methods=['GET'], strict_slashes=False)
 def show_dashboard():
     capture_img = "<img style=\"width:100%;max-width:600px;\" src=\"/capture\"><br>"
-    running_scripts = get_running_scripts() + "<a href=\"/reset\"/> Clear </a>"  + '<br>'
+    running_scripts = get_running_scripts() + "<a href=\"/reset_scripts\"/> Clear Scripts </a>"  + '<br>'
+    running_events = get_running_events() + "<a href=\"/reset\"/> Clear All </a>"  + '<br>'
     file_server = '<a href=\"http://' + request.host.split(':')[0] + ':3848/\"> File Server </a><br>'
     space_remaining = get_space_remaining()
     runnable_scripts = get_runnable_scripts()
-    return (capture_img + running_scripts + file_server + space_remaining + runnable_scripts, 200)
+    return (capture_img + running_scripts + running_events + file_server + space_remaining + runnable_scripts, 200)
 
 
 def get_runnable_scripts():
     def buttonize(script_file):
         return "<li><a href=\"/run/" + script_file.split('.')[0] + "?timeout=0h30m\"/>" + script_file + "</a></li>"
 
-    script_files = subprocess.check_output([
-                                               'dir',
-                                               'C:\\Users\\takho\\ScriptEngine\\scripts\\scriptFolders',
-                                               '/b',
-                                               '/a-d'] if platform.system() == 'Windows' else [
-        'ls'
-    ] if platform.system() == 'Darwin' else [
 
-    ], shell=True
-                                           ).decode('utf-8').split('\r\n')
+    if platform.system() == 'Windows':
+        script_files = subprocess.check_output([
+           'dir',
+           os.getcwd() + '\\scripts\\scriptFolders',
+           '/b',
+           '/a-d'] if platform.system() == 'Windows' else [
+            'ls scripts/scriptFolders'
+        ] if platform.system() == 'Darwin' else [
+
+        ], shell=True
+                                               ).decode('utf-8')
+        script_files = script_files.split('\r\n')
+    else:
+        script_files = list(map(os.path.basename, glob.glob('./scripts/scriptFolders/*.zip')))
     script_files.sort()
     script_file_buttons = '<html>' + DEFAULT_HTML_HEADER + '<body><ul>' + ''.join(list(map(buttonize, script_files))) + \
                           '</ul></body></html>'
@@ -282,7 +325,7 @@ def list_run_scripts():
 def get_log_folders():
     script_files = subprocess.check_output([
        'dir',
-       'C:\\Users\\takho\\ScriptEngine\\scripts\\logs',
+       os.getcwd() + '\\scripts\\logs',
        '/O-D',
        '/AD'] if platform.system() == 'Windows' else [
         'ls'
@@ -305,10 +348,28 @@ def restart_server():
 def clear_running_scripts():
     if os.path.exists(RUNNING_SCRIPTS_PATH):
         os.remove(RUNNING_SCRIPTS_PATH)
+
+def clear_running_events():
+    if os.path.exists(RUNNING_EVENTS_PATH):
+        os.remove(RUNNING_EVENTS_PATH)
+
 @app.route('/reset', methods=['GET'], strict_slashes=False)
+def reset_all():
+    clear_running_scripts()
+    clear_running_events()
+    return ('<p>running scripts and events cleared</p>' + \
+            COMPONENTS["DASHBOARD BUTTON"], 201)
+
+@app.route('/reset_scripts', methods=['GET'], strict_slashes=False)
 def reset_running_scripts():
     clear_running_scripts()
     return ('<p>running scripts cleared</p>' + \
+            COMPONENTS["DASHBOARD BUTTON"], 201)
+
+@app.route('/reset_events', methods=['GET'], strict_slashes=False)
+def reset_running_events():
+    clear_running_events()
+    return ('<p>running events cleared</p>' + \
             COMPONENTS["DASHBOARD BUTTON"], 201)
 
 @app.route('/img-paths', methods=['GET'], strict_slashes=False)

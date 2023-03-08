@@ -130,7 +130,7 @@ class adb_host:
                     source_im = np.array(Image.open(bytes_im))
                 except UnidentifiedImageError:
                     print('ADB CONTROLLER: Unable to restart ADB, get_im_command: ', get_im_command)
-                    exit(1)
+                    exit(478)
             self.width = source_im.shape[1]
             self.height = source_im.shape[0]
         if is_null(self.props['width']):
@@ -149,7 +149,7 @@ class adb_host:
             print('get_im_command: ', get_im_command)
             source_im = self.init_system(reinitialize=True)
             if source_im is None:
-                exit(1)
+                exit(478)
         return cv2.cvtColor(np.array(source_im), cv2.COLOR_RGB2BGR)
 
     def save_screenshot(self, save_name):
