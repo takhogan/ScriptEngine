@@ -58,17 +58,24 @@ def update_running_scripts_file(scriptname, action):
 def load_and_run(script_name, timeout, constants=None, start_time=None):
     # if you want to open zip then you pass .zip in command line args
     update_running_scripts_file(script_name, 'push')
+    print('script start time: ', datetime.datetime.now(), ' script trigger time: ', start_time, ' scheduled end time: ', timeout)
+    print('constants : ', constants)
     script_object = parse_zip(script_name)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
     main_script = ScriptExecutor(script_object, timeout, state=constants, start_time=start_time)
-    main_script.run(log_level='INFO')
+    try:
+        main_script.run(log_level='INFO')
+    except Exception:
+        print('exception occured!')
+        pass
     print('completed script ', script_name, datetime.datetime.now())
     update_running_scripts_file(script_name, 'pop')
 
 
 
 if __name__=='__main__':
+    print('SCRIPT MANAGER: parsing args')
     script_name = sys.argv[1]
     start_time = None
     end_time = None
@@ -86,6 +93,7 @@ if __name__=='__main__':
         for arg_index in range(4, n_args):
             arg_split = sys.argv[arg_index].strip().split(':')
             constants[arg_split[0]] = arg_split[1]
+    print('SCRIPT MANAGER: loading script and running')
     load_and_run(
         script_name,
         (start_time + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal()) if end_time is None else end_time,

@@ -25,6 +25,7 @@ from googleapiclient.errors import HttpError
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 CALENDAR_NAME = 'ScriptScheduler'
 RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
+RUNNING_EVENTS_PATH = './tmp/running_events.json'
 REFRESH_GOOGLE_TOKEN_SCRIPT = 'Windows_RefreshGoogleToken'
 
 class ScriptScheduler:
@@ -33,6 +34,8 @@ class ScriptScheduler:
     def __init__(self, host_server_ip):
         self.host_server_ip = host_server_ip
         self.host_name = socket.gethostname()
+
+
     def str_timeout_to_datetime_timeout(self, timeout, src=None):
         if not isinstance(timeout, str):
             return timeout
@@ -93,7 +96,7 @@ class ScriptScheduler:
             print('loaded existing calendar: ', CALENDAR_NAME)
         return calendars[CALENDAR_NAME]
 
-    def initialize_service(self):
+    def initialize_service(self, force_refresh=False):
         creds = None
         # The file token.json stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
@@ -101,20 +104,26 @@ class ScriptScheduler:
         if os.path.exists('assets/token.json'):
             creds = Credentials.from_authorized_user_file('assets/token.json', SCOPES)
         # If there are no (valid) credentials available, let the user log in.
-        if not creds or not creds.valid:
+        if not creds or not creds.valid or force_refresh:
             print('loaded creds were not valid, starting refresh')
-            needs_refresh = True
-            if creds and creds.expired and creds.refresh_token:
+            if not force_refresh:
+                needs_refresh = True
+            else:
+                needs_refresh = False
+
+            if (creds and creds.expired and creds.refresh_token) or force_refresh:
                 try:
                     creds.refresh(Request())
                     needs_refresh = False
                 except RefreshError:
+                    needs_refresh = True
                     pass
             if needs_refresh:
                 print('calling refresh script')
                 refresh_process = multiprocessing.Process(
                     target=self.parse_and_run_script_sequence_def,
                     args=(
+                        'REFRESH_GOOGLE_TOKEN_SCRIPT',
                         self.clean_description(REFRESH_GOOGLE_TOKEN_SCRIPT),
                         (datetime.datetime.utcnow() + datetime.timedelta(minutes=10)).strftime(
                             "%Y-%m-%dT%H:%M:%S") + 'Z'
@@ -123,7 +132,8 @@ class ScriptScheduler:
                 refresh_process.daemon = True
                 refresh_process.start()
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'assets/credentials.json', SCOPES)
+                    'assets/credentials.json', SCOPES
+                )
                 # if issues here: https://github.com/googleapis/google-auth-library-python-oauthlib/issues/69
                 creds = flow.run_local_server(port=0)
 
@@ -144,7 +154,7 @@ class ScriptScheduler:
 
         return service,calendar_id
 
-    def check_and_execute_active_tasks(self, service, calendar_id, scheduled_events):
+    def check_and_execute_active_tasks(self, service, calendar_id, running_events):
         now_datetime = datetime.datetime.utcnow()
         now_minus_five_datetime = now_datetime - datetime.timedelta(minutes=5)
 
@@ -160,7 +170,7 @@ class ScriptScheduler:
         except RefreshError as r_error:
             print('Encountered Token error while calling calendar API: ',r_error)
             print('Renewing Token')
-            self.initialize_service()
+            self.initialize_service(force_refresh=True)
             return
         except ConnectionResetError as cr_error:
             print('Encountered Connection Reset error while calling calendar API : ',cr_error)
@@ -188,33 +198,36 @@ class ScriptScheduler:
             pass
         else:
             for event in events:
-                if event['summary'] not in scheduled_events:
+                if event['summary'] not in running_events:
                     event_plan = self.clean_description(event['description']) if 'description' in event else ''
                     print(event_plan)
                     event_process = multiprocessing.Process(
                         target=self.parse_and_run_script_sequence_def,
-                        args=(event_plan, event['end']['dateTime'])
+                        args=(event['summary'], event_plan, event['end']['dateTime'])
                     )
                     event_process.daemon = True
                     event_process.start()
-                    scheduled_events[event['summary']] = {}
-                    pass
+                    running_events[event['summary']] = {}
+                    time.sleep(5)
         # event['summary']
 
         event_list = set(map(lambda event: event['summary'], events))
         delete_events = []
-        for event in scheduled_events.keys():
+        for event in running_events.keys():
             if event not in event_list:
                 delete_events.append(event)
         for event in delete_events:
-            del scheduled_events[event]
+            del running_events[event]
         request_url = "http://{}/queue".format(
             self.host_server_ip
         )
         running_scripts_str = requests.get(request_url).text
-        print(now_minus_five, '-', now, ' active scheduled events: ', list(scheduled_events), ' running scripts: ', running_scripts_str)
+        print(now_minus_five, '-', now, ' active running events: ', list(running_events), ' running scripts: ', running_scripts_str)
 
-    def run_script_sequence(self, script_sequence, sequences, timeout):
+        with open(RUNNING_EVENTS_PATH, 'w') as running_events_file:
+            json.dump(running_events, running_events_file)
+
+    def run_script_sequence(self, event_name, script_sequence, sequences, timeout):
         def get_command_tuple_val(command_val):
             if '(' in command_val:
                 delay_range_repr = command_val[1:-1].split(',')
@@ -253,17 +266,28 @@ class ScriptScheduler:
 
         for script in script_sequence['sequence']:
             if script in sequences:
-                self.run_script_sequence(sequences[script], sequences, extended_timeout)
+                self.run_script_sequence(event_name, sequences[script], sequences, extended_timeout)
             else:
                 print('running script ', script)
 
-                self.load_and_run(script, extended_timeout, script_sequence['constants'])
+                self.load_and_run(event_name, script, extended_timeout, script_sequence['constants'])
 
-    def load_and_run(self,script_name, timeout, constants=None):
-        def await_script_load(script_name, is_await_queue, request_url):
+    def load_and_run(self, event_name, script_name, timeout, constants=None):
+        def check_terminate_signal(event_name):
+            running_events = {}
+            if os.path.exists(RUNNING_EVENTS_PATH):
+                with open(RUNNING_EVENTS_PATH, 'r') as running_events_file:
+                    running_events = json.load(running_events_file)
+            return event_name not in running_events
+
+        def await_script_load(event_name, script_name, is_await_queue, request_url):
             MAX_CHECK_COUNT = 10
             check_count = 0
             while True:
+                if check_terminate_signal(event_name):
+                    print('received terminate signal')
+                    break
+
                 if is_await_queue:
                     requests.get(request_url)
                 elif check_count > MAX_CHECK_COUNT:
@@ -285,9 +309,13 @@ class ScriptScheduler:
             print('Script load timed out')
             return False
 
-        def await_script_completion(script_name):
+        def await_script_completion(event_name, script_name):
             while True:
                 print('Awaiting Script Completion ', script_name)
+                if check_terminate_signal(event_name):
+                    print('received terminate signal')
+                    break
+
                 if os.path.exists(RUNNING_SCRIPTS_PATH):
                     running_scripts = []
                     with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
@@ -300,7 +328,9 @@ class ScriptScheduler:
                 time.sleep(60)
             return False
 
-
+        if check_terminate_signal(event_name):
+            print('received terminate signal')
+            return
         duration = timeout - datetime.datetime.now().replace(tzinfo=tz.tzlocal())
         duration_mins = duration.seconds / 60
         duration_hours = str(int(duration_mins // 60))
@@ -317,9 +347,9 @@ class ScriptScheduler:
             is_await_queue = True
         print(request_result)
 
-        script_loaded = await_script_load(script_name, is_await_queue, request_url)
+        script_loaded = await_script_load(event_name, script_name, is_await_queue, request_url)
         if script_loaded:
-            await_script_completion(script_name)
+            await_script_completion(event_name, script_name)
 
     def parse_constant_def(self, script_sequence_def):
         pass
@@ -380,25 +410,34 @@ class ScriptScheduler:
                 exit(0)
         return main_sequence,sequences
 
-    def parse_and_run_script_sequence_def(self, script_sequence_def, timeout):
+    def parse_and_run_script_sequence_def(self, event_name, script_sequence_def, timeout):
         print('def ', script_sequence_def)
         main_sequence,sequences = self.parse_script_sequence_def(script_sequence_def)
         print(main_sequence, sequences)
         timeout = self.str_timeout_to_datetime_timeout(timeout)
         if 'onInit' in sequences:
-            self.run_script_sequence(sequences['onInit'], sequences, timeout)
-        print('1')
-        self.run_script_sequence(main_sequence, sequences, timeout)
+            self.run_script_sequence(event_name, sequences['onInit'], sequences, timeout)
+        self.run_script_sequence(event_name, main_sequence, sequences, timeout)
         if 'onDestroy' in sequences:
-            self.run_script_sequence(sequences['onDestroy'], sequences, timeout + datetime.timedelta(minutes=15))
+            self.run_script_sequence(event_name, sequences['onDestroy'], sequences, timeout + datetime.timedelta(minutes=15))
+        running_events = {}
+        with open(RUNNING_EVENTS_PATH, 'r') as running_events_file:
+            running_events = json.load(running_events_file)
+        if event_name in running_events:
+            del running_events[event_name]
+        with open(RUNNING_EVENTS_PATH, 'w') as running_events_file:
+            json.dump(running_events, running_events_file)
 
     def run(self):
         print("Starting script scheduling service")
         service,calendar_id = self.initialize_service()
-        running_scripts = {}
+        running_events = {}
+        if os.path.exists(RUNNING_EVENTS_PATH):
+            with open(RUNNING_EVENTS_PATH, 'r') as running_events_file:
+                running_events = json.load(running_events_file)
         print("Completed script scheduler setup, entering scheduler loop")
         while True:
-            self.check_and_execute_active_tasks(service, calendar_id, running_scripts)
+            self.check_and_execute_active_tasks(service, calendar_id, running_events)
             time.sleep(60)
 
 
