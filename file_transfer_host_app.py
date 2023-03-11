@@ -71,18 +71,18 @@ with open(WHITELIST_PATH, 'r') as white_list_file:
 print('whitelist :', whitelist)
 app.config['WHITELIST_IPS'] = whitelist
 
-# app.config['SUBPROCESSES'].append(
-#     subprocess.Popen([
-#         BASE_FOLDER + (
-#             '\\venv_scheduling_server\\Scripts\\python' if app.config['PLATFORM'] == 'Windows' else
-#             '/venv_scheduling_server/bin/python'),
-#         BASE_FOLDER + os_normalize_path('\\script_scheduler.py'),
-#         socket.gethostbyname(socket.gethostname()),
-#         str(SCRIPT_SERVER_PORT)],
-#         cwd=BASE_FOLDER,
-#         shell=True
-#     )
-# )
+app.config['SUBPROCESSES'].append(
+    subprocess.Popen([
+        BASE_FOLDER + (
+            '\\venv_scheduling_server\\Scripts\\python' if app.config['PLATFORM'] == 'Windows' else
+            '/venv_scheduling_server/bin/python'),
+        BASE_FOLDER + os_normalize_path('\\script_scheduler.py'),
+        socket.gethostbyname(socket.gethostname()),
+        str(SCRIPT_SERVER_PORT)],
+        cwd=BASE_FOLDER,
+        shell=True
+    )
+)
 
 def on_server_shutdown():
     for server_subprocess in app.config['SUBPROCESSES']:
