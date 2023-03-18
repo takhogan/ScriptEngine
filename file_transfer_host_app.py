@@ -73,14 +73,14 @@ app.config['WHITELIST_IPS'] = whitelist
 
 app.config['SUBPROCESSES'].append(
     subprocess.Popen([
-        BASE_FOLDER + (
-            '\\venv_scheduling_server\\Scripts\\python' if app.config['PLATFORM'] == 'Windows' else
-            '/venv_scheduling_server/bin/python'),
-        BASE_FOLDER + os_normalize_path('\\script_scheduler.py'),
+        (
+            '\\venv_scheduling_server\\Scripts\\python3' if app.config['PLATFORM'] == 'Windows' else
+            'venv_scheduling_server/bin/python3'
+        ),
+        os_normalize_path('script_scheduler.py'),
         socket.gethostbyname(socket.gethostname()),
         str(SCRIPT_SERVER_PORT)],
-        cwd=BASE_FOLDER,
-        shell=True
+        cwd=BASE_FOLDER
     )
 )
 

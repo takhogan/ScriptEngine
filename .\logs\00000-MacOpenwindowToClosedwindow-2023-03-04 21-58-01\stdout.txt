@@ -1,0 +1,2 @@
+/Users/takhogan/Dropbox/Mac (2)/Documents/ScriptEngine/ScriptEngine/script_manager.py: -c: line 0: syntax error near unexpected token `2'
+/Users/takhogan/Dropbox/Mac (2)/Documents/ScriptEngine/ScriptEngine/script_manager.py: -c: line 0: `/Users/takhogan/Dropbox/Mac (2)/Documents/ScriptEnginevenv/bin/python3'

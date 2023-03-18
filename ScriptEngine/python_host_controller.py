@@ -19,6 +19,7 @@ from script_engine_utils import is_null
 
 import matplotlib.pyplot as plt
 import time
+from device_action_interpeter import DeviceActionInterpreter
 from script_execution_state import ScriptExecutionState
 from scipy.stats import truncnorm
 from click_action_helper import ClickActionHelper
@@ -28,7 +29,6 @@ from rv_helper import RandomVariableHelper
 from script_engine_utils import generate_context_switch_action
 from forward_detect_peek_helper import ForwardDetectPeekHelper
 
-KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
 
 class python_host:
     def __init__(self, props):
@@ -44,6 +44,21 @@ class python_host:
                   'observed :', height, width)
         self.props['width'] = width
         self.props['height'] = height
+
+    def screenshot(self):
+        return cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR)
+
+    def keyUp(self, key):
+        pyautogui.keyUp(key)
+
+    def keyDown(self, key):
+        pyautogui.keyDown(key)
+
+    def press(self, key):
+        pyautogui.press(key)
+
+    def hotkey(self, keys):
+        pyautogui.hotkey(keys)
 
     def run_script(self, action, state):
         # print('run_script: ', action)
@@ -62,9 +77,6 @@ class python_host:
             print('shellScript-' + str(action["actionGroup"]), ' starting process ', action["actionData"]['shellScript'], ' without awaiting output')
             proc = subprocess.Popen(action["actionData"]["shellScript"], cwd="/", shell=True)
             return state
-
-    def screenshot(self):
-        return cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR)
 
 
     def handle_action(self, action, state, context, log_level, log_folder):
@@ -105,63 +117,7 @@ class python_host:
             pyautogui.scroll(action["actionData"]["scrollDistance"])
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "keyboardAction":
-            if action["actionData"]["keyboardActionType"] == "keyPress":
-                print('keyboard-expression-' + str(action["actionGroup"]), ' type: ',
-                      action["actionData"]["keyboardActionType"], ' expression: ',
-                      action["actionData"]["keyboardExpression"], ' isHotKey: ',
-                      action["actionData"]["isHotKey"] == 'isHotKey')
-                if action["actionData"]["isHotKey"] == 'isHotKey':
-                    pyautogui.hotkey(*action["actionData"]["keyboardExpression"].split(","))
-                else:
-                    is_escaped_char = False
-                    escaped_char = ''
-                    for char_index,expression_char in enumerate(str(action["actionData"]["keyboardExpression"])):
-                        if is_escaped_char:
-                            if expression_char == '}':
-                                is_escaped_char = False
-                                if escaped_char in KEYBOARD_KEYS:
-                                    pyautogui.press(escaped_char)
-                                else:
-                                    eval_expression = str(eval(escaped_char, state.copy()))
-                                    for eval_expression_char in eval_expression:
-                                        pyautogui.press(eval_expression_char)
-                                escaped_char = ''
-                            else:
-                                escaped_char += expression_char
-                        elif expression_char == '{':
-                            is_escaped_char = True
-                        else:
-                            pyautogui.press(expression_char)
-            elif action["actionData"]["keyboardActionType"] == "keyPressAndHold":
-                if action["actionData"]["isHotKey"] == 'isHotKey':
-                    hotKeyKeys = action["actionData"]["keyboardExpression"].split(",")
-                    for hotKeyKey in hotKeyKeys:
-                        pyautogui.keyDown(hotKeyKey)
-                    time.sleep(RandomVariableHelper.get_rv_val(action))
-                    for hotKeyKey in reversed(hotKeyKeys):
-                        pyautogui.keyUp(hotKeyKey)
-                else:
-                    is_escaped_char = False
-                    escaped_char = ''
-                    keyPressKeys = []
-                    for char_index,expression_char in enumerate(action["actionData"]["keyboardExpression"]):
-                        if is_escaped_char:
-                            if expression_char == '}':
-                                is_escaped_char = False
-                                keyPressKeys.append(escaped_char)
-                                escaped_char = ''
-                            else:
-                                escaped_char += expression_char
-                        elif expression_char == '{':
-                            is_escaped_char = True
-                        else:
-                            keyPressKeys.append(expression_char)
-                    for keyPressKey in keyPressKeys:
-                        pyautogui.keyDown(keyPressKey)
-                    time.sleep(RandomVariableHelper.get_rv_val(action))
-                    for keyPressKey in keyPressKeys:
-                        pyautogui.keyUp(keyPressKey)
-            return ScriptExecutionState.SUCCESS, state, context
+            DeviceActionInterpreter.parse_keyboard_action(self, action, state, context)
         # elif action["actionName"] == "detectScene":
         #     forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
         #     if forward_peek_result is not None:
