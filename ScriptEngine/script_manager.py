@@ -66,9 +66,9 @@ def load_and_run(script_name, timeout, constants=None, start_time=None):
     main_script = ScriptExecutor(script_object, timeout, state=constants, start_time=start_time)
     try:
         main_script.run(log_level='INFO')
-    except Exception:
+    except Exception as e:
         print('exception occured!')
-        pass
+        print(e)
     print('completed script ', script_name, datetime.datetime.now())
     update_running_scripts_file(script_name, 'pop')
 

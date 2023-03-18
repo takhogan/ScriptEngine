@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/ScriptComposer.iml" filepath="$PROJECT_DIR$/.idea/ScriptComposer.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/ScriptEngine.iml" filepath="$PROJECT_DIR$/.idea/ScriptEngine.iml" />
     </modules>
   </component>
 </project>

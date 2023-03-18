@@ -12,8 +12,6 @@ from waitress import serve
 
 from file_transfer_host_app import app#, cache
 # from ScriptEngine.script_engine_constants import RUNNING_SCRIPTS_PATH
-RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
-RUNNING_EVENTS_PATH = './tmp/running_events.json'
 
 from flask import Flask, request, redirect, Response, jsonify, make_response, send_file, send_from_directory, render_template
 from werkzeug.utils import secure_filename
@@ -25,6 +23,7 @@ import threading
 import sys
 import platform
 from utils.file_transfer_host_utils import os_normalize_path
+from utils.script_status_utils import *
 
 ALLOWED_EXTENSIONS = set(['zip'])
 
@@ -75,7 +74,6 @@ def get_library_zip(library_zip_path, refresh_cache=True):
         print('caching result')
         SERVER_CACHE['LIBRARY_ZIP'] = BytesIO(stream.getvalue())
         return stream
-
 
 # To send back a library script file it must be a zip file
 @app.route('/library', strict_slashes=False)
@@ -239,33 +237,6 @@ def enqueue_script(scriptname):
     return ('<p> Added ' + scriptname + ' to queue. Now running : ' + str(running_scripts) + '  </p>' +\
             COMPONENTS['DASHBOARD BUTTON'], 200)
 
-
-
-
-def get_running_scripts():
-    if not os.path.exists(RUNNING_SCRIPTS_PATH):
-        return 'None'
-
-    with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
-        try:
-            running_scripts = json.load(running_script_file)
-        except json.JSONDecodeError:
-            clear_running_scripts()
-            running_scripts = 'None'
-        return str(running_scripts)
-
-def get_running_events():
-    if not os.path.exists(RUNNING_EVENTS_PATH):
-        return 'None'
-
-    with open(RUNNING_EVENTS_PATH, 'r') as running_events_file:
-        try:
-            running_events = json.load(running_events_file)
-        except json.JSONDecodeError:
-            clear_running_events()
-            running_events = 'None'
-        return str(running_events)
-
 @app.route('/queue', methods=['GET'], strict_slashes=False)
 def show_queue():
     return (get_running_scripts(), 200)
@@ -281,15 +252,23 @@ def get_space_remaining():
     # bytes_free = str(round(bytes_free_val / 1000000000, 2)) + 'GB free'
     return '<p>' + bytes_free +'</p><br>'
 
+def to_paragraph_blocks(input_str):
+    input_str = input_str.replace(' ', '&nbsp;')
+    return ''.join(list(map(lambda line: '<p>' + line + '</p>', input_str.split('\n'))))
+
 @app.route('/dashboard', methods=['GET'], strict_slashes=False)
 def show_dashboard():
     capture_img = "<img style=\"width:100%;max-width:600px;\" src=\"/capture\"><br>"
-    running_scripts = get_running_scripts() + "<a href=\"/reset_scripts\"/> Clear Scripts </a>"  + '<br>'
-    running_events = get_running_events() + "<a href=\"/reset\"/> Clear All </a>"  + '<br>'
+    running_scripts = get_running_scripts_status() + "<a href=\"/reset_script\"/> Clear Running Script </a>" +\
+                      "<a href=\"/reset_scripts\"/> Clear All Scripts </a>" + '<br>'
+    running_events = to_paragraph_blocks(get_running_events_status()) + "<a href=\"/reset_event\"/> Clear Running Event </a>" + \
+                      "<a href=\"/reset_events\"/> Clear All Events </a>" + '<br>'
+    completed_events = to_paragraph_blocks(get_completed_events_status()) + "<a href=\"/reset_completed_events\"/> Clear Completed Events </a>" + '<br>'
+    clear_all = "<a href=\"/reset\"/> Clear All </a>"  + '<br>'
     file_server = '<a href=\"http://' + request.host.split(':')[0] + ':3848/\"> File Server </a><br>'
     space_remaining = get_space_remaining()
     runnable_scripts = get_runnable_scripts()
-    return (capture_img + running_scripts + running_events + file_server + space_remaining + runnable_scripts, 200)
+    return (capture_img + running_scripts + running_events + completed_events + clear_all + file_server + space_remaining + runnable_scripts, 200)
 
 
 def get_runnable_scripts():
@@ -345,19 +324,50 @@ def restart_server():
     return ('<p> not restarting server </p>' +\
             '<a href=/run> Click here to run a script </a>', 201)
 
+def clear_running_script():
+    running_scripts = []
+    if os.path.exists(RUNNING_SCRIPTS_PATH):
+        with open(RUNNING_SCRIPTS_PATH, 'r') as running_scripts_file:
+            running_scripts = json.load(running_scripts_file)
+    if len(running_scripts) > 0:
+        running_scripts = running_scripts[1:]
+    with open(RUNNING_SCRIPTS_PATH, 'w') as running_scripts_file:
+        json.dump(running_scripts, running_scripts_file)
+
 def clear_running_scripts():
     if os.path.exists(RUNNING_SCRIPTS_PATH):
         os.remove(RUNNING_SCRIPTS_PATH)
+
+def clear_running_event():
+    running_events = []
+    if os.path.exists(RUNNING_EVENTS_PATH):
+        with open(RUNNING_EVENTS_PATH, 'r') as running_events_file:
+            running_events = json.load(running_events_file)
+    if len(running_events) > 0:
+        running_events = running_events[1:]
+    with open(RUNNING_EVENTS_PATH, 'w') as running_events_file:
+        json.dump(running_events, running_events_file)
 
 def clear_running_events():
     if os.path.exists(RUNNING_EVENTS_PATH):
         os.remove(RUNNING_EVENTS_PATH)
 
+def clear_completed_events():
+    if os.path.exists(COMPLETED_EVENTS_PATH):
+        os.remove(COMPLETED_EVENTS_PATH)
+
 @app.route('/reset', methods=['GET'], strict_slashes=False)
 def reset_all():
     clear_running_scripts()
     clear_running_events()
-    return ('<p>running scripts and events cleared</p>' + \
+    clear_completed_events()
+    return ('<p>cleared all temp files</p>' + \
+            COMPONENTS["DASHBOARD BUTTON"], 201)
+
+@app.route('/reset_script', methods=['GET'], strict_slashes=False)
+def reset_running_script():
+    clear_running_script()
+    return ('<p>running script cleared</p>' + \
             COMPONENTS["DASHBOARD BUTTON"], 201)
 
 @app.route('/reset_scripts', methods=['GET'], strict_slashes=False)
@@ -366,10 +376,22 @@ def reset_running_scripts():
     return ('<p>running scripts cleared</p>' + \
             COMPONENTS["DASHBOARD BUTTON"], 201)
 
+@app.route('/reset_event', methods=['GET'], strict_slashes=False)
+def reset_running_event():
+    clear_running_event()
+    return ('<p>running event cleared</p>' + \
+            COMPONENTS["DASHBOARD BUTTON"], 201)
+
 @app.route('/reset_events', methods=['GET'], strict_slashes=False)
 def reset_running_events():
     clear_running_events()
     return ('<p>running events cleared</p>' + \
+            COMPONENTS["DASHBOARD BUTTON"], 201)
+
+@app.route('/reset_completed_events', methods=['GET'], strict_slashes=False)
+def reset_completed_events():
+    clear_completed_events()
+    return ('<p>completed events cleared</p>' + \
             COMPONENTS["DASHBOARD BUTTON"], 201)
 
 @app.route('/img-paths', methods=['GET'], strict_slashes=False)
@@ -443,6 +465,8 @@ def capture():
 
     # https://stackoverflow.com/questions/7877282/how-to-send-image-generated-by-pil-to-browser
     def serve_pil_image(pil_img):
+        if platform.system() == 'Darwin':
+            pil_img = pil_img.convert('RGB')
         img_io = BytesIO()
         pil_img.save(img_io, 'JPEG', quality=70)
         img_io.seek(0)

@@ -22,6 +22,7 @@ import itertools
 import pyautogui
 
 sys.path.append("..")
+from device_action_interpeter import DeviceActionInterpreter
 from script_execution_state import ScriptExecutionState
 from click_path_generator import ClickPathGenerator
 from image_matcher import ImageMatcher
@@ -32,6 +33,86 @@ from detect_object_helper import DetectObjectHelper
 from forward_detect_peek_helper import ForwardDetectPeekHelper
 
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
+KEY_TO_KEYCODE = {
+    "a": "KEYCODE_A",
+    "b": "KEYCODE_B",
+    "c": "KEYCODE_C",
+    "d": "KEYCODE_D",
+    "e": "KEYCODE_E",
+    "f": "KEYCODE_F",
+    "g": "KEYCODE_G",
+    "h": "KEYCODE_H",
+    "i": "KEYCODE_I",
+    "j": "KEYCODE_J",
+    "k": "KEYCODE_K",
+    "l": "KEYCODE_L",
+    "m": "KEYCODE_M",
+    "n": "KEYCODE_N",
+    "o": "KEYCODE_O",
+    "p": "KEYCODE_P",
+    "q": "KEYCODE_Q",
+    "r": "KEYCODE_R",
+    "s": "KEYCODE_S",
+    "t": "KEYCODE_T",
+    "u": "KEYCODE_U",
+    "v": "KEYCODE_V",
+    "w": "KEYCODE_W",
+    "x": "KEYCODE_X",
+    "y": "KEYCODE_Y",
+    "z": "KEYCODE_Z",
+    "0": "KEYCODE_0",
+    "1": "KEYCODE_1",
+    "2": "KEYCODE_2",
+    "3": "KEYCODE_3",
+    "4": "KEYCODE_4",
+    "5": "KEYCODE_5",
+    "6": "KEYCODE_6",
+    "7": "KEYCODE_7",
+    "8": "KEYCODE_8",
+    "9": "KEYCODE_9",
+    "alt": "KEYCODE_ALT_LEFT",
+    "altleft": "KEYCODE_ALT_LEFT",
+    "altright": "KEYCODE_ALT_RIGHT",
+    "backspace": "KEYCODE_DEL",
+    "capslock": "KEYCODE_CAPS_LOCK",
+    "ctrl": "KEYCODE_CTRL_LEFT",
+    "ctrlleft": "KEYCODE_CTRL_LEFT",
+    "ctrlright": "KEYCODE_CTRL_RIGHT",
+    "delete": "KEYCODE_DEL",
+    "down": "KEYCODE_DPAD_DOWN",
+    "end": "KEYCODE_MOVE_END",
+    "enter": "KEYCODE_ENTER",
+    "esc": "KEYCODE_ESCAPE",
+    "f1": "KEYCODE_F1",
+    "f2": "KEYCODE_F2",
+    "f3": "KEYCODE_F3",
+    "f4": "KEYCODE_F4",
+    "f5": "KEYCODE_F5",
+    "f6": "KEYCODE_F6",
+    "f7": "KEYCODE_F7",
+    "f8": "KEYCODE_F8",
+    "f9": "KEYCODE_F9",
+    "f10": "KEYCODE_F10",
+    "f11": "KEYCODE_F11",
+    "f12": "KEYCODE_F12",
+    "home": "KEYCODE_MOVE_HOME",
+    "insert": "KEYCODE_INSERT",
+    "left": "KEYCODE_DPAD_LEFT",
+    "menu": "KEYCODE_MENU",
+    "numlock": "KEYCODE_NUM_LOCK",
+    "pageup": "KEYCODE_PAGE_UP",
+    "pagedown": "KEYCODE_PAGE_DOWN",
+    "pause": "KEYCODE_MEDIA_PAUSE",
+    "printscreen": "KEYCODE_SYSRQ",
+    "right": "KEYCODE_DPAD_RIGHT",
+    "scrolllock": "KEYCODE_SCROLL_LOCK",
+    "shift": "KEYCODE_SHIFT",
+    "shiftleft": "KEYCODE_SHIFT_LEFT",
+    "shiftright": "KEYCODE_SHIFT_RIGHT",
+    "space": "KEYCODE_SPACE",
+    "tab": "KEYCODE_TAB",
+    "up": "KEYCODE_DPAD_UP"
+}
 
 class adb_host:
     def __init__(self, props, host_os, adb_ip):
@@ -151,6 +232,25 @@ class adb_host:
             if source_im is None:
                 exit(478)
         return cv2.cvtColor(np.array(source_im), cv2.COLOR_RGB2BGR)
+
+    def keyUp(self, key):
+        print('adb keypress and hold unimplemented!')
+        pyautogui.keyUp(key)
+
+    def keyDown(self, key):
+        print('adb keypress and hold unimplemented!')
+        pyautogui.keyDown(key)
+
+    def press(self, key):
+        keycode = KEY_TO_KEYCODE[key]
+        key_input_string = "input keyevent \"{}\"".format(keycode)
+        shell_process = subprocess.Popen([self.adb_path, 'shell'],
+                                         stdin=subprocess.PIPE)
+        shell_process.communicate(key_input_string.encode('utf-8'))
+
+    def hotkey(self, keys):
+        print('adb hotkey unimplemented!')
+        pyautogui.hotkey(keys)
 
     def save_screenshot(self, save_name):
         pass
@@ -885,7 +985,7 @@ class adb_host:
             # self.state[action["actionData"]["outputVarName"]] = expression
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "keyboardAction":
-            return self.host_os.handle_action(action, state, context, log_level, log_folder)
+            return DeviceActionInterpreter.parse_keyboard_action(self, action, state, context)
         else:
             print("action uninplemented on adb " + action["actionName"])
             exit(0)
