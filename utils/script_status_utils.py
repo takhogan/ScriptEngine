@@ -163,7 +163,10 @@ def check_terminate_signal(event_name):
     running_events = []
     if os.path.exists(RUNNING_EVENTS_PATH):
         with open(RUNNING_EVENTS_PATH, 'r') as running_events_file:
-            running_events = json.load(running_events_file)
+            try:
+                running_events = json.load(running_events_file)
+            except JSONDecodeError:
+                running_events = []
     return not (len(running_events) > 0 and running_events[0]['sequence_name'] == event_name)
 
 
@@ -176,7 +179,7 @@ def await_script_load(event_name, script_name, is_await_queue, request_url):
             break
 
         if is_await_queue:
-            requests.get(request_url)
+            print(requests.get(request_url))
         elif check_count > MAX_CHECK_COUNT:
             break
         else:
@@ -225,8 +228,10 @@ def await_event_start(event_name):
         if os.path.exists(RUNNING_EVENTS_PATH):
             with open(RUNNING_EVENTS_PATH, 'r') as running_events_file:
                 running_events = json.load(running_events_file)
-        if len(running_events) > 0 and running_events[0]['sequence_name'] == event_name and running_events[0]['status'] == 'started':
+
+        if len(running_events) > 0 and running_events[0]['sequence_name'] == event_name and running_events[0]['status'] == 'running':
             return True
+        time.sleep(60)
 
 
 if __name__ == '__main__':

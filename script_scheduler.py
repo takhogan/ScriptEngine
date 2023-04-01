@@ -115,7 +115,8 @@ class ScriptScheduler:
                 try:
                     creds.refresh(Request())
                     needs_refresh = False
-                except RefreshError:
+                except RefreshError as r:
+                    print('refresh error!', r)
                     needs_refresh = True
                     pass
             if needs_refresh:
@@ -129,10 +130,12 @@ class ScriptScheduler:
                     (datetime.datetime.utcnow() + datetime.timedelta(minutes=10)).strftime(
                         "%Y-%m-%dT%H:%M:%S") + 'Z'
                 )
-
+                self.parse_event_queue()
                 await_event_start(REFRESH_EVENT_NAME)
                 # running_events['REFRESH_GOOGLE_TOKEN_SCRIPT'] = {}
 
+            if force_refresh or needs_refresh:
+                print('running local refresh server')
                 flow = InstalledAppFlow.from_client_secrets_file(
                     'assets/credentials.json', SCOPES
                 )
@@ -304,6 +307,7 @@ class ScriptScheduler:
         if check_terminate_signal(event_name):
             print('received terminate signal')
             return
+
         utcnow = datetime.datetime.utcnow()
         if timeout > utcnow:
             duration = timeout - utcnow
