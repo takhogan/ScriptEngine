@@ -15,10 +15,16 @@ class DeviceActionInterpreter:
         print('keyboard-expression-' + str(keyboard_action["actionGroup"]), ' type: ',
               keyboard_action["actionData"]["keyboardActionType"], ' expression: ',
               keyboard_action["actionData"]["keyboardExpression"], ' isHotKey: ',
-              keyboard_action["actionData"]["isHotKey"] == 'isHotKey')
+              keyboard_action["actionData"]["isHotKey"] == 'isHotKey',
+              (
+                  keyboard_action["actionData"]["keyboardExpression"].strip()
+              ).split(",") if
+              keyboard_action["actionData"]["isHotKey"] == 'isHotKey' else '')
         if keyboard_action["actionData"]["isHotKey"] == 'isHotKey':
             if keyboard_action["actionData"]["keyboardActionType"] == "keyPress":
-                device.hotkey(*keyboard_action["actionData"]["keyboardExpression"].split(","))
+                device.hotkey((
+                    keyboard_action["actionData"]["keyboardExpression"].strip()
+                ).split(","))
             elif keyboard_action["actionData"]["keyboardActionType"] == "keyPressAndHold":
                 hotKeyKeys = keyboard_action["actionData"]["keyboardExpression"].split(",")
                 for hotKeyKey in hotKeyKeys:

@@ -331,8 +331,11 @@ def clear_running_script():
             running_scripts = json.load(running_scripts_file)
     if len(running_scripts) > 0:
         running_scripts = running_scripts[1:]
-    with open(RUNNING_SCRIPTS_PATH, 'w') as running_scripts_file:
-        json.dump(running_scripts, running_scripts_file)
+    if len(running_scripts) > 0:
+        with open(RUNNING_SCRIPTS_PATH, 'w') as running_scripts_file:
+            json.dump(running_scripts, running_scripts_file)
+    elif os.path.exists(RUNNING_SCRIPTS_PATH):
+        os.remove(RUNNING_SCRIPTS_PATH)
 
 def clear_running_scripts():
     if os.path.exists(RUNNING_SCRIPTS_PATH):
@@ -378,12 +381,18 @@ def reset_running_scripts():
 
 @app.route('/reset_event', methods=['GET'], strict_slashes=False)
 def reset_running_event():
-    clear_running_event()
+    running_events = get_running_events()
+    if len(running_events) > 0:
+        update_completed_events(running_events[0])
+        persist_event_status(running_events[0]["sequence_name"], None)
     return ('<p>running event cleared</p>' + \
             COMPONENTS["DASHBOARD BUTTON"], 201)
 
 @app.route('/reset_events', methods=['GET'], strict_slashes=False)
 def reset_running_events():
+    running_events = get_running_events()
+    for running_event in running_events:
+        update_completed_events(running_event)
     clear_running_events()
     return ('<p>running events cleared</p>' + \
             COMPONENTS["DASHBOARD BUTTON"], 201)

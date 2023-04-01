@@ -27,11 +27,10 @@ class ClickActionHelper:
                 )
         if var_name is not None and len(var_name) > 0:
             print('clickaction-' + str(action["actionGroup"]), ' reading from ', var_name)
-            input_points = eval(var_name, state)
+            input_points = eval(var_name, state.copy())
             # print('input_points: ', input_points, var_name, state)
             if len(input_points) > 0:
                 # potentially for loop here
-                next_input_points = input_points[1:]
                 input_point = input_points[0]
                 # if len(next_input_points) > 0:
                 #     context["run_queue"].append(
@@ -39,7 +38,6 @@ class ClickActionHelper:
                 #
                 #         }, action)
                 #     )
-                state[var_name] = next_input_points
                 if input_point["input_type"] == "rectangle":
                     width_coord = random.random() * input_point["width"]
                     height_coord = random.random() * input_point['height']

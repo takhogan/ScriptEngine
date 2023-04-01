@@ -64,7 +64,7 @@ app.secret_key = "Not reccomended to leave server running for too long as there 
 
 app.config['TEMP_FOLDER'] = TEMP_FOLDER
 app.config['ASSETS_FOLDER'] = ASSETS_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 250 * 1024 * 1024
+# app.config['MAX_CONTENT_LENGTH'] = 250 * 1024 * 1024
 with open(WHITELIST_PATH, 'r') as white_list_file:
     whitelist_json = json.load(white_list_file)
     whitelist = {key for key,value in whitelist_json.items() if value == 'T'}
@@ -74,7 +74,7 @@ app.config['WHITELIST_IPS'] = whitelist
 app.config['SUBPROCESSES'].append(
     subprocess.Popen([
         (
-            '\\venv_scheduling_server\\Scripts\\python3' if app.config['PLATFORM'] == 'Windows' else
+            'venv_scheduling_server\\Scripts\\python' if app.config['PLATFORM'] == 'Windows' else
             'venv_scheduling_server/bin/python3'
         ),
         os_normalize_path('script_scheduler.py'),

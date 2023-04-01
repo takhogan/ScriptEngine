@@ -666,8 +666,16 @@ class adb_host:
             return action_result, state, context
 
         elif action["actionName"] == "clickAction":
+            # if '__builtins__' in state:
+            #     print('deleting builtins')
+            #     del state['__builtins__']
+            # print('pre clickaction state ', state)
             var_name = action["actionData"]["inputExpression"]
             point_choice,state,context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
+            # if '__builtins__' in state:
+            #     print('deleting builtins')
+            #     del state['__builtins__']
+            # print('post clickaction state ', state)
             # point_choice = (
             # point_choice[0] * self.width / self.props['width'], point_choice[1] * self.height / self.props['height'])
             print('clickAction-' + str(action["actionGroup"]), ' input: ', var_name, ' output : ', point_choice)

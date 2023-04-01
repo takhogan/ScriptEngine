@@ -4,6 +4,7 @@ import time
 from dateutil import tz
 import os
 import json
+import traceback
 
 
 import datetime
@@ -66,9 +67,8 @@ def load_and_run(script_name, timeout, constants=None, start_time=None):
     main_script = ScriptExecutor(script_object, timeout, state=constants, start_time=start_time)
     try:
         main_script.run(log_level='INFO')
-    except Exception as e:
-        print('exception occured!')
-        print(e)
+    except:
+        traceback.print_exc()
     print('completed script ', script_name, datetime.datetime.now())
     update_running_scripts_file(script_name, 'pop')
 

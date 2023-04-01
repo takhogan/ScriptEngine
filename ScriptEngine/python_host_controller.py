@@ -58,7 +58,8 @@ class python_host:
         pyautogui.press(key)
 
     def hotkey(self, keys):
-        pyautogui.hotkey(keys)
+        print('keys : ', keys)
+        pyautogui.hotkey(*keys)
 
     def run_script(self, action, state):
         # print('run_script: ', action)
@@ -117,7 +118,7 @@ class python_host:
             pyautogui.scroll(action["actionData"]["scrollDistance"])
             return ScriptExecutionState.SUCCESS, state, context
         elif action["actionName"] == "keyboardAction":
-            DeviceActionInterpreter.parse_keyboard_action(self, action, state, context)
+            return DeviceActionInterpreter.parse_keyboard_action(self, action, state, context)
         # elif action["actionName"] == "detectScene":
         #     forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
         #     if forward_peek_result is not None:
