@@ -141,7 +141,7 @@ class ScriptScheduler:
                 )
                 # if issues here: https://github.com/googleapis/google-auth-library-python-oauthlib/issues/69
                 creds = flow.run_local_server(port=0)
-
+                await_script_completion(REFRESH_EVENT_NAME, REFRESH_GOOGLE_TOKEN_SCRIPT)
             # Save the credentials for the next run
             with open('assets/token.json', 'w') as token:
                 token.write(creds.to_json())
