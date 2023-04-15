@@ -211,6 +211,7 @@ class SystemHostController:
             first_loop = True
             state_copy = state.copy()
             in_variable = eval(action["actionData"]["inVariables"], state_copy)
+
             print('forLoopAction-' + str(action["actionGroup"]), ' inVariable : ', action["actionData"]["inVariables"], ' value: ', in_variable)
             for_variable_list = action["actionData"]["forVariables"].split(',')
             for for_variables in in_variable:
