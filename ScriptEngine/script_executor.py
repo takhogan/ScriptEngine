@@ -125,6 +125,8 @@ class ScriptExecutor:
         self.status = ScriptExecutionState.FINISHED
         self.context["action_attempts"] = [0] * len(self.actions)
         self.context["success_states"] = None
+        self.context["run_queue"] = None
+        self.run_queue = []
         if input_vars is not None:
             self.state.update(input_vars)
         # print('state (2) : ', self.state)
@@ -134,6 +136,10 @@ class ScriptExecutor:
         for [var_name, input_expression, default_value] in self.inputs:
             if (len(input_expression) == 0) or \
                ((default_value or default_value == "true") and (var_name in self.state and self.state[var_name] is not None)):
+                print(self.props['script_name'],' CONTROL FLOW: Parsing Input: ', var_name,
+                      " Value: ", self.state[var_name],
+                      " Default Parameter? ", default_value,
+                      " Overwriting Default? True" if default_value else "")
                 continue
             state_copy = self.state.copy()
             state_copy.update({
@@ -142,7 +148,10 @@ class ScriptExecutor:
             })
             eval_result = eval(input_expression, state_copy)
             self.state[var_name] = eval_result
-            print(self.props['script_name'] + ' CONTROL FLOW:   Parsing Input: ', var_name, " Value: ", eval_result)
+            print(self.props['script_name'], ' CONTROL FLOW: Parsing Input: ', var_name,
+                  " Value: ", eval_result,
+                  " Default Parameter? ", default_value,
+                  " Overwriting Default? False" if default_value else "")
 
     def log_action_details(self, action):
         now = datetime.datetime.now()
@@ -173,32 +182,34 @@ class ScriptExecutor:
                     detect_types_by_target_system[target_system].append([action_index,action])
                 else:
                     detect_types_by_target_system[target_system] = [[action_index,action]]
-        print(self.props['script_name'] + ' CONTROL FLOW: performing forward peek')
-        for target_system,actions in detect_types_by_target_system.items():
-            if target_system == 'adb':
-                self.adb_host.init_system()
-                screenshot = self.adb_host.screenshot()
-                for [action_index,action] in actions:
-                    self.log_action_details(action)
-                    action['actionData']['screencap_im_bgr'] = screenshot
-                    action['actionData']['detect_run_type'] = 'result_precalculation'
-                    action['actionData']['results_precalculated'] = False
-                    self.status, self.state, self.context = self.adb_host.handle_action(
-                        action, self.state, self.context, self.log_level, self.log_folder
-                    )
-                    self.actions[action_index] = self.context['action']
-            elif target_system == 'python':
-                screenshot = self.python_host.screenshot()
-                for [action_index,action] in actions:
-                    self.log_action_details(action)
-                    action['actionData']['screencap_im_bgr'] = screenshot
-                    action['actionData']['detect_run_type'] = 'result_precalculation'
-                    action['actionData']['results_precalculated'] = False
-                    self.status, self.state, self.context = self.python_host.handle_action(
-                        action, self.state, self.context, self.log_level, self.log_folder
-                    )
-                    self.actions[action_index] = self.context['action']
-        print(self.props['script_name'] + ' CONTROL FLOW: Finished forward peek')
+        detect_type_actions = detect_types_by_target_system.items()
+        if len(detect_type_actions) > 0:
+            print(self.props['script_name'] + ' CONTROL FLOW: performing forward peek')
+            for target_system,actions in detect_type_actions:
+                if target_system == 'adb':
+                    self.adb_host.init_system()
+                    screenshot = self.adb_host.screenshot()
+                    for [action_index,action] in actions:
+                        self.log_action_details(action)
+                        action['actionData']['screencap_im_bgr'] = screenshot
+                        action['actionData']['detect_run_type'] = 'result_precalculation'
+                        action['actionData']['results_precalculated'] = False
+                        self.status, self.state, self.context = self.adb_host.handle_action(
+                            action, self.state, self.context, self.log_level, self.log_folder
+                        )
+                        self.actions[action_index] = self.context['action']
+                elif target_system == 'python':
+                    screenshot = self.python_host.screenshot()
+                    for [action_index,action] in actions:
+                        self.log_action_details(action)
+                        action['actionData']['screencap_im_bgr'] = screenshot
+                        action['actionData']['detect_run_type'] = 'result_precalculation'
+                        action['actionData']['results_precalculated'] = False
+                        self.status, self.state, self.context = self.python_host.handle_action(
+                            action, self.state, self.context, self.log_level, self.log_folder
+                        )
+                        self.actions[action_index] = self.context['action']
+            print(self.props['script_name'] + ' CONTROL FLOW: Finished forward peek')
 
 
     def handle_action(self, action):
