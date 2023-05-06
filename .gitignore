@@ -15,6 +15,7 @@ assets/viber_credentials.json
 viber_credentials.json
 assets/credentials.json
 credentials.json
+assets/service_credentials.json
 assets/token.json
 token.json
 __pycache__/

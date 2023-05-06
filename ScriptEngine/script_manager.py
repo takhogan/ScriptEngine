@@ -64,7 +64,7 @@ def load_and_run(script_name, timeout, constants=None, start_time=None):
     script_object = parse_zip(script_name)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
-    main_script = ScriptExecutor(script_object, timeout, state=constants, start_time=start_time)
+    main_script = ScriptExecutor(script_object, timeout, script_name, state=constants, start_time=start_time)
     try:
         main_script.run(log_level='INFO')
     except:

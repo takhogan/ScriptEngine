@@ -150,11 +150,9 @@ def update_completed_events(event_object):
     event_object['start_time'] = event_object['start_time'].strftime(
         "%Y-%m-%dT%H:%M:%S"
     ) + 'Z'
-    print(' assigning timeout ', event_object['timeout'])
     event_object['timeout'] = event_object['timeout'].strftime(
         "%Y-%m-%dT%H:%M:%S"
     ) + 'Z'
-    print('assigning ', event_object)
     new_completed_events.append(event_object)
     with open(COMPLETED_EVENTS_PATH, 'w') as completed_events_file:
         json.dump(new_completed_events, completed_events_file)
@@ -175,7 +173,7 @@ def await_script_load(event_name, script_name, is_await_queue, request_url):
     check_count = 0
     while True:
         if check_terminate_signal(event_name):
-            print('received terminate signal')
+            print(event_name, 'received event terminate signal')
             break
 
         if is_await_queue:
@@ -202,9 +200,9 @@ def await_script_load(event_name, script_name, is_await_queue, request_url):
 
 def await_script_completion(event_name, script_name):
     while True:
-        print('Awaiting Script Completion ', script_name)
+        print(event_name, ' awaiting script completion: ', script_name)
         if check_terminate_signal(event_name):
-            print('received terminate signal')
+            print(event_name, 'received event terminate signal')
             break
         running_scripts = []
         if os.path.exists(RUNNING_SCRIPTS_PATH):
@@ -217,12 +215,20 @@ def await_script_completion(event_name, script_name):
         time.sleep(60)
     return False
 
+def await_event_queue_availability():
+    while True:
+        print('Awaiting Event Queue Availability')
+        running_events = get_running_events()
+        if len(running_events) == 0:
+            return True
+        time.sleep(60)
+
 
 def await_event_start(event_name):
     while True:
         print('Awaiting Event Start ', event_name)
         if check_terminate_signal(event_name):
-            print('received terminate signal')
+            print(event_name, 'received event terminate signal')
             break
         running_events = []
         if os.path.exists(RUNNING_EVENTS_PATH):

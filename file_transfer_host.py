@@ -258,7 +258,7 @@ def to_paragraph_blocks(input_str):
 
 @app.route('/dashboard', methods=['GET'], strict_slashes=False)
 def show_dashboard():
-    capture_img = "<img style=\"width:100%;max-width:600px;\" src=\"/capture\"><br>"
+    capture_img = "<a href=\"/capture\"/> <img style=\"width:100%;max-width:600px;\" src=\"/capture\"> </a><br>"
     running_scripts = get_running_scripts_status() + "<a href=\"/reset_script\"/> Clear Running Script </a>" +\
                       "<a href=\"/reset_scripts\"/> Clear All Scripts </a>" + '<br>'
     running_events = to_paragraph_blocks(get_running_events_status()) + "<a href=\"/reset_event\"/> Clear Running Event </a>" + \

@@ -14,12 +14,6 @@ class DetectObjectHelper:
             print('detectObject-' + str(action["actionGroup"]), ' fetching variable ', var_name, 'from state')
             input_area = eval(var_name, state)
             if len(input_area) > 0:
-                # potentially for loop here
-                # next_input_points = input_area[1:]
-                input_area = input_area[0]
-                # if len(next_input_points) > 0:
-                #     context["replay_stack"].append(action)
-                # state[var_name] = next_input_points
                 if action["actionData"]["targetContext"] == "detectResult":
                     if input_area["input_type"] == "rectangle":
                         pass
@@ -58,7 +52,7 @@ class DetectObjectHelper:
         for match in matches[1:max_matches]:
             switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
                 "state": {
-                    action['actionData']['outputVarName']: [match]
+                    action['actionData']['outputVarName']: match
                 }
             })
             if detect_run_type_normal:
@@ -68,7 +62,7 @@ class DetectObjectHelper:
             else:
                 update_dict['context']['run_queue'].append(switch_action)
         if detect_run_type_normal:
-            state[action['actionData']['outputVarName']] = [matches[0]]
+            state[action['actionData']['outputVarName']] = matches[0]
         else:
-            update_dict['state'][action['actionData']['outputVarName']] = [matches[0]]
+            update_dict['state'][action['actionData']['outputVarName']] = matches[0]
         return state, context, update_dict
