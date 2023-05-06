@@ -121,6 +121,7 @@ class ScriptScheduler:
                     pass
             if needs_refresh:
                 print('calling refresh script')
+                await_event_queue_availability()
                 self.parse_and_run_script_sequence_def(
                     REFRESH_EVENT_NAME,
                     self.clean_description(REFRESH_GOOGLE_TOKEN_SCRIPT),
@@ -142,6 +143,15 @@ class ScriptScheduler:
                 # if issues here: https://github.com/googleapis/google-auth-library-python-oauthlib/issues/69
                 creds = flow.run_local_server(port=0)
                 await_script_completion(REFRESH_EVENT_NAME, REFRESH_GOOGLE_TOKEN_SCRIPT)
+
+            if (creds and creds.expired and creds.refresh_token) or force_refresh:
+                print('reauthorizing with credentials')
+                try:
+                    creds.refresh(Request())
+                except RefreshError as r:
+                    print('refresh error!', r)
+                    exit(1)
+
             # Save the credentials for the next run
             with open('assets/token.json', 'w') as token:
                 token.write(creds.to_json())
@@ -175,28 +185,28 @@ class ScriptScheduler:
         except RefreshError as r_error:
             print('Encountered Token error while calling calendar API: ',r_error)
             print('Renewing Token')
-            self.initialize_service(force_refresh=True)
-            return
+            service,calendar_id = self.initialize_service(force_refresh=True)
+            return service,calendar_id
         except ConnectionResetError as cr_error:
             print('Encountered Connection Reset error while calling calendar API : ',cr_error)
             print('Waiting 60 seconds')
             time.sleep(60)
-            return
+            return service,calendar_id
         except socket.gaierror as gaierror:
             print('Encountered Socket error while calling calendar API : ',gaierror)
             print('Waiting 60 seconds')
             time.sleep(60)
-            return
+            return service,calendar_id
         except httplib2.error.ServerNotFoundError as sr_error:
             print('Encountered Server Not Found error while calling calendar API : ', sr_error)
             print('Waiting 60 seconds')
             time.sleep(60)
-            return
+            return service,calendar_id
         except ssl.SSLEOFError as ssl_error:
             print('Encountered SSL Error while calling calendar API : ', ssl_error)
             print('Waiting 60 seconds')
             time.sleep(60)
-            return
+            return service,calendar_id
         events = events_result.get('items', [])
 
         if not events:
@@ -239,9 +249,7 @@ class ScriptScheduler:
         print('active running events: ', get_running_events_status())
         print('completed events: ', get_completed_events_status())
         print('running scripts: ', running_scripts_str)
-
-        # with open(RUNNING_EVENTS_PATH, 'w') as running_events_file:
-        #     json.dump(running_events, running_events_file)
+        return service,calendar_id
 
     def run_script_sequence(self, running_event, event_name, script_sequence, timeout, base=True):
         print('starting sequence : ', script_sequence['sequence_name'])
@@ -305,7 +313,7 @@ class ScriptScheduler:
 
     def load_and_run(self, running_event, event_name, script_obj, timeout, constants=None):
         if check_terminate_signal(event_name):
-            print('received terminate signal')
+            print(event_name, ' received event terminate signal')
             return
 
         utcnow = datetime.datetime.utcnow()
@@ -455,7 +463,7 @@ class ScriptScheduler:
         service,calendar_id = self.initialize_service()
         print("Completed script scheduler setup, entering scheduler loop")
         while True:
-            self.check_and_execute_active_tasks(service, calendar_id)
+            service,calendar_id = self.check_and_execute_active_tasks(service, calendar_id)
             time.sleep(60)
 
 

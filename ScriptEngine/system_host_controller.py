@@ -10,6 +10,8 @@ import datetime
 import os
 import shutil
 
+from pymongo import MongoClient
+
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
 from script_execution_state import ScriptExecutionState
@@ -20,7 +22,8 @@ from script_engine_utils import generate_context_switch_action
 
 
 class SystemHostController:
-    def __init__(self, props):
+    def __init__(self, base_script_name, props):
+        self.base_script_name = base_script_name
         self.props = props
 
     def handle_action(self, action, state, context, log_level, log_folder):
@@ -244,9 +247,60 @@ class SystemHostController:
             print('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"])
             eval(action["actionData"]["codeBlock"], state_copy)
             status = ScriptExecutionState.SUCCESS
+        elif action["actionName"] == "databaseCRUD":
+            if action["actionData"]["databaseType"] == "mongoDB":
+                with open(SERVICE_CREDENTIALS_FILE_PATH, 'r') as service_credentials_file:
+                    mongo_credentials = json.load(service_credentials_file)["mongoDB"]
+                connection_string = "mongodb+srv://{}:{}@scriptenginecluster.44rpgo2.mongodb.net/?retryWrites=true&w=majority".format(
+                    mongo_credentials["username"],
+                    mongo_credentials["password"]
+                )
+                client = MongoClient(connection_string)
+                print(client)
+                if len(action["actionData"]["collectionName"]) > 0:
+                    collection_name = action["actionData"]["collectionName"]
+                else:
+                    collection_name = self.base_script_name
+                collection = getattr(client, collection_name)
+
+                if action["actionData"]["actionType"] == "insert":
+                    if len(action["actionData"]["key"]) > 0:
+                        new_item = {"key": action["actionData"]["key"],
+                                    "value": eval(action["actionData"]["value"], state.copy())}
+                    else:
+                        new_item = eval(action["actionData"]["value"], state.copy())
+                    result = collection.insert_one(new_item)
+                elif action["actionData"]["actionType"] == "update" or\
+                        action["actionData"]["actionType"] == "upsert":
+                    query = {"key": action["actionData"]["key"]}
+                    update_item = {"$set": {"value": eval(action["actionData"]["value"], state.copy())}}
+                    result = collection.update_one(
+                        query,
+                        update_item,
+                        upsert=(action["actionData"]["actionType"] == "upsert")
+                    )
+                elif action["actionData"]["actionType"] == "delete":
+                    query = {"key": action["actionData"]["key"]}
+                    result = collection.delete_one(query)
+                else:
+                    result = 'action type not implemented'
+                print('db action result: ', result)
+            elif action["actionData"]["databaseType"] == "oracle" or\
+                action["actionData"]["databaseType"] == "mysql":
+                pass
+                # just need DB name
+                # have the user input a SQL string to execute
+                # to insert variables user SQL variable substitution
+            else:
+                print("DB provider unimplemented")
+                exit(1)
         else:
             status = ScriptExecutionState.ERROR
             print("action unimplemented ")
             print(action)
-            exit(0)
+            exit(1)
         return status,state,context
+
+
+if __name__ == '__main__':
+    pass

@@ -50,7 +50,8 @@ DELAY_EXEMPT_ACTIONS = {
 
 
 class ScriptExecutor:
-    def __init__(self, script_obj, timeout, log_level='INFO', parent_folder='', start_time=None, context=None, state=None, create_log_folders=True):
+    def __init__(self, script_obj, timeout, base_script_name, log_level='INFO', parent_folder='', start_time=None, context=None, state=None, create_log_folders=True):
+        self.base_script_name = base_script_name
         self.props = script_obj['props']
         if start_time is None:
             self.refresh_start_time()
@@ -63,7 +64,7 @@ class ScriptExecutor:
         self.action_rows = script_obj["actionRows"]
         self.inputs = script_obj["inputs"]
         self.python_host = python_host(self.props.copy())
-        self.system_host = SystemHostController(self.props.copy())
+        self.system_host = SystemHostController(base_script_name, self.props.copy())
         self.adb_host = adb_host(self.props.copy(), self.python_host, '127.0.0.1:5555')
         # TODO IP shouldn't be hard coded
         self.include_scripts = script_obj['include']
@@ -310,6 +311,7 @@ class ScriptExecutor:
                     ref_script_executor = ScriptExecutor(
                         ref_script,
                         self.props["timeout"],
+                        self.base_script_name,
                         self.log_level,
                         parent_folder=self.log_folder,
                         context=child_context,
@@ -320,6 +322,7 @@ class ScriptExecutor:
                     ref_script_executor = ScriptExecutor(
                         ref_script,
                         self.props["timeout"],
+                        self.base_script_name,
                         self.log_level,
                         parent_folder=self.log_folder,
                         context=child_context,
