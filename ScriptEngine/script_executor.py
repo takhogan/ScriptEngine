@@ -138,7 +138,7 @@ class ScriptExecutor:
             if (len(input_expression) == 0) or \
                ((default_value or default_value == "true") and (var_name in self.state and self.state[var_name] is not None)):
                 print(self.props['script_name'],' CONTROL FLOW: Parsing Input: ', var_name,
-                      " Value: ", self.state[var_name],
+                      " Value: ", self.state[var_name] if var_name in self.state else 'None',
                       " Default Parameter? ", default_value,
                       " Overwriting Default? True" if default_value else "")
                 continue
@@ -275,14 +275,18 @@ class ScriptExecutor:
                                 context["parent_action"]["actionName"] == "searchPatternContinueAction"
 
             parsed_input_vars = list(
-                filter(lambda input_vars: input_vars != '', action["actionData"]["inputVars"].split(",")))
-            # print(' state (2.5) ', state)
-            # print(' parsed_input_vars : ', parsed_input_vars)
+                filter(lambda input_vars: input_vars != '', action["actionData"]["inputVars"].split(","))
+            )
             input_vars = {
                 input_var_key: state[input_var_key]
                 if input_var_key in state else None
                 for input_var_key in parsed_input_vars
             }
+            print(self.props["script_name"],
+                  'CONTROL FLOW passing inputs',
+                  parsed_input_vars,
+                  'from parent state to ',
+                  action["actionData"]["scriptName"], input_vars)
             # print(' state (3) : ', state)
             input_vars = None if len(input_vars) == 0 else input_vars
             # creates script engine object
