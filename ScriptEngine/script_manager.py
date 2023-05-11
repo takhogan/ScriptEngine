@@ -56,17 +56,17 @@ def update_running_scripts_file(scriptname, action):
                 with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
                     json.dump(running_scripts, running_script_file)
 
-def load_and_run(script_name, timeout, constants=None, start_time=None):
+def load_and_run(script_name, timeout, constants=None, start_time=None, log_level='info'):
     # if you want to open zip then you pass .zip in command line args
     update_running_scripts_file(script_name, 'push')
-    print('script start time: ', datetime.datetime.now(), ' script trigger time: ', start_time, ' scheduled end time: ', timeout)
+    print('SCRIPT_MANAGER: script start time: ', datetime.datetime.now(), ' script trigger time: ', start_time, ' scheduled end time: ', timeout)
     print('constants : ', constants)
     script_object = parse_zip(script_name)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
     main_script = ScriptExecutor(script_object, timeout, script_name, state=constants, start_time=start_time)
     try:
-        main_script.run(log_level='INFO')
+        main_script.run(log_level=log_level)
     except:
         traceback.print_exc()
     print('completed script ', script_name, datetime.datetime.now())
@@ -89,14 +89,20 @@ if __name__=='__main__':
         start_time_str = start_time.strftime('%Y-%m-%d %H-%M-%S')
     if n_args > 3:
         end_time = str_timeout_to_datetime_timeout(sys.argv[3], src='deployment_server').replace(tzinfo=tz.tzlocal())
+
     if n_args > 4:
+        log_level = sys.argv[4]
+    else:
+        log_level = 'info'
+    if n_args > 5:
         for arg_index in range(4, n_args):
             arg_split = sys.argv[arg_index].strip().split(':')
             constants[arg_split[0]] = arg_split[1]
-    print('SCRIPT MANAGER: loading script and running')
+    print('SCRIPT MANAGER: loading script and running with log level ', log_level)
     load_and_run(
         script_name,
         (start_time + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal()) if end_time is None else end_time,
         start_time=start_time_str,
-        constants=constants
+        constants=constants,
+        log_level=log_level
     )

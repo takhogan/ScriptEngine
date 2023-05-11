@@ -14,6 +14,7 @@ class ImageMatcher:
     def template_match(detectObject,
                        screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr, screencap_outputmask_gray,
                        detector_name, logs_path, script_mode, match_point,
+                       log_level='info',
                        check_image_scale=True,
                        output_cropping=None,
                        threshold=0.96, use_color=True, use_mask=True):
@@ -28,6 +29,7 @@ class ImageMatcher:
                 logs_path,
                 int(detectObject['actionData']['sourceScreenHeight']),
                 int(detectObject['actionData']['sourceScreenWidth']),
+                log_level=log_level,
                 check_image_scale=check_image_scale,
                 output_cropping=output_cropping,
                 threshold=threshold,
@@ -56,9 +58,10 @@ class ImageMatcher:
             exit(0)
 
         h, w = screencap_outputmask_gray.shape[0:2]
-        cv2.imwrite(logs_path + 'matching_overlay.png', result_im_bgr)
-        cv2.imwrite(logs_path + 'match_result.png', match_result * 255)
-        cv2.imwrite(logs_path + 'output_mask.png', screencap_outputmask_gray)
+        if log_level == 'info':
+            cv2.imwrite(logs_path + 'matching_overlay.png', result_im_bgr)
+            cv2.imwrite(logs_path + 'match_result.png', match_result * 255)
+            cv2.imwrite(logs_path + 'output_mask.png', screencap_outputmask_gray)
         n_matches = len(matches)
         print('matches : ', [match for match,score,match_area in matches], match_point)
         return [{
@@ -84,6 +87,7 @@ class ImageMatcher:
             source_screen_height,
             source_screen_width,
             check_image_scale,
+            log_level='info',
             output_cropping=None,
             threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
         # https://docs.opencv.org/3.4/de/da9/tutorial_template_matching.html
@@ -167,6 +171,7 @@ class ImageMatcher:
             screencap_search_bgr,
             screencap_outputmask_bgr,
             logs_path,
+            log_level=log_level,
             height_translation=height_translation,
             width_translation=width_translation,
             script_mode=script_mode,
@@ -182,6 +187,7 @@ class ImageMatcher:
             screencap_search_bgr,
             screencap_outputmask_bgr,
             logs_path,
+            log_level='info',
             height_translation=1,
             width_translation=1,
             script_mode='test', output_cropping=None):
@@ -235,7 +241,7 @@ class ImageMatcher:
                     )
                 )
                 # exit(0)
-                if script_mode == "train":
+                if script_mode == "train" and log_level == 'info':
                     # change name to fit image format
                     cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(
                         match_result[pt[1], pt[0]]) + '-img.png', match_img_bgr)

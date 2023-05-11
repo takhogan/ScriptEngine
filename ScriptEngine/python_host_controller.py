@@ -104,7 +104,7 @@ class python_host:
                     maxes = (np.repeat(action["actionData"]["max"], action["actionData"]["clickCount"]) - mean) / stddev
                     delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev) if action["actionData"]["clickCount"] > 1 else [truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]
 
-            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
+            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path, log_level=log_level)
             for click_count in range(0, action["actionData"]["clickCount"]):
                 pyautogui.click(x=point_choice[0], y=point_choice[1], button=action['actionData']['mouseButton'])
                 time.sleep(delays[click_count])
@@ -166,7 +166,7 @@ class python_host:
 
 
             screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
-            if self.props["scriptMode"] == "train":
+            if self.props["scriptMode"] == "train" and log_level == 'info':
                 cv2.imwrite(logs_path + '-search_img.png', screencap_search_bgr)
             is_detect_object_first_match = (
                         action['actionData']['detectActionType'] == 'detectObject' and action['actionData'][
@@ -184,6 +184,7 @@ class python_host:
                     action["actionData"]["positiveExamples"][0]["outputMask"],
                     self.props["dir_path"],
                     logs_path,
+                    log_level=log_level,
                     output_cropping=action["actionData"]["maskLocation"] if
                     (action["actionData"]["maskLocation"] != 'null' and
                      "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
@@ -204,6 +205,7 @@ class python_host:
                     logs_path,
                     self.props["scriptMode"],
                     match_point,
+                    log_level=log_level,
                     check_image_scale=check_image_scale,
                     output_cropping=action["actionData"]["maskLocation"] if
                     (action["actionData"]["maskLocation"] != 'null' and

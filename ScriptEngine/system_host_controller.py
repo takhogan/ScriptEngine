@@ -87,7 +87,9 @@ class SystemHostController:
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "sleepStatement":
             if str(action["actionData"]["inputExpression"]).strip() != '':
-                time.sleep(float(eval(str(action["actionData"]["inputExpression"]), state.copy())))
+                sleep_length = float(eval(str(action["actionData"]["inputExpression"]), state.copy()))
+                print('sleepStatement evaluated expression', action["actionData"]["inputExpression"], ' and sleeping for ', sleep_length, 's')
+                time.sleep(sleep_length)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "randomVariable":
             delays = RandomVariableHelper.get_rv_val(action)

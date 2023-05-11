@@ -311,7 +311,7 @@ class ScriptScheduler:
             running_event = None
         persist_event_status(event_name, running_event)
 
-    def load_and_run(self, running_event, event_name, script_obj, timeout, constants=None):
+    def load_and_run(self, running_event, event_name, script_obj, timeout, log_level='info', constants=None):
         if check_terminate_signal(event_name):
             print(event_name, ' received event terminate signal')
             return
@@ -329,8 +329,8 @@ class ScriptScheduler:
 
         print('duration ', duration)
         script_name = script_obj['script_name']
-        request_url = "http://{}/run/{}?timeout={}h{}m".format(
-            self.host_server_ip, script_name, duration_hours, duration_mins
+        request_url = "http://{}/run/{}?timeout={}h{}m&log_level={}".format(
+            self.host_server_ip, script_name, duration_hours, duration_mins, log_level
         ) + self.constants_to_url_params(constants)
 
         print('Script Scheduler invoking script: ', request_url)
