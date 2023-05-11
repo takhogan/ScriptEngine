@@ -19,6 +19,7 @@ class DetectSceneHelper:
             screencap_outputmask_bgr,
             dir_path,
             logs_path,
+            log_level='info',
             check_image_scale=True,
             output_cropping=None):
         mask_size = np.count_nonzero(scene_screencap_mask_single_channel)
@@ -54,10 +55,10 @@ class DetectSceneHelper:
                 location_val[1] + object_h,
             ), (0, 0, 255), 2
         )
-
-        cv2.imwrite(action_logs_path + '-screencap-matching-overlay.png', screencap_im_bgr)
-        cv2.imwrite(action_logs_path + '-screencap-masked.png', screencap_masked)
-        cv2.imwrite(action_logs_path + '-screencap-compare.png', screencap_compare)
+        if log_level == 'info':
+            cv2.imwrite(action_logs_path + '-screencap-matching-overlay.png', screencap_im_bgr)
+            cv2.imwrite(action_logs_path + '-screencap-masked.png', screencap_masked)
+            cv2.imwrite(action_logs_path + '-screencap-compare.png', screencap_compare)
         #TODO if the input is resized the coordinates will not be resized so there may be clicks in the wrong place
         output_mask_single_channel = sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].copy()
         if needs_rescale:

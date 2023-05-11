@@ -709,9 +709,14 @@ class ScriptExecutor:
         while self.status != ScriptExecutionState.FINISHED and\
                 self.status != ScriptExecutionState.FINISHED_FAILURE and\
                 self.status != ScriptExecutionState.ERROR:
+            print('0', datetime.datetime.now())
             self.execute_actions()
+            print('1', datetime.datetime.now())
             end_branch,end_script = self.check_if_done()
+            print('2', datetime.datetime.now())
+
             if end_script:
+                print('2.2', datetime.datetime.now())
                 break
             if self.status == ScriptExecutionState.FINISHED_BRANCH:
                 overall_status = ScriptExecutionState.SUCCESS
@@ -719,7 +724,9 @@ class ScriptExecutor:
                 self.status = ScriptExecutionState.FINISHED_BRANCH
         if overall_status == ScriptExecutionState.SUCCESS:
             self.status = ScriptExecutionState.FINISHED
+        print('2.5', datetime.datetime.now())
         self.on_script_completion()
+        print('3', datetime.datetime.now())
 
     def on_script_completion(self):
         if self.context["success_states"] is not None:

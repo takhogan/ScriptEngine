@@ -597,7 +597,7 @@ class adb_host:
             # print('post transform: ', screencap_im_bgr.shape)
 
             screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
-            if self.props["scriptMode"] == "train":
+            if self.props["scriptMode"] == "train" and log_level == 'info':
                 cv2.imwrite(logs_path + '-search_img.png', screencap_search_bgr)
             is_detect_object_first_match = (action['actionData']['detectActionType'] == 'detectObject' and action['actionData']['matchMode'] == 'firstMatch')
 
@@ -613,6 +613,7 @@ class adb_host:
                     action["actionData"]["positiveExamples"][0]["outputMask"],
                     self.props["dir_path"],
                     logs_path,
+                    log_level=log_level,
                     check_image_scale=check_image_scale,
                     output_cropping=action["actionData"]["maskLocation"] if
                     (action["actionData"]["maskLocation"] != 'null' and
@@ -642,6 +643,7 @@ class adb_host:
                     logs_path,
                     self.props["scriptMode"],
                     match_point,
+                    log_level=log_level,
                     check_image_scale=check_image_scale,
                     output_cropping=action["actionData"]["maskLocation"] if
                     (action["actionData"]["maskLocation"] != 'null' and
@@ -690,7 +692,7 @@ class adb_host:
                                                                                        "clickCount"] > 1 else [
                         truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]
 
-            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path)
+            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path, log_level)
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1])
                 time.sleep(delays[click_count])

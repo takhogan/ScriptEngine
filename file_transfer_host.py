@@ -147,12 +147,17 @@ def run_script(scriptname):
             timeout_val = request.args.get('timeout')
         else:
             timeout_val = '0h30m'
+        if 'log_level' in request.args:
+            log_level = request.args.get('log_level')
+        else:
+            log_level = 'info'
+
         if 'args' in request.args:
             script_constants = request.args.getlist('args')
         else:
             script_constants = []
 
-        def initialize_script_manager_args(scriptname, timeout_val, script_constants):
+        def initialize_script_manager_args(scriptname, timeout_val, script_constants, log_level):
             start_time = datetime.datetime.now()
             start_time_str = start_time.strftime('%Y-%m-%d %H-%M-%S')
             script_log_folder = os_normalize_path(app.config['LOGFILE_FOLDER'] + '0'.zfill(5) + '-' + scriptname + '-' + start_time_str + '\\')
@@ -160,11 +165,11 @@ def run_script(scriptname):
             timeout_val_split = timeout_val.split('h')
             end_time = start_time + datetime.timedelta(hours=int(timeout_val_split[0]),minutes=int(timeout_val_split[1][:-1]))
             end_time_str = end_time.strftime('%Y-%m-%d %H-%M-%S')
-            return scriptname, start_time_str, end_time_str, script_constants, script_log_folder
+            return scriptname, start_time_str, end_time_str, script_constants, script_log_folder, log_level
 
 
 
-        def run_in_thread(scriptname, start_time_str, end_time_str, script_constants, script_log_folder):
+        def run_in_thread(scriptname, start_time_str, end_time_str, script_constants, script_log_folder, log_level):
             print('running ', scriptname, 'from', start_time_str, 'to', end_time_str, 'with constants', script_constants)
             with open(script_log_folder + 'stdout.txt', 'w') as log_file:
                 shell_process = subprocess.Popen([
@@ -176,6 +181,7 @@ def run_script(scriptname):
                         scriptname,
                         start_time_str,
                         end_time_str,
+                        log_level,
                         *script_constants
                     ],
                     # shell=True,
@@ -202,11 +208,11 @@ def run_script(scriptname):
                     running_scripts = json.load(running_script_file)
                     script_thread = threading.Thread(
                         target=run_in_thread,
-                        args=initialize_script_manager_args(running_scripts[0],'0h30m',[])
+                        args=initialize_script_manager_args(running_scripts[0],'0h30m',[], log_level)
                     )
                     script_thread.start()
             return
-        script_manager_args = initialize_script_manager_args(scriptname, timeout_val, script_constants)
+        script_manager_args = initialize_script_manager_args(scriptname, timeout_val, script_constants, log_level)
         script_thread = threading.Thread(target=run_in_thread, args=script_manager_args)
         script_thread.start()
         # returns immediately after the thread starts
