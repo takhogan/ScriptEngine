@@ -75,7 +75,7 @@ def load_and_run(script_name, timeout, constants=None, start_time=None, log_leve
 
 
 if __name__=='__main__':
-    print('SCRIPT MANAGER: parsing args')
+    print('SCRIPT MANAGER: parsing args ', sys.argv)
     script_name = sys.argv[1]
     start_time = None
     end_time = None
@@ -94,8 +94,9 @@ if __name__=='__main__':
         log_level = sys.argv[4]
     else:
         log_level = 'info'
+
     if n_args > 5:
-        for arg_index in range(4, n_args):
+        for arg_index in range(5, n_args):
             arg_split = sys.argv[arg_index].strip().split(':')
             constants[arg_split[0]] = arg_split[1]
     print('SCRIPT MANAGER: loading script and running with log level ', log_level)
