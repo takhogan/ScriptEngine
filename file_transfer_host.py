@@ -283,16 +283,20 @@ def get_runnable_scripts():
 
 
     if platform.system() == 'Windows':
-        script_files = subprocess.check_output([
-           'dir',
-           os.getcwd() + '\\scripts\\scriptFolders',
-           '/b',
-           '/a-d'] if platform.system() == 'Windows' else [
-            'ls scripts/scriptFolders'
-        ] if platform.system() == 'Darwin' else [
+        try:
+            script_files = subprocess.check_output([
+               'dir',
+               os.getcwd() + '\\scripts\\scriptFolders',
+               '/b',
+               '/a-d'] if platform.system() == 'Windows' else [
+                'ls scripts/scriptFolders'
+            ] if platform.system() == 'Darwin' else [
 
-        ], shell=True
-                                               ).decode('utf-8')
+            ], shell=True
+                                                   ).decode('utf-8')
+        except subprocess.CalledProcessError as e:
+            print(f"Error getting list of scripts {e}")
+            script_files = ''
         script_files = script_files.split('\r\n')
     else:
         script_files = list(map(os.path.basename, glob.glob('./scripts/scriptFolders/*.zip')))

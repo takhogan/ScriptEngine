@@ -1,1 +1,1 @@
-start cmd /k "chdir C:\Users\takho\ScriptEngine && C:\Users\takho\ScriptEngine\venv_host_server\Scripts\activate && python C:\Users\takho\ScriptEngine\file_transfer_host.py"
+start cmd /k "chdir C:\Users\%USERNAME%\ScriptEngine && C:\Users\%USERNAME%\ScriptEngine\venv_host_server\Scripts\activate && python C:\Users\%USERNAME%\ScriptEngine\file_transfer_host.py"
