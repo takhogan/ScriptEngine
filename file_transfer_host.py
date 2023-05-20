@@ -13,7 +13,7 @@ from waitress import serve
 from file_transfer_host_app import app#, cache
 # from ScriptEngine.script_engine_constants import RUNNING_SCRIPTS_PATH
 
-from flask import Flask, request, redirect, Response, jsonify, make_response, send_file, send_from_directory, render_template
+from flask import Flask, request, redirect, Response, jsonify, make_response, send_file, send_from_directory, render_template, url_for
 from werkzeug.utils import secure_filename
 from flask_cors import CORS, cross_origin
 import shutil
@@ -140,9 +140,140 @@ def get_library():
     #     mimetype='.zip'
     # )
 
+def initialize_script_object(script_object):
+    start_time = datetime.datetime.now()
+    start_time_str = start_time.strftime('%Y-%m-%d %H-%M-%S')
+    script_log_folder = os_normalize_path(
+        app.config['LOGFILE_FOLDER'] + '0'.zfill(5) + '-' + script_object['script_name'] + '-' + start_time_str + '\\'
+    )
+    os.makedirs(script_log_folder, exist_ok=True)
+    timeout_val_split = script_object['script_duration'].split('h')
+    end_time = start_time + datetime.timedelta(hours=int(timeout_val_split[0]),
+                                               minutes=int(timeout_val_split[1][:-1]))
+    end_time_str = end_time.strftime('%Y-%m-%d %H-%M-%S')
+    script_object["start_time_str"] = start_time_str
+    script_object["end_time_str"] = end_time_str
+    script_object["script_log_folder"] = script_log_folder
+    script_object["status"] = "started"
+    persist_running_script(script_object, script_id=script_object["script_id"])
+    return script_object
+
+def create_script_object(
+        script_id,
+        scriptname,
+        timeout_val,
+        script_constants,
+        log_level,
+        notification_level,
+        parallel
+    ):
+
+    return {
+        "script_id" : script_id,
+        "script_name": scriptname,
+        "status": "pending",
+        "script_duration" : timeout_val,
+        "start_time_str" : None,
+        "end_time_str" : None,
+        "log_level" : log_level,
+        "notification_level" : notification_level,
+        "args" : script_constants,
+        "parallel" : parallel,
+        "script_log_folder" : None
+    }
+
+
+def run_in_thread(script_object):
+    print(
+        'running ',
+        script_object['script_name'],
+        'from',
+        script_object['start_time_str'],
+        'to',
+        script_object['end_time_str'],
+        'with constants',
+        script_object['args']
+    )
+    with open(script_object['script_log_folder'] + 'stdout.txt', 'w') as log_file:
+        print('args',
+            (
+                'venv\\Scripts\\python' if platform.system() == 'Windows' else
+                'venv/bin/python3'
+            ),
+            os_normalize_path('ScriptEngine\\script_manager.py'),
+            script_object["script_name"],
+            script_object["start_time_str"],
+            script_object["end_time_str"],
+            script_object["log_level"],
+            script_object["script_id"],
+            *script_object["args"],
+            script_object['script_log_folder'])
+
+        shell_process = subprocess.Popen([
+            (
+                'venv\\Scripts\\python' if platform.system() == 'Windows' else
+                'venv/bin/python3'
+            ),
+            os_normalize_path('ScriptEngine\\script_manager.py'),
+            script_object["script_name"],
+            script_object["start_time_str"],
+            script_object["end_time_str"],
+            script_object["log_level"],
+            str(script_object["script_id"]),
+            *script_object["args"]
+        ],
+            # shell=True,
+            stdout=log_file,
+            stderr=log_file,
+            cwd=os.getcwd()
+        )
+        shell_process.wait()
+    exit_code = shell_process.returncode
+    print('completed ', script_object['script_name'], 'with return code', str(exit_code))
+    with open(script_object['script_log_folder'] + 'completed.txt', 'w') as completed_file:
+        completed_file.write(script_object['script_name'] + ' completed at ' + str(datetime.datetime.now()) + ' with return code ' + str(exit_code))
+    if exit_code == 1:
+        return
+    elif exit_code == 478:
+        return
+    print('1', get_running_scripts())
+    persist_running_script(None, script_id=script_object["script_id"])
+    print('2', get_running_scripts())
+    parse_running_scripts()
+    print('3', get_running_scripts())
+
+    return
+def parse_running_scripts():
+    running_scripts = get_running_scripts()
+    if len(running_scripts) == 0:
+        return
+    current_running_script = running_scripts[0]
+    if current_running_script["status"] == "pending":
+        current_running_script = initialize_script_object(current_running_script)
+        script_thread = threading.Thread(target=run_in_thread, args=(current_running_script,))
+        script_thread.start()
+    if current_running_script["parallel"]:
+        for script_index,running_script in enumerate(running_scripts):
+            if script_index == 0:
+                continue
+            if running_script["parallel"]:
+                running_script = initialize_script_object(running_script)
+                script_thread = threading.Thread(target=run_in_thread, args=(running_script,))
+                script_thread.start()
+            else:
+                break
+
+
+
+
 @app.route('/run/<scriptname>', strict_slashes=False)
 def run_script(scriptname):
-    if not os.path.exists(RUNNING_SCRIPTS_PATH):
+    running_scripts = get_running_scripts()
+    if 'queue' in request.args:
+        queue_script = request.args.get('queue') == 'True'
+    else:
+        queue_script = False
+    if len(running_scripts) == 0 or queue_script:
         if 'timeout' in request.args:
             timeout_val = request.args.get('timeout')
         else:
@@ -152,80 +283,52 @@ def run_script(scriptname):
         else:
             log_level = 'info'
 
+        if 'notification_level' in request.args:
+            notification_level = request.args.get('notification_level')
+        else:
+            notification_level = None
+
+        if 'parallel' in request.args:
+            parallel = request.args.get('parallel') == 'True'
+        else:
+            parallel = False
+
         if 'args' in request.args:
             script_constants = request.args.getlist('args')
         else:
             script_constants = []
 
-        def initialize_script_manager_args(scriptname, timeout_val, script_constants, log_level):
-            start_time = datetime.datetime.now()
-            start_time_str = start_time.strftime('%Y-%m-%d %H-%M-%S')
-            script_log_folder = os_normalize_path(app.config['LOGFILE_FOLDER'] + '0'.zfill(5) + '-' + scriptname + '-' + start_time_str + '\\')
-            os.makedirs(script_log_folder, exist_ok=True)
-            timeout_val_split = timeout_val.split('h')
-            end_time = start_time + datetime.timedelta(hours=int(timeout_val_split[0]),minutes=int(timeout_val_split[1][:-1]))
-            end_time_str = end_time.strftime('%Y-%m-%d %H-%M-%S')
-            return scriptname, start_time_str, end_time_str, script_constants, script_log_folder, log_level
-
-
-
-        def run_in_thread(scriptname, start_time_str, end_time_str, script_constants, script_log_folder, log_level):
-            print('running ', scriptname, 'from', start_time_str, 'to', end_time_str, 'with constants', script_constants)
-            with open(script_log_folder + 'stdout.txt', 'w') as log_file:
-                shell_process = subprocess.Popen([
-                        (
-                            'venv\\Scripts\\python' if platform.system() == 'Windows' else
-                            'venv/bin/python3'
-                        ),
-                        os_normalize_path('ScriptEngine\\script_manager.py'),
-                        scriptname,
-                        start_time_str,
-                        end_time_str,
-                        log_level,
-                        *script_constants
-                    ],
-                    # shell=True,
-                    stdout=log_file,
-                    stderr=log_file,
-                    cwd=os.getcwd()
-                )
-                shell_process.wait()
-            exit_code = shell_process.returncode
-            print('log folder: ', script_log_folder)
-            print(os.getcwd() + os_normalize_path('\\ScriptEngine\\script_manager.py'), os.getcwd() + (
-                        'venv\\Scripts\\python' if platform.system() == 'Windows' else
-                        'venv/bin/python3'
-                    ))
-            print('completed ', scriptname, 'with return code', exit_code)
-            with open(script_log_folder + 'completed.txt', 'w') as completed_file:
-                completed_file.write(scriptname + ' completed at ' + str(datetime.datetime.now()))
-            if exit_code == 1:
-                return
-            elif exit_code == 478:
-                return
-            if os.path.exists(RUNNING_SCRIPTS_PATH):
-                with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
-                    running_scripts = json.load(running_script_file)
-                    script_thread = threading.Thread(
-                        target=run_in_thread,
-                        args=initialize_script_manager_args(running_scripts[0],'0h30m',[], log_level)
-                    )
-                    script_thread.start()
-            return
-        script_manager_args = initialize_script_manager_args(scriptname, timeout_val, script_constants, log_level)
-        script_thread = threading.Thread(target=run_in_thread, args=script_manager_args)
-        script_thread.start()
+        script_id = get_next_script_id()
+        running_script_object = create_script_object(
+            script_id,
+            scriptname,
+            timeout_val,
+            script_constants,
+            log_level,
+            notification_level,
+            parallel
+        )
+        persist_running_script(running_script_object)
+        parse_running_scripts()
+        script_object = get_script_object(script_id)
         # returns immediately after the thread starts
-        return ('<p>' + scriptname + ' started! </p>' +\
-                    '<a href="http://' + request.host.split(':')[0] + ':3848/logs/' + '0'.zfill(5) + '-' + scriptname +\
-                    '-' + script_manager_args[1] + '/"' + '> Click here for logs </a><br>' +\
-                    '<a href="/capture"' + '> Click here to monitor </a><br>' +\
-                    COMPONENTS['DASHBOARD BUTTON'] +\
-                    '<a href="/reset_scripts"' + '> Click here to terminate </a><br>', 201)
+        if queue_script:
+            return ('<p> Added ' + script_object['script_name'] + ' to queue. Now running : ' + str(get_running_scripts()) + '  </p>' + \
+             COMPONENTS['DASHBOARD BUTTON'], 200)
+        else:
+            return ('<p>' + script_object['script_name'] + ' started! </p>' +\
+                        '<a href="http://' + request.host.split(':')[0] + ':3848/logs/' + '0'.zfill(5) + '-' + script_object["script_name"] +\
+                        '-' + script_object['start_time_str'] + '/"' + '> Click here for logs </a><br>' +\
+                        '<a href="/capture"' + '> Click here to monitor </a><br>' +\
+                        COMPONENTS['DASHBOARD BUTTON'] +\
+                        '<a href="/reset_scripts"' + '> Click here to terminate </a><br>', 201)
     else:
+        request_args = dict(request.args)
+        request_args['queue'] = 'True'
+        queue_link = url_for('run_script', scriptname=scriptname, **request_args)
         with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
             return ('<p>Please wait for script completion, script: ' + running_script_file.read() + ' still running!</p>' +\
-                    '<a href=/enqueue/' + scriptname + '> Click here to enqueue </a><br>' +\
+                    '<a href=' + queue_link +'> Click here to enqueue </a><br>' +\
                         '<a href=/reset_scripts> Click here to terminate </a><br>', 400)
 
 @app.route('/enqueue/<scriptname>', methods=['GET'], strict_slashes=False)
