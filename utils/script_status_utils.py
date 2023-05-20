@@ -54,9 +54,38 @@ def get_running_scripts():
 
     return running_scripts
 
+def get_script_object(script_id):
+    running_scripts = get_running_scripts()
+    for running_script in running_scripts:
+        if running_script['script_id'] == script_id:
+            return running_script
+    return None
+
+def persist_running_script(running_script, script_id=None):
+    running_scripts = get_running_scripts()
+    if script_id is None:
+        if running_script is not None:
+            running_scripts.append(running_script)
+    else:
+        for script_index,running_script_iter in enumerate(running_scripts):
+            if running_script_iter['script_id'] == script_id:
+                if running_script is None:
+                    del running_scripts[script_index]
+                else:
+                    running_scripts[script_index] = running_script
+    with open(RUNNING_SCRIPTS_PATH, 'w') as runng_scripts_file:
+        json.dump(running_scripts, runng_scripts_file)
+
+def get_next_script_id():
+    running_scripts = get_running_scripts()
+    if len(running_scripts) > 0:
+        return max(running_scripts, key=lambda script: script['script_id'])['script_id'] + 1
+    else:
+        return 1
+
 def get_running_scripts_status():
     running_scripts = get_running_scripts()
-    return '\n'.join(running_scripts)
+    return str(running_scripts)
 
 def get_running_events(convert_timeout=True):
     running_events = []

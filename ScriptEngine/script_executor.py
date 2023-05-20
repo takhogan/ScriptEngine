@@ -17,9 +17,10 @@ from script_engine_constants import *
 from script_execution_state import ScriptExecutionState
 from python_host_controller import python_host
 from adb_host_controller import adb_host
-from script_engine_utils import generate_context_switch_action
+from script_engine_utils import generate_context_switch_action,get_running_scripts
 from script_logger import ScriptLogger
 from system_host_controller import SystemHostController
+
 
 
 import time
@@ -50,7 +51,8 @@ DELAY_EXEMPT_ACTIONS = {
 
 
 class ScriptExecutor:
-    def __init__(self, script_obj, timeout, base_script_name, log_level='INFO', parent_folder='', start_time=None, context=None, state=None, create_log_folders=True):
+    def __init__(self, script_obj, timeout, base_script_name, script_id, log_level='INFO', parent_folder='', start_time=None, context=None, state=None, create_log_folders=True):
+        self.script_id = script_id
         self.base_script_name = base_script_name
         self.props = script_obj['props']
         if start_time is None:
@@ -316,7 +318,8 @@ class ScriptExecutor:
                         ref_script,
                         self.props["timeout"],
                         self.base_script_name,
-                        self.log_level,
+                        self.script_id,
+                        log_level=self.log_level,
                         parent_folder=self.log_folder,
                         context=child_context,
                         state=input_vars,
@@ -327,7 +330,8 @@ class ScriptExecutor:
                         ref_script,
                         self.props["timeout"],
                         self.base_script_name,
-                        self.log_level,
+                        self.script_id,
+                        log_level=self.log_level,
                         parent_folder=self.log_folder,
                         context=child_context,
                         state=input_vars,
@@ -457,14 +461,25 @@ class ScriptExecutor:
         if datetime.datetime.now().astimezone(tz.tzlocal()) > self.timeout:
             print(self.props['script_name'] + ' CONTROL FLOW: script timeout - ', datetime.datetime.now())
             return end_branch,True
-        terminate_request = False
-        if os.path.exists(RUNNING_SCRIPTS_PATH):
-            with open(RUNNING_SCRIPTS_PATH, 'r') as temp_file:
-                if not len(temp_file.read()) > 0:
-                    terminate_request = True
-        else:
+        running_scripts = get_running_scripts()
+        if len(running_scripts) == 0:
             terminate_request = True
+            print('1--')
+        else:
+            current_running_script = running_scripts[0]
+            print('2--', self.script_id, current_running_script['script_id'])
+            terminate_request = current_running_script["script_id"] != self.script_id
+            if terminate_request and current_running_script['parallel']:
+                for running_script in running_scripts:
+                    if running_script['parallel']:
+                        terminate_request = (terminate_request and (running_script['script_id'] != self.script_id))
+                        if not terminate_request:
+                            break
+                    else:
+                        break
+
         if terminate_request:
+            print('4--', get_running_scripts())
             print(self.props['script_name'] + ' CONTROL FLOW: received terminate request')
             return end_branch,True
 
@@ -709,14 +724,10 @@ class ScriptExecutor:
         while self.status != ScriptExecutionState.FINISHED and\
                 self.status != ScriptExecutionState.FINISHED_FAILURE and\
                 self.status != ScriptExecutionState.ERROR:
-            print('0', datetime.datetime.now())
             self.execute_actions()
-            print('1', datetime.datetime.now())
             end_branch,end_script = self.check_if_done()
-            print('2', datetime.datetime.now())
 
             if end_script:
-                print('2.2', datetime.datetime.now())
                 break
             if self.status == ScriptExecutionState.FINISHED_BRANCH:
                 overall_status = ScriptExecutionState.SUCCESS
@@ -724,9 +735,7 @@ class ScriptExecutor:
                 self.status = ScriptExecutionState.FINISHED_BRANCH
         if overall_status == ScriptExecutionState.SUCCESS:
             self.status = ScriptExecutionState.FINISHED
-        print('2.5', datetime.datetime.now())
         self.on_script_completion()
-        print('3', datetime.datetime.now())
 
     def on_script_completion(self):
         if self.context["success_states"] is not None:

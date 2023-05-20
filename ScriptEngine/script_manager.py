@@ -56,21 +56,21 @@ def update_running_scripts_file(scriptname, action):
                 with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
                     json.dump(running_scripts, running_script_file)
 
-def load_and_run(script_name, timeout, constants=None, start_time=None, log_level='info'):
+def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, log_level='info'):
     # if you want to open zip then you pass .zip in command line args
-    update_running_scripts_file(script_name, 'push')
+    # update_running_scripts_file(script_name, 'push')
     print('SCRIPT_MANAGER: script start time: ', datetime.datetime.now(), ' script trigger time: ', start_time, ' scheduled end time: ', timeout)
     print('constants : ', constants)
     script_object = parse_zip(script_name)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
-    main_script = ScriptExecutor(script_object, timeout, script_name, state=constants, start_time=start_time)
+    main_script = ScriptExecutor(script_object, timeout, script_name, script_id, log_level=log_level,state=constants, start_time=start_time)
     try:
         main_script.run(log_level=log_level)
     except:
         traceback.print_exc()
-    print('completed script ', script_name, datetime.datetime.now())
-    update_running_scripts_file(script_name, 'pop')
+    # print('completed script ', script_name, datetime.datetime.now())
+    # update_running_scripts_file(script_name, 'pop')
 
 
 
@@ -94,14 +94,19 @@ if __name__=='__main__':
         log_level = sys.argv[4]
     else:
         log_level = 'info'
-
     if n_args > 5:
-        for arg_index in range(5, n_args):
+        script_id = int(sys.argv[5])
+    else:
+        script_id = 1
+
+    if n_args > 6:
+        for arg_index in range(6, n_args):
             arg_split = sys.argv[arg_index].strip().split(':')
             constants[arg_split[0]] = arg_split[1]
     print('SCRIPT MANAGER: loading script and running with log level ', log_level)
     load_and_run(
         script_name,
+        script_id,
         (start_time + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal()) if end_time is None else end_time,
         start_time=start_time_str,
         constants=constants,

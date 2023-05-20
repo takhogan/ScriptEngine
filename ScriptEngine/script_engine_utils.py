@@ -1,6 +1,9 @@
 
 import math
 import numpy as np
+import os
+import json
+RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
 
 
 def generate_context_switch_action(childGroups, state, context, update_dict):
@@ -121,3 +124,12 @@ def get_glob_digit_regex_string(start_index, stop_index, pad_zeros=False):
     # print('m: ', middle_range)
     # print('s: ', start_index, 'st: ', stop_index, 'bottom foot: ', bottom_range)
     return top_range + middle_range + bottom_range
+
+
+def get_running_scripts():
+    running_scripts = []
+    if os.path.exists(RUNNING_SCRIPTS_PATH):
+        with open(RUNNING_SCRIPTS_PATH, 'r') as running_scripts_file:
+            running_scripts = json.load(running_scripts_file)
+
+    return running_scripts

@@ -207,6 +207,11 @@ class ScriptScheduler:
             print('Waiting 60 seconds')
             time.sleep(60)
             return service,calendar_id
+        except TimeoutError as timeout_error:
+            print('Encountered Timeout Error while calling calendar API : ', timeout_error)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return service,calendar_id
         events = events_result.get('items', [])
 
         if not events:
