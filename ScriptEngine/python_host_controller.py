@@ -15,7 +15,7 @@ import glob
 from PIL import Image
 from skimage.metrics import structural_similarity as ssim
 from image_matcher import ImageMatcher
-from script_engine_utils import is_null
+from script_engine_utils import is_null, apply_state_to_cmd_str
 
 import matplotlib.pyplot as plt
 import time
@@ -64,19 +64,23 @@ class python_host:
     def run_script(self, action, state):
         # print('run_script: ', action)
         if action["actionData"]["openInNewWindow"]:
-            run_command = "start cmd /K " + action["actionData"]["shellScript"]
+
+            run_command = "start cmd /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
             print('shellScript-' + str(action["actionGroup"]), ' opening in new window run command : ', run_command)
             os.system(run_command)
             return state
         elif action["actionData"]["awaitScript"]:
-            print('shellScript-' + str(action["actionGroup"]), ' running command ', action["actionData"]["shellScript"], ' and awaiting output')
-            outputs = subprocess.run(action["actionData"]["shellScript"], cwd="/", shell=True, capture_output=True)
+            await_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
+            print('shellScript-' + str(action["actionGroup"]), ' running command ', await_command, ' and awaiting output')
+            outputs = subprocess.run(await_command, cwd="/", shell=True, capture_output=True)
             state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
-            # print('output : ', outputs, 'state : ', state)
+            state[action["actionData"]["returnCodeOutputVarName"]] = outputs.returncode
+            print('shellScript-' + str(action["actionGroup"]), 'command output : ', outputs)
             return state
         else:
-            print('shellScript-' + str(action["actionGroup"]), ' starting process ', action["actionData"]['shellScript'], ' without awaiting output')
-            proc = subprocess.Popen(action["actionData"]["shellScript"], cwd="/", shell=True)
+            process_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
+            print('shellScript-' + str(action["actionGroup"]), ' starting process ', process_command, ' without awaiting output')
+            proc = subprocess.Popen(process_command, cwd="/", shell=True)
             return state
 
 

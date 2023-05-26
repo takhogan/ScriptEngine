@@ -44,6 +44,35 @@ def get_digits(number):
     return digits
 
 
+import subprocess
+import re
+
+# Mapping dictionary with key-value pairs
+variable_mapping = {
+    "var1": "value1",
+    "var3": "value3"
+}
+
+def apply_state_to_cmd_str(cmd_str, state):
+
+    # Custom string formatter that replaces %KEY% placeholders with dictionary values
+    class CustomFormatter:
+        def __init__(self, mapping):
+            self.mapping = mapping
+
+        def format(self, text):
+            pattern = r"%(\w+)%"
+            return re.sub(pattern, lambda m: self.mapping.get(m.group(1), m.group()), text)
+
+    # Replace %KEY% placeholders with dictionary values if they exist, otherwise leave them unchanged
+    formatter = CustomFormatter(state)
+    formatted_command = formatter.format(cmd_str)
+    return formatted_command
+
+
+
+
+
 def get_glob_digit_regex_string(start_index, stop_index, pad_zeros=False):
     if start_index > stop_index:
         return []
