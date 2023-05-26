@@ -13,6 +13,7 @@ sys.path.append("..")
 from script_loader import parse_zip
 from script_executor import ScriptExecutor
 from script_engine_constants import *
+from device_manager import DeviceManager
 
 def str_timeout_to_datetime_timeout(timeout, src=None):
     if not isinstance(timeout, str):
@@ -64,7 +65,24 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
     script_object = parse_zip(script_name)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
-    main_script = ScriptExecutor(script_object, timeout, script_name, script_id, log_level=log_level,state=constants, start_time=start_time)
+    adb_args = {}
+    if 'DEVICE_NAME' in constants and 'AUTO_DETECT_ADB_PORT' in constants and constants['AUTO_DETECT_ADB_PORT'] == 'True':
+        adb_args = {
+            'DEVICE_NAME' : constants['DEVICE_NAME'],
+            'AUTO_DETECT_ADB_PORT' : True
+        }
+    device_manager = DeviceManager(script_name, script_object['props'], adb_args)
+    main_script = ScriptExecutor(
+        script_object,
+        timeout,
+        script_name,
+        start_time,
+        script_id,
+        device_manager,
+        log_level=log_level,
+        state=constants,
+        start_time=start_time
+    )
     try:
         main_script.run(log_level=log_level)
     except:

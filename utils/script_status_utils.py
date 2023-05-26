@@ -42,6 +42,8 @@ def persist_event_status(event_name, running_event):
                 running_events = running_events[1:]
             else:
                 running_events[0] = running_event
+        elif len(running_events) > 0:
+            running_events = running_events.append(running_event)
         else:
             running_events = [running_event]
         json.dump(running_events, running_events_file)
@@ -85,7 +87,7 @@ def get_next_script_id():
 
 def get_running_scripts_status():
     running_scripts = get_running_scripts()
-    return str(running_scripts)
+    return json.dumps(running_scripts, indent=4)
 
 def get_running_events(convert_timeout=True):
     running_events = []
@@ -198,12 +200,12 @@ def check_terminate_signal(event_name):
 
 
 def await_script_load(event_name, script_name, is_await_queue, request_url):
-    MAX_CHECK_COUNT = 10
+    MAX_CHECK_COUNT = 60
     check_count = 0
     while True:
         if check_terminate_signal(event_name):
             print(event_name, 'received event terminate signal')
-            break
+            return 'terminated'
 
         if is_await_queue:
             print(requests.get(request_url))
@@ -212,19 +214,15 @@ def await_script_load(event_name, script_name, is_await_queue, request_url):
         else:
             check_count += 1
         print('Awaiting script load ', script_name)
-        running_scripts = []
-        if os.path.exists(RUNNING_SCRIPTS_PATH):
-            with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
-                running_scripts = json.load(running_script_file)
-
-        if script_name in running_scripts:
-            return True
+        running_scripts = get_running_scripts()
+        if len(running_scripts) > 0 and running_scripts[0]['script_name'] == script_name:
+            return 'loaded'
         if is_await_queue:
             time.sleep(60)
         else:
             time.sleep(2)
     print('Script load timed out')
-    return False
+    return 'timed_out'
 
 
 def await_script_completion(event_name, script_name):
@@ -232,15 +230,13 @@ def await_script_completion(event_name, script_name):
         print(event_name, ' awaiting script completion: ', script_name)
         if check_terminate_signal(event_name):
             print(event_name, 'received event terminate signal')
-            break
-        running_scripts = []
-        if os.path.exists(RUNNING_SCRIPTS_PATH):
-            with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
-                running_scripts = json.load(running_script_file)
-
-        if script_name not in running_scripts:
+            return False
+        running_scripts = get_running_scripts()
+        script_running = False
+        if len(running_scripts) > 0 and running_scripts[0]['script_name'] == script_name:
+            script_running = True
+        if not script_running:
             return True
-
         time.sleep(60)
     return False
 
@@ -258,7 +254,7 @@ def await_event_start(event_name):
         print('Awaiting Event Start ', event_name)
         if check_terminate_signal(event_name):
             print(event_name, 'received event terminate signal')
-            break
+            return False
         running_events = []
         if os.path.exists(RUNNING_EVENTS_PATH):
             with open(RUNNING_EVENTS_PATH, 'r') as running_events_file:

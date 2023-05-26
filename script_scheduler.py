@@ -319,7 +319,7 @@ class ScriptScheduler:
     def load_and_run(self, running_event, event_name, script_obj, timeout, log_level='info', constants=None):
         if check_terminate_signal(event_name):
             print(event_name, ' received event terminate signal')
-            return
+            exit(0)
 
         utcnow = datetime.datetime.utcnow()
         if timeout > utcnow:
@@ -349,16 +349,18 @@ class ScriptScheduler:
         script_obj['status'] = 'invoking'
         persist_event_status(event_name, running_event)
 
-        script_loaded = await_script_load(event_name, script_name, is_await_queue, request_url)
-        if script_loaded:
+        script_load_status = await_script_load(event_name, script_name, is_await_queue, request_url)
+        if script_load_status == 'loaded':
             script_obj['status'] = 'running'
             persist_event_status(event_name, running_event)
             await_script_completion(event_name, script_name)
             script_obj['status'] = 'completed'
             persist_event_status(event_name, running_event)
-        else:
+        elif script_load_status == 'timed_out':
             script_obj['status'] = 'timed out'
             persist_event_status(event_name, running_event)
+        elif script_load_status == 'terminated':
+            exit(0)
 
     def create_script_event_object(self, script_event_obj, sequence_name):
         if 'onInit' in script_event_obj['sequences'] and script_event_obj['sequence'][0] != 'onInit':

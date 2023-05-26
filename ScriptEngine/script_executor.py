@@ -15,11 +15,9 @@ import cv2
 sys.path.append("..")
 from script_engine_constants import *
 from script_execution_state import ScriptExecutionState
-from python_host_controller import python_host
-from adb_host_controller import adb_host
 from script_engine_utils import generate_context_switch_action,get_running_scripts
 from script_logger import ScriptLogger
-from system_host_controller import SystemHostController
+
 
 
 
@@ -51,9 +49,23 @@ DELAY_EXEMPT_ACTIONS = {
 
 
 class ScriptExecutor:
-    def __init__(self, script_obj, timeout, base_script_name, script_id, log_level='INFO', parent_folder='', start_time=None, context=None, state=None, create_log_folders=True):
+    def __init__(self,
+                 script_obj,
+                 timeout,
+                 base_script_name,
+                 base_start_time,
+                 script_id,
+                 device_manager,
+                 log_level='INFO',
+                 parent_folder='',
+                 start_time=None,
+                 context=None,
+                 state=None,
+                 create_log_folders=True):
         self.script_id = script_id
         self.base_script_name = base_script_name
+        self.base_start_time = base_start_time
+        self.device_manager = device_manager
         self.props = script_obj['props']
         if start_time is None:
             self.refresh_start_time()
@@ -65,9 +77,7 @@ class ScriptExecutor:
         self.actions = script_obj["actionRows"][0]["actions"]
         self.action_rows = script_obj["actionRows"]
         self.inputs = script_obj["inputs"]
-        self.python_host = python_host(self.props.copy())
-        self.system_host = SystemHostController(base_script_name, self.props.copy())
-        self.adb_host = adb_host(self.props.copy(), self.python_host, '127.0.0.1:5555')
+
         # TODO IP shouldn't be hard coded
         self.include_scripts = script_obj['include']
         self.run_queue = []
@@ -190,25 +200,25 @@ class ScriptExecutor:
             print(self.props['script_name'] + ' CONTROL FLOW: performing forward peek')
             for target_system,actions in detect_type_actions:
                 if target_system == 'adb':
-                    self.adb_host.init_system()
-                    screenshot = self.adb_host.screenshot()
+                    self.device_manager.adb_host.init_system()
+                    screenshot = self.device_manager.adb_host.screenshot()
                     for [action_index,action] in actions:
                         self.log_action_details(action)
                         action['actionData']['screencap_im_bgr'] = screenshot
                         action['actionData']['detect_run_type'] = 'result_precalculation'
                         action['actionData']['results_precalculated'] = False
-                        self.status, self.state, self.context = self.adb_host.handle_action(
+                        self.status, self.state, self.context = self.device_manager.adb_host.handle_action(
                             action, self.state, self.context, self.log_level, self.log_folder
                         )
                         self.actions[action_index] = self.context['action']
                 elif target_system == 'python':
-                    screenshot = self.python_host.screenshot()
+                    screenshot = self.device_manager.python_host.screenshot()
                     for [action_index,action] in actions:
                         self.log_action_details(action)
                         action['actionData']['screencap_im_bgr'] = screenshot
                         action['actionData']['detect_run_type'] = 'result_precalculation'
                         action['actionData']['results_precalculated'] = False
-                        self.status, self.state, self.context = self.python_host.handle_action(
+                        self.status, self.state, self.context = self.device_manager.python_host.handle_action(
                             action, self.state, self.context, self.log_level, self.log_folder
                         )
                         self.actions[action_index] = self.context['action']
@@ -224,15 +234,14 @@ class ScriptExecutor:
 
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
-                self.adb_host.init_system()
-                self.status, self.state, self.context = self.adb_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
+                self.status, self.state, self.context = self.device_manager.adb_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
             elif action["actionData"]["targetSystem"] == "python":
-                self.status, self.state, self.context = self.python_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
+                self.status, self.state, self.context = self.device_manager.python_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
             elif action["actionData"]["targetSystem"] == "none":
                 if action["actionName"] == "scriptReference":
                     self.status, self.state, self.context = self.handle_script_reference(action, self.state, self.context)
                 else:
-                    self.status, self.state, self.context = self.system_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
+                    self.status, self.state, self.context = self.device_manager.system_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
             else:
                 self.status = ScriptExecutionState.ERROR
                 print("target system " + action["actionData"]["targetSystem"] + " unimplemented!")
@@ -318,7 +327,9 @@ class ScriptExecutor:
                         ref_script,
                         self.props["timeout"],
                         self.base_script_name,
+                        self.base_start_time,
                         self.script_id,
+                        self.device_manager,
                         log_level=self.log_level,
                         parent_folder=self.log_folder,
                         context=child_context,
@@ -330,7 +341,9 @@ class ScriptExecutor:
                         ref_script,
                         self.props["timeout"],
                         self.base_script_name,
+                        self.base_start_time,
                         self.script_id,
+                        self.device_manager,
                         log_level=self.log_level,
                         parent_folder=self.log_folder,
                         context=child_context,
@@ -464,15 +477,26 @@ class ScriptExecutor:
         running_scripts = get_running_scripts()
         if len(running_scripts) == 0:
             terminate_request = True
-            print('1--')
         else:
             current_running_script = running_scripts[0]
             print('2--', self.script_id, current_running_script['script_id'])
-            terminate_request = current_running_script["script_id"] != self.script_id
+            terminate_request = (
+                current_running_script["script_id"] != self.script_id or
+                current_running_script['start_time_str'] != self.base_start_time or
+                current_running_script['script_name'] != self.base_script_name
+            )
+            print(current_running_script["script_id"] != self.script_id,
+                current_running_script['start_time_str'] != self.base_start_time)
+            print(type(self.props['start_time']), type(current_running_script['start_time_str']))
+            print(set(self.props['start_time']), set(current_running_script['start_time_str']))
             if terminate_request and current_running_script['parallel']:
                 for running_script in running_scripts:
                     if running_script['parallel']:
-                        terminate_request = (terminate_request and (running_script['script_id'] != self.script_id))
+                        terminate_request = (terminate_request and (
+                            running_script['script_id'] != self.script_id) or
+                            running_script['start_time_str'] != self.base_start_time or
+                            running_script['script_name'] != self.base_script_name
+                        )
                         if not terminate_request:
                             break
                     else:
@@ -480,6 +504,7 @@ class ScriptExecutor:
 
         if terminate_request:
             print('4--', get_running_scripts())
+            print('5--', self.base_start_time, self.script_id)
             print(self.props['script_name'] + ' CONTROL FLOW: received terminate request')
             return end_branch,True
 
