@@ -293,8 +293,7 @@ class adb_host:
 
 
             emulator_active = (
-                ('emulator' in devices_output or
-                self.full_ip in devices_output) and 'offline' not in devices_output
+                (self.full_ip in devices_output) and 'offline' not in devices_output
             )
 
             if not emulator_active:
@@ -302,8 +301,7 @@ class adb_host:
                 restart_adb()
                 devices_output = get_device_list_output()
                 emulator_active = (
-                    ('emulator' in devices_output or
-                     self.full_ip in devices_output) and 'offline' not in devices_output
+                    (self.full_ip in devices_output) and 'offline' not in devices_output
                 )
 
             while not emulator_active:
@@ -338,8 +336,7 @@ class adb_host:
                 restart_adb()
                 devices_output = get_device_list_output()
                 emulator_active = (
-                        ('emulator' in devices_output or
-                         self.full_ip in devices_output) and 'offline' not in devices_output
+                        (self.full_ip in devices_output) and 'offline' not in devices_output
                 )
 
             if not emulator_active:
@@ -347,8 +344,7 @@ class adb_host:
                 restart_adb()
                 devices_output = get_device_list_output()
                 emulator_active = (
-                        ('emulator' in devices_output or
-                         self.full_ip in devices_output) and 'offline' not in devices_output
+                        (self.full_ip in devices_output) and 'offline' not in devices_output
                 )
 
             while not emulator_active:
@@ -361,8 +357,7 @@ class adb_host:
                 restart_adb()
                 devices_output = get_device_list_output()
                 emulator_active = (
-                        ('emulator' in devices_output or
-                         self.full_ip in devices_output) and 'offline' not in devices_output
+                        (self.full_ip in devices_output) and 'offline' not in devices_output
                 )
                 time.sleep(30)
 
@@ -381,7 +376,7 @@ class adb_host:
                     exit(478)
             self.width = source_im.shape[1]
             self.height = source_im.shape[0]
-            print('ADB CONTROLLER: adb configuration successful')
+            print('ADB CONTROLLER: adb configuration successful ', self.full_ip, devices_output)
         if is_null(self.props['width']):
             self.props['width'] = self.width
         if is_null(self.props['height']):
