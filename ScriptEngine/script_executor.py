@@ -485,10 +485,6 @@ class ScriptExecutor:
                 current_running_script['start_time_str'] != self.base_start_time or
                 current_running_script['script_name'] != self.base_script_name
             )
-            print(current_running_script["script_id"] != self.script_id,
-                current_running_script['start_time_str'] != self.base_start_time)
-            print(type(self.props['start_time']), type(current_running_script['start_time_str']))
-            print(set(self.props['start_time']), set(current_running_script['start_time_str']))
             if terminate_request and current_running_script['parallel']:
                 for running_script in running_scripts:
                     if running_script['parallel']:

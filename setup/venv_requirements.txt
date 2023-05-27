@@ -6,6 +6,7 @@ cloudpickle
 colorama
 commonmark
 configparser
+configobj
 cycler
 Flask
 fonttools

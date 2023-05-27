@@ -220,6 +220,10 @@ class adb_host:
 
 
     def init_system(self, reinitialize=False):
+        max_adb_attempts = 6
+        max_window_attempts = 36
+        adb_attempts = 0
+        window_attempts = 0
         source_im = None
         if reinitialize or self.width is None or self.height is None:
             if self.auto_detect_adb_port:
@@ -240,13 +244,12 @@ class adb_host:
                         shell=True
                     ).stdout, 'utf-8')
 
-                    attempts = 0
-                    max_attempts = 36
+
                     while not check_for_window(instance_window_name):
                         print('ADB CONTROLLER: window {} not found, sleeping for 5 seconds'.format(instance_window_name))
                         time.sleep(5)
-                        attempts += 1
-                        if attempts > max_attempts:
+                        window_attempts += 1
+                        if window_attempts > max_window_attempts:
                             print('ADB CONTROLLER: window {} not found and exceeded max attempts'.format(instance_window_name))
                             exit(478)
                     bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
@@ -273,24 +276,51 @@ class adb_host:
             print('ADB CONTROLLER: listing devices')
             if not self.full_ip in devices_output:
                 run_connect_command()
-                time.sleep(5)
+                time.sleep(3)
                 devices_output = get_device_list_output()
+
             run_kill_command = lambda: subprocess.run(self.adb_path + ' kill-server', cwd="/", shell=True)
             run_start_command = lambda: subprocess.run(self.adb_path + ' start-server', cwd="/", shell=True)
-            if 'offline' in devices_output or\
-                self.full_ip not in devices_output:
-                print('ADB CONTROLLER: problem found in devices output : ', devices_output, ' restarting adb')
+
+            def restart_adb():
+                print('ADB CONTROLLER restarting adb server')
                 run_kill_command()
                 run_start_command()
-                devices_output = get_device_list_output()
-            emualator_active = (
-                'emulator' in devices_output or
-                self.full_ip in devices_output
-            )
-
-            if not emualator_active:
+                time.sleep(3)
                 print('ADB CONTROLLER: connecting to adb device')
                 run_connect_command()
+                time.sleep(3)
+
+
+            emulator_active = (
+                ('emulator' in devices_output or
+                self.full_ip in devices_output) and 'offline' not in devices_output
+            )
+
+            if not emulator_active:
+                print('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
+                restart_adb()
+                devices_output = get_device_list_output()
+                emulator_active = (
+                    ('emulator' in devices_output or
+                     self.full_ip in devices_output) and 'offline' not in devices_output
+                )
+
+            while not emulator_active:
+                if adb_attempts > max_adb_attempts:
+                    print('ADB CONTROLLER: adb connection timed out ')
+                    exit(478)
+                else:
+                    adb_attempts += 1
+                print('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
+                restart_adb()
+                devices_output = get_device_list_output()
+                emulator_active = (
+                    ('emulator' in devices_output or
+                     self.full_ip in devices_output) and 'offline' not in devices_output
+                )
+                time.sleep(30)
+
             get_im_command = subprocess.run(
                 self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip),
                 cwd="/",
@@ -301,23 +331,42 @@ class adb_host:
             bytes_im = BytesIO(get_im_command.stdout)
             try:
                 source_im = np.array(Image.open(bytes_im))
+                emulator_active = True
                 screencap_succesful = True
             except UnidentifiedImageError:
-                print('ADB CONTROLLER: Unable to connect to ADB, restarting ADB, get_im_command: ', get_im_command)
-                run_kill_command()
-                run_start_command()
-            if not screencap_succesful:
+                print('ADB CONTROLLER: Scrrencap Failed, trying again in 30 seconds, get_im_command: ', get_im_command)
+                restart_adb()
                 devices_output = get_device_list_output()
-                emualator_active = (
-                        'emulator' in devices_output or
-                        (self.adb_ip + ':' + self.adb_port) in devices_output
+                emulator_active = (
+                        ('emulator' in devices_output or
+                         self.full_ip in devices_output) and 'offline' not in devices_output
                 )
-                if not emualator_active:
-                    print('ADB CONTROLLER: failed to connect, connecting again in 30 seconds')
-                    time.sleep(30)
-                    run_connect_command()
 
-                print('ADB CONTROLLER: devices output post troubleshooting: ', devices_output)
+            if not emulator_active:
+                print('ADB CONTROLLER: problem found in devices output : ', devices_output)
+                restart_adb()
+                devices_output = get_device_list_output()
+                emulator_active = (
+                        ('emulator' in devices_output or
+                         self.full_ip in devices_output) and 'offline' not in devices_output
+                )
+
+            while not emulator_active:
+                if adb_attempts > max_adb_attempts:
+                    print('ADB CONTROLLER: adb connection timed out ')
+                    exit(478)
+                else:
+                    adb_attempts += 1
+                print('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
+                restart_adb()
+                devices_output = get_device_list_output()
+                emulator_active = (
+                        ('emulator' in devices_output or
+                         self.full_ip in devices_output) and 'offline' not in devices_output
+                )
+                time.sleep(30)
+
+            if not screencap_succesful:
                 get_im_command = subprocess.run(
                     self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip),
                     cwd="/",
@@ -328,10 +377,11 @@ class adb_host:
                 try:
                     source_im = np.array(Image.open(bytes_im))
                 except UnidentifiedImageError:
-                    print('ADB CONTROLLER: Unable to restart ADB, get_im_command: ', get_im_command)
+                    print('ADB CONTROLLER: Screencap failed, get_im_command: ', get_im_command)
                     exit(478)
             self.width = source_im.shape[1]
             self.height = source_im.shape[0]
+            print('ADB CONTROLLER: adb configuration successful')
         if is_null(self.props['width']):
             self.props['width'] = self.width
         if is_null(self.props['height']):
