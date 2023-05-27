@@ -297,6 +297,7 @@ def run_script(scriptname):
             script_constants = request.args.getlist('args')
         else:
             script_constants = []
+        print('script_constants ', script_constants)
 
         script_id = get_next_script_id()
         running_script_object = create_script_object(
@@ -324,27 +325,17 @@ def run_script(scriptname):
                         '<a href="/reset_scripts"' + '> Click here to terminate </a><br>', 201)
     else:
         request_args = dict(request.args)
+        if 'args' in request.args:
+            script_constants = request.args.getlist('args')
+        else:
+            script_constants = []
         request_args['queue'] = 'True'
+        request_args['args'] = script_constants
         queue_link = url_for('run_script', scriptname=scriptname, **request_args)
         with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
             return ('<p>Please wait for script completion, script: ' + running_script_file.read() + ' still running!</p>' +\
                     '<a href=' + queue_link +'> Click here to enqueue </a><br>' +\
                         '<a href=/reset_scripts> Click here to terminate </a><br>', 400)
-
-@app.route('/enqueue/<scriptname>', methods=['GET'], strict_slashes=False)
-def enqueue_script(scriptname):
-    if not os.path.exists(RUNNING_SCRIPTS_PATH):
-        return ('<p> nothing in que </p>' +\
-                '<a href="/run/{}"> Click here to run script </a>'.format(scriptname), 400)
-    else:
-        running_scripts = []
-        with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
-            running_scripts = json.load(running_script_file)
-        running_scripts.append(scriptname)
-        with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
-            json.dump(running_scripts, running_script_file)
-    return ('<p> Added ' + scriptname + ' to queue. Now running : ' + str(running_scripts) + '  </p>' +\
-            COMPONENTS['DASHBOARD BUTTON'], 200)
 
 @app.route('/queue', methods=['GET'], strict_slashes=False)
 def show_queue():

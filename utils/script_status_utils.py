@@ -205,7 +205,7 @@ def await_script_load(event_name, script_name, is_await_queue, request_url):
     while True:
         if check_terminate_signal(event_name):
             print(event_name, 'received event terminate signal')
-            return 'terminated'
+            exit(0)
 
         if is_await_queue:
             print(requests.get(request_url))
@@ -230,7 +230,9 @@ def await_script_completion(event_name, script_name):
         print(event_name, ' awaiting script completion: ', script_name)
         if check_terminate_signal(event_name):
             print(event_name, 'received event terminate signal')
-            return False
+            # note if you return from here it will persist the script completed status
+            # which restarts the event instead of ending the event
+            exit(0)
         running_scripts = get_running_scripts()
         script_running = False
         if len(running_scripts) > 0 and running_scripts[0]['script_name'] == script_name:
