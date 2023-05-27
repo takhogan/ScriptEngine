@@ -257,9 +257,12 @@ def parse_running_scripts():
             if script_index == 0:
                 continue
             if running_script["parallel"]:
-                running_script = initialize_script_object(running_script)
-                script_thread = threading.Thread(target=run_in_thread, args=(running_script,))
-                script_thread.start()
+                if running_script["status"] == "pending":
+                    running_script = initialize_script_object(running_script)
+                    script_thread = threading.Thread(target=run_in_thread, args=(running_script,))
+                    script_thread.start()
+                else:
+                    continue
             else:
                 break
 
