@@ -9,7 +9,6 @@ import traceback
 
 import datetime
 
-sys.path.append("..")
 from script_loader import parse_zip
 from script_executor import ScriptExecutor
 from script_engine_constants import *

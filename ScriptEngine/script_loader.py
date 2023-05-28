@@ -1,13 +1,12 @@
 import sys
-
-sys.path.append("..")
-from zipfile import ZipFile
 import json
 import os
 import glob
 import datetime
 import cv2
 import numpy as np
+
+from zipfile import ZipFile
 
 
 def set_output_mask(positive_example, img_type_prefix, include_contained_area, exclude_matched_area):

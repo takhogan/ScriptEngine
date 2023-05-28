@@ -6,6 +6,7 @@ import urllib.request
 from io import BytesIO
 import glob
 from zipfile import ZipFile
+import sys
 
 # from progressbar import ProgressBar
 from waitress import serve
@@ -22,6 +23,9 @@ import subprocess
 import threading
 import sys
 import platform
+
+sys.path.append('.')
+from ScriptEngine.messaging_helper import MessagingHelper
 from utils.file_transfer_host_utils import os_normalize_path
 from utils.script_status_utils import *
 
@@ -232,10 +236,18 @@ def run_in_thread(script_object):
     print('completed ', script_object['script_name'], 'with return code', str(exit_code))
     with open(script_object['script_log_folder'] + 'completed.txt', 'w') as completed_file:
         completed_file.write(script_object['script_name'] + ' completed at ' + str(datetime.datetime.now()) + ' with return code ' + str(exit_code))
-    if exit_code == 1:
-        return
-    elif exit_code == 478:
-        return
+    if script_object['notification_level'] is not None:
+        notify = (script_object['notification_level'] == 'info')
+        notify = notify or ((
+            script_object['notification_level'] == 'error'
+        ) and (
+                exit_code == 1 or
+                exit_code == 478
+        ))
+        if notify:
+            messaging_helper = MessagingHelper()
+            messaging_helper.send_viber_message(script_object['script_name'] + ' completed with return code ' + str(exit_code))
+
     print('1', get_running_scripts())
     persist_running_script(None, script_id=script_object["script_id"])
     print('2', get_running_scripts())
