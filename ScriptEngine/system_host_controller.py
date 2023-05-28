@@ -17,7 +17,7 @@ from rv_helper import RandomVariableHelper
 from script_execution_state import ScriptExecutionState
 from script_engine_constants import *
 from script_engine_utils import generate_context_switch_action
-
+from messaging_helper import MessagingHelper
 
 
 
@@ -25,6 +25,7 @@ class SystemHostController:
     def __init__(self, base_script_name, props):
         self.base_script_name = base_script_name
         self.props = props
+        self.messaging_helper = MessagingHelper()
 
     def handle_action(self, action, state, context, log_level, log_folder):
         log_file_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
@@ -190,16 +191,8 @@ class SystemHostController:
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "sendMessageAction":
             if action["actionData"]["messagingProvider"] == "viber":
-                with open(VIBER_CREDENTIALS_FILEPATH, 'r') as creds_file:
-                    creds = json.load(creds_file)
-                print(requests.post(url=VIBER_CONTROLLER_ENDPOINT_URL, json={
-                    'action': 'sendMessage',
-                    'payload': eval(action["actionData"]["inputExpression"], state.copy())
-                }, headers={
-                    'SECRET': creds['SECRET']
-                    # 'Authorization' : 'Bearer ' + creds['AUTHORIZATION']
-                }).text)
-                del creds
+                message = eval(action["actionData"]["inputExpression"], state.copy())
+                self.messaging_helper.send_viber_message(message)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "exceptionAction":
             print('exceptionAction-' + str(action["actionGroup"]), ' message: ', action["actionData"]["exceptionMessage"])
