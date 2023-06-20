@@ -78,11 +78,27 @@ class SystemHostController:
             print('variableAssignment' + str(action["actionGroup"]),' : result : ', expression)
             # print(' state (5) ', state)
             # print(' expression : ', expression, ', ', type(expression))
+
+
+            print('state :', state)
             if '[' in action["actionData"]["outputVarName"] and ']' in action["actionData"]["outputVarName"]:
-                target_obj_split = action["actionData"]["outputVarName"].split('[')
-                target_obj = target_obj_split[0]
-                target_obj_attr = target_obj_split[1].split(']')[0]
-                state[target_obj][eval(target_obj_attr, state.copy())] = expression
+                keys = action["actionData"]["outputVarName"].split('[')  # Split the key string by '][' to get individual keys
+                # Evaluate variable names within the state dictionary
+                for i, k in enumerate(keys[1:]):
+                    k = k.rstrip(']')
+                    if k.isnumeric():
+                        keys[i + 1] = int(k)
+                    elif k in state:
+                        keys[i + 1] = eval(k, state.copy())
+                    else:
+                        keys[i + 1] = k
+
+                # Assign the value to the corresponding key within the state dictionary
+                current = state
+                for i in range(len(keys) - 1):
+                    current = current[keys[i]]
+                current[keys[-1]] = expression
+                print('variableAssignment' + str(action["actionGroup"]), ' setting ', action["actionData"]["outputVarName"], keys, ' to ', expression)
             else:
                 state[action["actionData"]["outputVarName"]] = expression
             status = ScriptExecutionState.SUCCESS
