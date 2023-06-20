@@ -94,6 +94,7 @@ def get_running_events(convert_timeout=True):
     if os.path.exists(RUNNING_EVENTS_PATH):
         with open(RUNNING_EVENTS_PATH, 'r') as running_events_file:
             running_events = json.load(running_events_file)
+        running_events = [] if running_events is None else running_events
     if convert_timeout:
         for running_event in running_events:
             running_event['timeout'] = str_timeout_to_datetime_timeout(running_event['timeout'])
@@ -232,7 +233,7 @@ def await_script_completion(event_name, script_name):
             print(event_name, 'received event terminate signal')
             # note if you return from here it will persist the script completed status
             # which restarts the event instead of ending the event
-            exit(0)
+            return 'terminate'
         running_scripts = get_running_scripts()
         script_running = False
         if len(running_scripts) > 0 and running_scripts[0]['script_name'] == script_name:

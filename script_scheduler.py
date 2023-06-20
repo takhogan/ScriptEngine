@@ -20,6 +20,7 @@ from dateutil import tz
 from google.auth.transport.requests import Request
 from google.auth.exceptions import RefreshError
 from google.oauth2.credentials import Credentials
+from google.auth.exceptions import TransportError
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -202,6 +203,11 @@ class ScriptScheduler:
             print('Waiting 60 seconds')
             time.sleep(60)
             return service,calendar_id
+        except TransportError as transport_error:
+            print('Encountered Transport error while calling calendar API : ', transport_error)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return service, calendar_id
         except ssl.SSLEOFError as ssl_error:
             print('Encountered SSL Error while calling calendar API : ', ssl_error)
             print('Waiting 60 seconds')
@@ -353,7 +359,9 @@ class ScriptScheduler:
         if script_load_status == 'loaded':
             script_obj['status'] = 'running'
             persist_event_status(event_name, running_event)
-            await_script_completion(event_name, script_name)
+            script_status = await_script_completion(event_name, script_name)
+            if script_status == 'terminate':
+                exit(0)
             script_obj['status'] = 'completed'
             persist_event_status(event_name, running_event)
         elif script_load_status == 'timed_out':
