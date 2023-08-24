@@ -373,18 +373,35 @@ def to_paragraph_blocks(input_str):
 
 @app.route('/dashboard', methods=['GET'], strict_slashes=False)
 def show_dashboard():
+    server_settings = get_server_settings()
     capture_img = "<a href=\"/capture\"/> <img style=\"width:100%;max-width:600px;\" src=\"/capture\"> </a><br>"
     running_scripts = get_running_scripts_status() + "<a href=\"/reset_script\"/> Clear Running Script </a>" +\
                       "<a href=\"/reset_scripts\"/> Clear All Scripts </a>" + '<br>'
-    running_events = to_paragraph_blocks(get_running_events_status()) + "<a href=\"/reset_event\"/> Clear Running Event </a>" + \
-                      "<a href=\"/reset_events\"/> Clear All Events </a>" + '<br>'
+    if server_settings['stop_event_processing']:
+        running_events = '<p> Event processing paused </p><br>'
+    else:
+        running_events = to_paragraph_blocks(get_running_events_status()) + "<a href=\"/reset_event\"/> Clear Running Event </a>" + \
+                          "<a href=\"/reset_events\"/> Clear All Events </a>" + '<br>'
     completed_events = to_paragraph_blocks(get_completed_events_status()) + "<a href=\"/reset_completed_events\"/> Clear Completed Events </a>" + '<br>'
     clear_all = "<a href=\"/reset\"/> Clear All </a>"  + '<br>'
     file_server = '<a href=\"http://' + request.host.split(':')[0] + ':3848/\"> File Server </a><br>'
+    server_settings = "<a href=\"/settings\"/> Settings </a>"  + '<br>'
     space_remaining = get_space_remaining()
     runnable_scripts = get_runnable_scripts()
-    return (capture_img + running_scripts + running_events + completed_events + clear_all + file_server + space_remaining + runnable_scripts, 200)
+    return (capture_img + running_scripts + running_events + completed_events + clear_all + file_server + server_settings + space_remaining + runnable_scripts, 200)
 
+@app.route('/settings', methods=['GET'], strict_slashes=False)
+def show_settings():
+    server_settings = get_server_settings()
+    for key in server_settings.keys():
+        if key in request.args:
+            server_settings[key] = False if request.args.get(key) == 'False' else 'True'
+    save_server_settings(server_settings)
+    return_html = ''
+    for key, value in server_settings.items():
+        return_html += f"<p>{key}: {value} <a href='/settings?{key}={(not value)}'>Toggle</a></p>"
+    return_html += COMPONENTS["DASHBOARD BUTTON"]
+    return (return_html, 201)
 
 def get_runnable_scripts():
     def buttonize(script_file):
@@ -502,6 +519,8 @@ def reset_running_scripts():
 def reset_running_event():
     running_events = get_running_events()
     if len(running_events) > 0:
+        print('reset events running _events: ', running_events)
+        print('re[0]', running_events[0])
         update_completed_events(running_events[0])
         persist_event_status(running_events[0]["sequence_name"], None)
     return ('<p>running event cleared</p>' + \

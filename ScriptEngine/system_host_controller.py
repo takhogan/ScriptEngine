@@ -30,7 +30,9 @@ class SystemHostController:
     def handle_action(self, action, state, context, log_level, log_folder):
         log_file_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
         def sanitize_input(statement_input, state):
-            operator_pattern = r'[()+-/*%=<>!^|&~]'
+            statement_input = statement_input.strip()
+            statement_input = statement_input.replace('\n', ' ')
+            operator_pattern = r'[\[\]()+-/*%=<>!^|&~]'
             word_operator_pattern = r'( is )|( in )|( not )|( and )|( or )'
             statement_strip = re.sub(operator_pattern, ' ', statement_input)
             statement_strip = re.sub(word_operator_pattern, ' ', statement_strip)
@@ -51,8 +53,9 @@ class SystemHostController:
         if action["actionName"] == "conditionalStatement":
             state_copy = state.copy()
             statement_strip = sanitize_input(action["actionData"]["condition"], state_copy)
-            print('condition : ', action["actionData"]["condition"], statement_strip)
-            if eval('(' + action["actionData"]["condition"] + ')', state_copy):
+            print('condition : ', action["actionData"]["condition"], statement_strip, len(action["actionData"]["condition"].replace("\n", " ")), len(action["actionData"]["condition"]))
+            condition = action["actionData"]["condition"].replace("\n", " ")
+            if eval('(' + condition + ')', state_copy):
                 print('condition success!')
                 status = ScriptExecutionState.SUCCESS
             else:
@@ -68,39 +71,38 @@ class SystemHostController:
                 status = ScriptExecutionState.SUCCESS
                 return status, state, context
 
-            print('variableAssignment' + str(action["actionGroup"]),'inputExpression : ', action["actionData"]["inputExpression"], end = '')
+            print('variableAssignment' + str(action["actionGroup"]),' inputExpression : ', action["actionData"]["inputExpression"], end = '')
             # print(' state (4) ', state)
-            expression = None
+            expression = action["actionData"]["inputExpression"].replace("\n", " ")
             if action["actionData"]["inputParser"] == 'eval':
-                expression = eval(action["actionData"]["inputExpression"], state.copy())
+                expression = eval(expression, state.copy())
             elif action["actionData"]["inputParser"] == "jsonload":
-                expression = json.loads(action["actionData"]["inputExpression"])
+                expression = json.loads(expression)
             print('variableAssignment' + str(action["actionGroup"]),' : result : ', expression)
             # print(' state (5) ', state)
             # print(' expression : ', expression, ', ', type(expression))
 
 
             print('state :', state)
-            if '[' in action["actionData"]["outputVarName"] and ']' in action["actionData"]["outputVarName"]:
-                keys = action["actionData"]["outputVarName"].split('[')  # Split the key string by '][' to get individual keys
+            outputVarName = action["actionData"]["outputVarName"].strip()
+            if '[' in outputVarName and ']' in outputVarName:
+                keys = outputVarName.split('[')  # Split the key string by '][' to get individual keys
                 # Evaluate variable names within the state dictionary
+                print('variableAssignment' + str(action["actionGroup"]) + ' keys', keys)
                 for i, k in enumerate(keys[1:]):
                     k = k.rstrip(']')
-                    if k.isnumeric():
-                        keys[i + 1] = int(k)
-                    elif k in state:
-                        keys[i + 1] = eval(k, state.copy())
-                    else:
-                        keys[i + 1] = k
+                    keys[i + 1] = eval(k, state.copy())
 
                 # Assign the value to the corresponding key within the state dictionary
                 current = state
+                print('variableAssignment' + str(action["actionGroup"]) + ' keys', keys)
                 for i in range(len(keys) - 1):
-                    current = current[keys[i]]
+                    if keys[i] in current:
+                        current = current[keys[i]]
                 current[keys[-1]] = expression
-                print('variableAssignment' + str(action["actionGroup"]), ' setting ', action["actionData"]["outputVarName"], keys, ' to ', expression)
+                print('variableAssignment' + str(action["actionGroup"]), ' setting ', outputVarName, keys, ' to ', expression)
             else:
-                state[action["actionData"]["outputVarName"]] = expression
+                state[outputVarName] = expression
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "sleepStatement":
             if str(action["actionData"]["inputExpression"]).strip() != '':
@@ -114,9 +116,12 @@ class SystemHostController:
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "jsonFileAction":
             if action["actionData"]["mode"] == "read":
-                with open(self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"],
-                          "r") as read_file:
-                    state[action["actionData"]["varName"]] = json.load(read_file)
+                json_filepath = self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"]
+                if os.path.exists(json_filepath):
+                    with open(json_filepath, "r") as read_file:
+                        state[action["actionData"]["varName"]] = json.load(read_file)
+                else:
+                    state[action["actionData"]["varName"]] = {}
                 status = ScriptExecutionState.SUCCESS
             elif action["actionData"]["mode"] == "write":
                 print('writing file: ', state[action["actionData"]["varName"]])
