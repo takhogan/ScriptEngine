@@ -8,6 +8,7 @@ from dateutil import tz
 RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
 RUNNING_EVENTS_PATH = './tmp/running_events.json'
 COMPLETED_EVENTS_PATH = './tmp/completed_events.json'
+SERVER_SETTINGS_PATH = './tmp/server_settings.json'
 
 
 def str_timeout_to_datetime_timeout(timeout, src=None):
@@ -47,6 +48,19 @@ def persist_event_status(event_name, running_event):
         else:
             running_events = [running_event]
         json.dump(running_events, running_events_file)
+
+def get_server_settings():
+    server_settings = {
+        'stop_event_processing': False
+    }
+    if os.path.exists(SERVER_SETTINGS_PATH):
+        with open(SERVER_SETTINGS_PATH, 'r') as server_settings_file:
+            server_settings = json.load(server_settings_file)
+    return server_settings
+
+def save_server_settings(server_settings):
+    with open(SERVER_SETTINGS_PATH, 'w') as server_settings_file:
+        json.dump(server_settings, server_settings_file)
 
 def get_running_scripts():
     running_scripts = []
@@ -123,6 +137,7 @@ def get_completed_events():
     if os.path.exists(COMPLETED_EVENTS_PATH):
         with open(COMPLETED_EVENTS_PATH, 'r') as completed_events_file:
             completed_events = json.load(completed_events_file)
+    print('get_completed_events', completed_events)
     for completed_event in completed_events:
         completed_event['timeout'] = str_timeout_to_datetime_timeout(completed_event['timeout'])
         completed_event['start_time'] = str_timeout_to_datetime_timeout(completed_event['start_time'])
@@ -169,6 +184,7 @@ def update_completed_events(event_object):
     completed_events = get_completed_events()
     now = datetime.datetime.utcnow()
     new_completed_events = []
+    print('update_completed_events', completed_events)
     for completed_event in completed_events:
         if completed_event['timeout'] > now:
             completed_event['timeout'] = completed_event['timeout'].strftime(

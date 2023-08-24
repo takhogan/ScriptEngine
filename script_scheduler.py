@@ -218,6 +218,11 @@ class ScriptScheduler:
             print('Waiting 60 seconds')
             time.sleep(60)
             return service,calendar_id
+        except googleapiclient.errors.HttpError as http_error:
+            print('Encountered googleapiclient.errors.HttpError while calling calendar API : ', http_error)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return service, calendar_id
         events = events_result.get('items', [])
 
         if not events:
@@ -478,7 +483,11 @@ class ScriptScheduler:
         service,calendar_id = self.initialize_service()
         print("Completed script scheduler setup, entering scheduler loop")
         while True:
-            service,calendar_id = self.check_and_execute_active_tasks(service, calendar_id)
+            server_settings = get_server_settings()
+            if not server_settings['stop_event_processing']:
+                service,calendar_id = self.check_and_execute_active_tasks(service, calendar_id)
+            else:
+                print(datetime.datetime.now(), 'event processing paused')
             time.sleep(60)
 
 
