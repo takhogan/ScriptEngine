@@ -7,6 +7,7 @@ from flask_cors import CORS
 import os
 import socket
 import platform
+import time
 
 
 from utils.file_transfer_host_utils import os_normalize_path
@@ -22,7 +23,7 @@ CORS(app)
 app.config['PLATFORM'] = platform.system()
 app.config['SUBPROCESSES'] = []
 
-LOGFILE_FOLDER = '.\\logs\\'
+LOGFILE_FOLDER = os_normalize_path('.\\logs\\')
 os.makedirs(LOGFILE_FOLDER, exist_ok=True)
 app.config['LOGFILE_FOLDER'] = LOGFILE_FOLDER
 
@@ -71,6 +72,15 @@ with open(WHITELIST_PATH, 'r') as white_list_file:
 print('whitelist :', whitelist)
 app.config['WHITELIST_IPS'] = whitelist
 
+
+for retries in range(0, 5):
+    try:
+        hostname = socket.gethostbyname(socket.gethostname())
+        break
+    except socket.gaierror as s:
+        print('encountered socket gaierror and waiting 5 seconds', s)
+        time.sleep(5)
+
 app.config['SUBPROCESSES'].append(
     subprocess.Popen([
         (
@@ -78,7 +88,7 @@ app.config['SUBPROCESSES'].append(
             'venv_scheduling_server/bin/python3'
         ),
         os_normalize_path('script_scheduler.py'),
-        socket.gethostbyname(socket.gethostname()),
+        hostname,
         str(SCRIPT_SERVER_PORT)],
         cwd=BASE_FOLDER
     )

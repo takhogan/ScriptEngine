@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import pandas as pd
+import time
 from script_engine_utils import dist
 from script_engine_utils import masked_mse
 
@@ -18,12 +19,11 @@ class ImageMatcher:
                        check_image_scale=True,
                        output_cropping=None,
                        threshold=0.96, use_color=True, use_mask=True):
-        # print(screencap_search.shape)
         if detector_name == "pixelDifference":
             matches, match_result, result_im_bgr = ImageMatcher.produce_template_matches(
                 detectObject,
-                screencap_im_bgr.copy(),
-                screencap_search_bgr.copy(),
+                screencap_im_bgr,
+                screencap_search_bgr,
                 screencap_mask_gray,
                 screencap_outputmask_bgr,
                 logs_path,
@@ -38,21 +38,9 @@ class ImageMatcher:
             )
         elif detector_name == "scaledPixelDifference":
             pass
-            # matches, match_result, result_im_bgr = ImageMatcher.produce_scaled_template_matches(
-            #     detectObject,
-            #     screencap_im_bgr.copy(),
-            #     screencap_search_bgr.copy(),
-            #     screencap_outputmask_bgr,
-            #     logs_path,
-            #     threshold=threshold,
-            #     use_color=use_color,
-            #     use_mask=use_mask
-            # )
         elif detector_name == "logisticClassifier":
             print("logistic detector unimplemented ")
             exit(0)
-            # assets_folder = '/'.join((self.props['dir_path'] + '/' + action["actionData"]["positiveExamples"][0]["mask"]).split('/')[:-2])
-            # matches,match_result,result_im = self.produce_logistic_matches(screencap_im.copy(), screencap_search, screencap_mask, logs_path, assets_folder)
         else:
             print("detector unimplemented! ")
             exit(0)
@@ -63,7 +51,6 @@ class ImageMatcher:
             cv2.imwrite(logs_path + 'match_result.png', match_result * 255)
             cv2.imwrite(logs_path + 'output_mask.png', screencap_outputmask_gray)
         n_matches = len(matches)
-        print('matches : ', [match for match,score,match_area in matches], match_point)
         return [{
                 'input_type': 'shape',
                 'point': (match[0] + match_point[0], match[1] + match_point[1]) if match_point is not None else match,
@@ -94,7 +81,6 @@ class ImageMatcher:
         capture_height = screencap_im_bgr.shape[0]
         capture_width = screencap_im_bgr.shape[1]
         is_dims_mismatch = check_image_scale and (capture_width != source_screen_width or capture_height != source_screen_height)
-        # print('is_dims_mismatch', is_dims_mismatch, capture_width, source_screen_width, capture_height, source_screen_height)
         height_translation = 1
         width_translation = 1
         match_result = None
@@ -102,25 +88,13 @@ class ImageMatcher:
         is_match_error = False
         threshold_match_results = lambda match_results: np.where((np.inf > match_results) & (match_results >= threshold))
         use_resized_im_only = detectObject["actionData"]["useImageRescaledToScreenOnly"] == "true" or detectObject["actionData"]["useImageRescaledToScreenOnly"]
-        print('useImageRescaledToScreenOnly : ', detectObject["actionData"]["useImageRescaledToScreenOnly"], use_resized_im_only)
         if not use_resized_im_only:
             try:
-                # print(cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr.shape, 'screencap_im_bgr')
-                # print(cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr.shape, 'screencap_search_bgr')
-                # print(screencap_mask_gray.shape, 'screencap_mask_gray shape')
-                # print(screencap_mask_gray, 'screencap_mask_gray')
                 match_result = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr,
                     cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
                     cv2.TM_CCOEFF_NORMED,result=None,
                     mask=screencap_mask_gray if use_mask else None)
-                # cv2.imshow('screencap_im_bgr', cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr)
-                # cv2.waitKey(0)
-                # cv2.imshow('screencap_search_bgr', cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr)
-                # cv2.waitKey(0)
-                # cv2.imshow('screencap_mask_gray', screencap_mask_gray)
-                # cv2.waitKey(0)
-                # print('first_match : ', threshold_match_results(match_result), use_color, use_mask)
             except cv2.error as e:
                 is_match_error = True
 
@@ -163,6 +137,7 @@ class ImageMatcher:
                 print('translation : ', height_translation, capture_height,source_screen_height, width_translation, capture_width, source_screen_width)
 
         # if there is an erorr resize image to original dims, pass translation factor to filter_matches
+
         return ImageMatcher.filter_matches_and_get_result_im(
             detectObject,
             match_result,
@@ -255,16 +230,17 @@ class ImageMatcher:
             print('a not valid')
         best_match_str = str(best_match)
         print('n matches : ', len(matches), ' best match : ', best_match_pt, best_match_str)
-        with open(logs_path + '-best-' + best_match_str + '.txt', 'w') as log_file:
-            log_file.write('n matches : ' + str(len(matches)))
-        result_im_bgr = screencap_im_bgr
+
+        # with open(logs_path + '-best-' + best_match_str + '.txt', 'w') as log_file:
+        #     log_file.write('n matches : ' + str(len(matches)))
+        result_im_bgr = screencap_im_bgr.copy()
         matches.sort(reverse=True, key=lambda match: match[1])
         def adjust_box_to_bounds(pt, box_width, box_height, screen_width, screen_height, box_thickness):
             x_overshoot = pt[0] + box_width + box_thickness - screen_width
             y_overshoot = pt[1] + box_height + box_thickness - screen_height
             return (
-                box_width - x_overshoot if x_overshoot > 0 else box_width,
-                box_height - y_overshoot if y_overshoot > 0 else box_height
+                max(0, box_width - x_overshoot if x_overshoot > 0 else box_width),
+                max(0, box_height - y_overshoot if y_overshoot > 0 else box_height)
             )
         box_w = box_h = -1
         for pt in zip(*thresholded_match_results[::-1]):
@@ -273,7 +249,6 @@ class ImageMatcher:
         if thresholded_match_results[0].size == 0 and best_match_pt is not None:
             box_w, box_h = adjust_box_to_bounds(best_match_pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
             cv2.rectangle(result_im_bgr, best_match_pt, (best_match_pt[0] + box_w, best_match_pt[1] + box_h), (0, 0, 128), 2)
-        print('box_w, box_h', box_w, box_h)
         return matches, match_result, result_im_bgr
 
     # def produce_logistic_matches(self, screencap_im, screencap_search, screencap_mask, logs_path, assets_folder, threshold=0.7):

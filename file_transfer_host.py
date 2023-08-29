@@ -86,7 +86,7 @@ def get_library():
     script_files = glob.glob(
         os_normalize_path(app.config['UPLOAD_LIBRARY_FOLDER'] + '\\*.zip')
     )
-    library_zip_changelog_path = app.config['TEMP_FOLDER'] + '\\library_zip_changelog.json'
+    library_zip_changelog_path = os_normalize_path(app.config['TEMP_FOLDER'] + '\\library_zip_changelog.json')
     if os.path.exists(library_zip_changelog_path):
         with open(library_zip_changelog_path, 'r') as library_zip_changelog:
             library_zip_changelog_dict = json.load(library_zip_changelog)
@@ -102,7 +102,7 @@ def get_library():
     with open(library_zip_changelog_path, 'w') as library_zip_changelog:
         json.dump(current_times, library_zip_changelog)
 
-    library_zip_path = app.config['TEMP_FOLDER'] + '\\library_zip.zip'
+    library_zip_path = os_normalize_path(app.config['TEMP_FOLDER'] + '\\library_zip.zip')
     script_files.sort()
     refresh_cache = True
     if current_times.keys() == library_zip_changelog_dict.keys() and\
@@ -360,7 +360,9 @@ def get_space_remaining():
     if app.config['PLATFORM'] == 'Windows':
         bytes_free = subprocess.check_output('dir|find "bytes free"', shell=True).decode('utf-8')
     else:
-        bytes_free = 'Bytes free command unimplemented'
+        bytes_free = int(subprocess.check_output(r"df -k / | tail -n 1 | awk '{print $4}'", shell=True).decode('utf-8'))
+        print(bytes_free)
+        bytes_free = f"{bytes_free:,}" + " bytes free"
     bytes_free_split = bytes_free.split(' ')
     # print(bytes_free_split)
     # bytes_free_val = int(bytes_free_split[3])

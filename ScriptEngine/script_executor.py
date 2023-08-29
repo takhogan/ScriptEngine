@@ -1,4 +1,5 @@
 import copy
+import concurrent.futures
 import json
 import shlex
 import sys
@@ -9,14 +10,18 @@ import tesserocr
 import random
 import re
 import glob
+import psutil
+
 
 import cv2
 
 sys.path.append("..")
+from parallelized_script_executor import ParallelizedScriptExecutor
 from script_engine_constants import *
 from script_execution_state import ScriptExecutionState
 from script_engine_utils import generate_context_switch_action,get_running_scripts
 from script_logger import ScriptLogger
+
 
 
 
@@ -207,10 +212,10 @@ class ScriptExecutor:
                         action['actionData']['screencap_im_bgr'] = screenshot
                         action['actionData']['detect_run_type'] = 'result_precalculation'
                         action['actionData']['results_precalculated'] = False
-                        self.status, self.state, self.context = self.device_manager.adb_host.handle_action(
-                            action, self.state, self.context, self.log_level, self.log_folder
-                        )
-                        self.actions[action_index] = self.context['action']
+                        # self.status, self.state, self.context = self.device_manager.adb_host.handle_action(
+                        #     action, self.state, self.context, self.log_level, self.log_folder
+                        # )
+                        # self.actions[action_index] = action
                 elif target_system == 'python':
                     screenshot = self.device_manager.python_host.screenshot()
                     for [action_index,action] in actions:
@@ -218,43 +223,37 @@ class ScriptExecutor:
                         action['actionData']['screencap_im_bgr'] = screenshot
                         action['actionData']['detect_run_type'] = 'result_precalculation'
                         action['actionData']['results_precalculated'] = False
-                        self.status, self.state, self.context = self.device_manager.python_host.handle_action(
-                            action, self.state, self.context, self.log_level, self.log_folder
-                        )
-                        self.actions[action_index] = self.context['action']
+                        # self.status, self.state, self.context = self.device_manager.python_host.handle_action(
+                        #     action, self.state, self.context, self.log_level, self.log_folder
+                        # )
+                        # self.actions[action_index] = action
             print(self.props['script_name'] + ' CONTROL FLOW: Finished forward peek')
 
 
-    def handle_action(self, action):
+    def handle_action(self, action, lazy_eval=False):
         self.log_action_details(action)
         self.context["script_counter"] += 1
-        # print(' context (2) : ', self.context["action_attempts"])
-        # if action["actionName"] not in DELAY_EXEMPT_ACTIONS:
-            # time.sleep(0.25)
-
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
-                self.status, self.state, self.context = self.device_manager.adb_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
+                handle_action_result = self.device_manager.adb_host.handle_action(action, self.state, self.context, self.run_queue, self.log_level, self.log_folder, lazy_eval=lazy_eval)
             elif action["actionData"]["targetSystem"] == "python":
-                self.status, self.state, self.context = self.device_manager.python_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
+                handle_action_result = self.device_manager.python_host.handle_action(action, self.state, self.context, self.run_queue, self.log_level, self.log_folder, lazy_eval=lazy_eval)
             elif action["actionData"]["targetSystem"] == "none":
                 if action["actionName"] == "scriptReference":
-                    self.status, self.state, self.context = self.handle_script_reference(action, self.state, self.context)
+                    handle_action_result = self.handle_script_reference(action, self.state, self.context, self.run_queue)
                 else:
-                    self.status, self.state, self.context = self.device_manager.system_host.handle_action(action, self.state, self.context, self.log_level, self.log_folder)
+                    handle_action_result = self.device_manager.system_host.handle_action(action, self.state, self.context, self.run_queue, self.log_level, self.log_folder)
             else:
-                self.status = ScriptExecutionState.ERROR
+                status = ScriptExecutionState.ERROR
                 print("target system " + action["actionData"]["targetSystem"] + " unimplemented!")
                 exit(0)
         else:
-            self.status = ScriptExecutionState.ERROR
+            status = ScriptExecutionState.ERROR
             print("script formatting error, targetSystem not present!")
             exit(0)
+        return handle_action_result
 
-        self.post_handle_action()
-        return action
-
-    def handle_script_reference(self, action, state, context):
+    def handle_script_reference(self, action, state, context, run_queue):
         if action["actionName"] == 'scriptReference':
 
             if 'paused_script' in self.context:
@@ -418,12 +417,7 @@ class ScriptExecutor:
             action["actionData"]["initializedScript"] = ref_script_executor
             print(action["actionData"][
                       "scriptName"] + " returning with status " + ref_script_executor.status.name + "/" + status.name)
-        return status, state, context
-
-    def post_handle_action(self):
-        if self.context['run_queue'] is not None:
-            self.run_queue += self.context['run_queue']
-            self.context['run_queue'] = None
+        return action, status, state, context, run_queue, []
 
     def get_out_of_attempts_handler(self, action):
         if action is None:
@@ -476,15 +470,23 @@ class ScriptExecutor:
             return end_branch,True
         running_scripts = get_running_scripts()
         if len(running_scripts) == 0:
+            print('CONTROL FLOW: running scripts file empty')
             terminate_request = True
         else:
             current_running_script = running_scripts[0]
-            print('2--', self.script_id, current_running_script['script_id'])
+            script_id_mismatch = current_running_script["script_id"] != self.script_id
+            start_time_mismatch = current_running_script['start_time_str'] != self.base_start_time
+            print(current_running_script['start_time_str'], self.base_start_time)
+            script_name_mismatch = current_running_script['script_name'] != self.base_script_name
             terminate_request = (
-                current_running_script["script_id"] != self.script_id or
-                current_running_script['start_time_str'] != self.base_start_time or
-                current_running_script['script_name'] != self.base_script_name
+                script_id_mismatch or
+                start_time_mismatch or
+                script_name_mismatch
             )
+            if terminate_request:
+                print(self.props['script_name'] + ' CONTROL FLOW: script_id_mismatch?', script_id_mismatch,
+                      'start_time_mismatch?', start_time_mismatch,
+                      'script_name_mismatch?', script_name_mismatch)
             if terminate_request and current_running_script['parallel']:
                 for running_script in running_scripts:
                     if running_script['parallel']:
@@ -499,8 +501,6 @@ class ScriptExecutor:
                         break
 
         if terminate_request:
-            print('4--', get_running_scripts())
-            print('5--', self.base_start_time, self.script_id)
             print(self.props['script_name'] + ' CONTROL FLOW: received terminate request')
             return end_branch,True
 
@@ -536,6 +536,30 @@ class ScriptExecutor:
             return False
         else:
             return True
+
+    def parse_update_queue(self, update_queue):
+        for [update_type, update_target, update_key, update_payload] in update_queue:
+            if update_target == 'context':
+                if update_type == 'update':
+                    self.context[update_key] = update_payload
+                elif update_type == 'append':
+                    self.context[update_key].append(update_payload)
+            elif update_target == 'state':
+                if update_type == 'update':
+                    self.state[update_key] = update_payload
+                elif update_type == 'append':
+                    self.state[update_key].append(update_payload)
+            elif update_target == 'run_queue':
+                if update_type == 'update':
+                    if update_key is not None:
+                        self.run_queue[update_key] = update_payload
+                    else:
+                        self.run_queue = update_payload
+                elif update_type == 'append':
+                    self.run_queue.append(update_payload)
+            elif update_target == 'status':
+                if update_type == 'update':
+                    self.status = update_payload
 
 
     #if it is handle all branches then you take the first branch and for the rest you create a context switch action
@@ -576,7 +600,7 @@ class ScriptExecutor:
             n_actions = 1
 
 
-
+        skip_indices = []
         for action_index in range(0, n_actions):
             self.context["action_index"] = action_index
             action = self.actions[action_indices[action_index]]
@@ -588,8 +612,41 @@ class ScriptExecutor:
                     "searchAreaObjectHandler" in action["actionData"]["detectorAttributes"]:
                 self.context["object_handler_encountered"] = True
 
-            # print('pre handle: ', action)
-            self.actions[action_indices[action_index]] = self.handle_action(action)
+            if action_index not in skip_indices:
+
+                is_parallelizeable = lambda action: 'detect_run_type' in action['actionData'] and \
+                                   action['actionData']['detect_run_type'] == 'result_precalculation'
+                parallellizeable = is_parallelizeable(action)
+
+                if parallellizeable:
+                    start_index = action_index
+                    stop_index = action_index
+                    parallel_actions = []
+                    parallel_indices = []
+                    for parallel_index in range(action_index, n_actions):
+                        parallel_action = self.actions[parallel_index]
+                        if not is_parallelizeable(parallel_action):
+                            break
+                        parallel_actions.append([parallel_index, parallel_action])
+                        parallel_indices.append(parallel_index)
+                        stop_index = parallel_index
+                if parallellizeable and stop_index > start_index:
+                    for parallel_action in parallel_actions:
+                        parallel_action[1] = self.handle_action(parallel_action[1], lazy_eval=True)
+                        # print('time: ', time.time(),
+                        #       'max w', executor._max_workers,
+                        #       'processes', executor._processes,
+                        #       'tasks ', executor._work_ids.qsize(),
+                        #       'cpu: ', psutil.cpu_percent(interval=1, percpu=True))
+
+                    skip_indices += parallel_indices
+                    parallelized_executor = ParallelizedScriptExecutor()
+                    update_queue = parallelized_executor.parallelized_execute(parallel_actions, start_index, stop_index)
+                    self.parse_update_queue(update_queue)
+                else:
+                    self.action, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
+                    self.parse_update_queue(update_queue)
+                # self.actions[action_indices[action_index]] =
             # print('post handle : ', action)
             self.context["action_attempts"][action_index] += 1
             if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_FAILURE:
