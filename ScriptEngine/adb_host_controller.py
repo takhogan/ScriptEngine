@@ -144,12 +144,13 @@ class adb_host:
         # shell_process = subprocess.Popen([self.adb_path, 'shell'],stdin=subprocess.PIPE)
         # device_name = shell_process.communicate(b"getevent -pl 2>&1 | sed -n '/^add/{h}/ABS_MT_TOUCH/{x;s/[^/]*//p}'")
         self.sendevent_command = 'sendevent /dev/input/event5 {} {} {};'
+
         self.commands = {
             "tracking_id_mousedown": self.sendevent_command.format(3, int('39', 16), 0),
-            "touch_major_func": lambda: self.sendevent_command.format(3, int('30', 16), self.event_counter),
+            "touch_major_func": self.touch_major_func,
             "abs_mt_pressure_down" : self.sendevent_command.format(3, int('3a', 16), int('81', 16)),
-            "x_command_func" : lambda x_val: self.sendevent_command.format(3, int('35',16), x_val),
-            "y_command_func" : lambda y_val: self.sendevent_command.format(3, int('36',16), y_val),
+            "x_command_func" : self.x_command_func,
+            "y_command_func" : self.y_command_func,
             "action_terminate_command" : self.sendevent_command.format(0, 0, 0),
             "abs_mt_pressure_up" : self.sendevent_command.format(3, int('3a', 16), 0),
             "tracking_id_mouseup" : self.sendevent_command.format(3, int('39', 16), '-1'),
@@ -169,6 +170,7 @@ class adb_host:
                 'autoDetectAdbPort' : False if 'AUTO_DETECT_ADB_PORT' not in adb_args else adb_args['AUTO_DETECT_ADB_PORT']
             }
         }, {}, {})
+
 
     def configure_adb(self, configurationAction, state, context):
 
@@ -427,6 +429,15 @@ class adb_host:
 
     def save_screenshot(self, save_name):
         pass
+
+    def touch_major_func(self):
+        return self.sendevent_command.format(3, int('30', 16), self.event_counter)
+
+    def x_command_func(self, x_val):
+        return self.sendevent_command.format(3, int('35', 16), x_val)
+
+    def y_command_func(self, y_val):
+        return self.sendevent_command.format(3, int('36', 16), y_val)
 
     def click(self, x, y, important=False):
         # 1st point always the og x,y
@@ -761,13 +772,14 @@ class adb_host:
         # print((''.join(command_string)).encode('utf-8'))
         self.event_counter += 1
 
-    def handle_action(self, action, state, context, log_level, log_folder):
+    def handle_action(self, action, state, context, run_queue, log_level, log_folder, lazy_eval=False):
         logs_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
 
 
         #initialize
         if action["actionName"] == "ADBConfigurationAction":
-            return self.configure_adb(action, state, context)
+            status, state, context = self.configure_adb(action, state, context)
+            return action, status, state, context, run_queue, []
         else:
             self.init_system()
 
@@ -775,89 +787,44 @@ class adb_host:
         if action["actionName"] == "detectObject":
             # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
             # https://learnopencv.com/image-resizing-with-opencv/
-            forward_peek_result = ForwardDetectPeekHelper.load_forward_peek_result(action, state, context)
-            if forward_peek_result is not None:
-                return forward_peek_result
 
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
-            # print('get_detect_result', match_point, screencap_im_bgr.shape if screencap_im_bgr is not None else 'none')
             check_image_scale = screencap_im_bgr is None
             screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, screencap_im_bgr)
+
             if screencap_im_bgr is None:
+                print('detectObject-' + str(action["actionGroup"]) + ' taking screenshot')
                 screencap_im_bgr = self.screenshot()
-            # print('post transform: ', screencap_im_bgr.shape)
 
-            screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
-            if self.props["scriptMode"] == "train" and log_level == 'info':
-                cv2.imwrite(logs_path + '-search_img.png', screencap_search_bgr)
-            is_detect_object_first_match = (action['actionData']['detectActionType'] == 'detectObject' and action['actionData']['matchMode'] == 'firstMatch')
-
-            if is_detect_object_first_match or\
-                action['actionData']['detectActionType'] == 'detectScene':
-                matches,ssim_coeff = DetectSceneHelper.get_match(
-                    action,
-                    screencap_im_bgr.copy(),
-                    action["actionData"]["positiveExamples"][0]["sceneimg"],
-                    action["actionData"]["positiveExamples"][0]["scenemask"],
-                    action["actionData"]["positiveExamples"][0]["scenemask_single_channel"],
-                    action["actionData"]["positiveExamples"][0]["mask_single_channel"],
-                    action["actionData"]["positiveExamples"][0]["outputMask"],
-                    self.props["dir_path"],
-                    logs_path,
-                    log_level=log_level,
-                    check_image_scale=check_image_scale,
-                    output_cropping=action["actionData"]["maskLocation"] if
-                    (action["actionData"]["maskLocation"] != 'null' and
-                     "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
-                    ) else None
-                )
-                if ssim_coeff < float(action["actionData"]["threshold"]):
-                    matches = []
-                    if action['actionData']['detectActionType'] == 'detectScene':
-                        print('detectObject-' + str(action["actionGroup"]) + ' FAILED, detect mode detect scene, match % : ' + str(ssim_coeff))
-                    else:
-                        print('detectObject-' + str(action["actionGroup"]) + ' first match failed, detect mode detect object, match % : ', str(ssim_coeff))
-                else:
-                    print('detectObject-' + str(action["actionGroup"]) + ' SUCCESS, detect mode detect scene, match % :' + str(ssim_coeff))
-
-
-            if (action['actionData']['detectActionType'] == 'detectObject' and action['actionData']['matchMode'] == 'bestMatch') or \
-                    (is_detect_object_first_match and len(matches) == 0):
-                matches = self.image_matcher.template_match(
+            if lazy_eval:
+                return DetectObjectHelper.handle_detect_object, (
                     action,
                     screencap_im_bgr,
-                    screencap_search_bgr,
-                    action["actionData"]["positiveExamples"][0]["mask_single_channel"],
-                    action["actionData"]["positiveExamples"][0]["outputMask"],
-                    action["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
-                    action['actionData']['detectorName'],
-                    logs_path,
-                    self.props["scriptMode"],
+                    state,
+                    context,
+                    run_queue,
                     match_point,
-                    log_level=log_level,
-                    check_image_scale=check_image_scale,
-                    output_cropping=action["actionData"]["maskLocation"] if
-                    (action["actionData"]["maskLocation"] != 'null' and
-                     "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
-                     ) else None,
-                    threshold=float(action["actionData"]["threshold"]),
-                    use_color=action["actionData"]["useColor"] == "true" or action["actionData"]["useColor"]
+                    check_image_scale,
+                    self.props['scriptMode'],
+                    log_level,
+                    logs_path,
+                    self.props['dir_path']
                 )
-
-
-            # exit(0)
-            if len(matches) > 0:
-                state, context, update_dict = DetectObjectHelper.append_to_run_queue(
-                    action, state, context, matches,
-                    action['actionData']['detect_run_type'] if 'detect_run_type' in action['actionData'] else 'normal'
-                )
-                action_result = ScriptExecutionState.SUCCESS
             else:
-                update_dict = {}
-                action_result = ScriptExecutionState.FAILURE
-            action, context = ForwardDetectPeekHelper.save_forward_peek_results(action, update_dict, action_result, context)
-            return action_result, state, context
-
+                action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_object(
+                    action,
+                    screencap_im_bgr,
+                    state,
+                    context,
+                    run_queue,
+                    match_point=match_point,
+                    check_image_scale=check_image_scale,
+                    script_mode=self.props['scriptMode'],
+                    log_level=log_level,
+                    logs_path=logs_path,
+                    dir_path=self.props['dir_path']
+                )
+                return action, status, state, context, run_queue, update_queue
         elif action["actionName"] == "clickAction":
             # if '__builtins__' in state:
             #     print('deleting builtins')
@@ -888,24 +855,24 @@ class adb_host:
                 self.click(point_choice[0], point_choice[1])
                 time.sleep(delays[click_count])
 
-            return ScriptExecutionState.SUCCESS, state, context
+            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
 
         elif action["actionName"] == "shellScript":
             if self.host_os is not None:
                 state = self.host_os.run_script(action, state)
-                return ScriptExecutionState.SUCCESS, state, context
+                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
 
         elif action["actionName"] == "conditionalStatement":
             if eval(action["actionData"]["condition"], state):
                 print('condition success!')
-                return ScriptExecutionState.SUCCESS, state, context
+                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
                 print('condition failure!')
-                return ScriptExecutionState.FAILURE, state, context
+                return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
         elif action["actionName"] == "sleepStatement":
             if str(action["actionData"]["inputExpression"]).strip() == '':
                 time.sleep(float(eval(str(action["actionData"]["inputExpression"]), state)))
-            return ScriptExecutionState.SUCCESS, state, context
+            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationSource":
             source_point = random.choice(action["actionData"]["pointList"])
             print('dragLocationSource : input expression : ', action["actionData"]["inputExpression"])
@@ -914,7 +881,7 @@ class adb_host:
                 source_point = eval(action["actionData"]["inputExpression"], state)
                 print('dragLocationSource : reading input expression ', action["actionData"]["inputExpression"])
             context["dragLocationSource"] = source_point
-            return ScriptExecutionState.SUCCESS, state, context
+            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationTarget":
             source_point = context["dragLocationSource"]
             target_point = random.choice(action["actionData"]["pointList"])
@@ -927,11 +894,11 @@ class adb_host:
             del context["dragLocationSource"]
             # print(source_point)
             # print(target_point)
-            return ScriptExecutionState.SUCCESS, state, context
+            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "searchPatternStartAction":
             context = self.search_pattern_helper.generate_pattern(action, context, log_folder, self.props['dir_path'])
             # print(state)
-            return ScriptExecutionState.SUCCESS, state, context
+            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "searchPatternContinueAction":
             search_pattern_id = action["actionData"]["searchPatternID"]
             raw_source_pt, raw_target_pt, displacement, context = self.search_pattern_helper.execute_pattern(search_pattern_id, context)
@@ -1124,7 +1091,7 @@ class adb_host:
                     break
 
             context["search_patterns"][search_pattern_id] = search_pattern_obj
-            return ScriptExecutionState.SUCCESS, state, context
+            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "searchPatternEndAction":
             search_pattern_id = action["actionData"]["searchPatternID"]
             if context["parent_action"] is not None and \
@@ -1170,23 +1137,24 @@ class adb_host:
             generate_greater_pano(0, step_index)
 
             del context["search_patterns"][action["actionData"]["searchPatternID"]]
-            return ScriptExecutionState.SUCCESS, state, context
+            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
                 # print(np.array(pyautogui.screenshot()).shape)
                 # exit(0)
                 log_image = self.screenshot()
                 cv2.imwrite(logs_path + '-logImage.png', log_image)
-                return ScriptExecutionState.SUCCESS, state, context
+                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
                 print('log type unimplemented ' + action["actionData"]["logType"])
                 exit(0)
         elif action["actionName"] == "timeAction":
             state[action["actionData"]["outputVarName"]] = datetime.datetime.now()
             # self.state[action["actionData"]["outputVarName"]] = expression
-            return ScriptExecutionState.SUCCESS, state, context
+            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "keyboardAction":
-            return DeviceActionInterpreter.parse_keyboard_action(self, action, state, context)
+            status, state, context = DeviceActionInterpreter.parse_keyboard_action(self, action, state, context)
+            return action, status, state, context, run_queue, []
         else:
             print("action uninplemented on adb " + action["actionName"])
             exit(0)

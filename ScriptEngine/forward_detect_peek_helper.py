@@ -6,6 +6,7 @@ class ForwardDetectPeekHelper:
 
     @staticmethod
     def load_forward_peek_result(action, state, context):
+        print(action['actionData']["resuseScreenshotBetweenActions"] == True, action['actionData']["resuseScreenshotBetweenActions"] )
         if 'detect_run_type' in action['actionData'] and\
                 action['actionData']['detect_run_type'] == 'result_precalculation' and \
                 (action['actionData']["resuseScreenshotBetweenActions"] if
@@ -48,7 +49,9 @@ class ForwardDetectPeekHelper:
         if screencap_im_bgr is not None:
             return screencap_im_bgr
         if 'screencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
+            print('detectObject-' + str(action["actionGroup"]) + ' loading cached screenshot')
             screencap_im_bgr = action['actionData']['screencap_im_bgr']
+            del action['actionData']['screencap_im_bgr']
         else:
             screencap_im_bgr = None
         return screencap_im_bgr

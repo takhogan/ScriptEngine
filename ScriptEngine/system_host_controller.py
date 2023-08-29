@@ -27,7 +27,7 @@ class SystemHostController:
         self.props = props
         self.messaging_helper = MessagingHelper()
 
-    def handle_action(self, action, state, context, log_level, log_folder):
+    def handle_action(self, action, state, context, run_queue, log_level, log_folder):
         log_file_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
         def sanitize_input(statement_input, state):
             statement_input = statement_input.strip()
@@ -69,7 +69,7 @@ class SystemHostController:
                      state[action["actionData"]["outputVarName"]] is not None):
                 print('output variable ', action["actionData"]["outputVarName"], ' was not null')
                 status = ScriptExecutionState.SUCCESS
-                return status, state, context
+                return action, status, state, context, run_queue, []
 
             print('variableAssignment' + str(action["actionGroup"]),' inputExpression : ', action["actionData"]["inputExpression"], end = '')
             # print(' state (4) ', state)
@@ -315,7 +315,7 @@ class SystemHostController:
             print("action unimplemented ")
             print(action)
             exit(1)
-        return status,state,context
+        return action, status, state, context, run_queue, []
 
 
 if __name__ == '__main__':
