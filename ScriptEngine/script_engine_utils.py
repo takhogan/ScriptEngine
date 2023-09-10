@@ -20,7 +20,6 @@ def generate_context_switch_action(childGroups, state, context, update_dict):
     }
 
 def masked_mse(target_im, compare_im, mask_size):
-    print('masked_mse', target_im.shape, compare_im.shape)
     return 1 - np.sum(np.square(np.subtract(target_im, compare_im))) / mask_size
 
 

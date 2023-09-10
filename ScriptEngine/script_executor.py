@@ -633,21 +633,22 @@ class ScriptExecutor:
                 if parallellizeable and stop_index > start_index:
                     for parallel_action in parallel_actions:
                         parallel_action[1] = self.handle_action(parallel_action[1], lazy_eval=True)
-                        # print('time: ', time.time(),
-                        #       'max w', executor._max_workers,
-                        #       'processes', executor._processes,
-                        #       'tasks ', executor._work_ids.qsize(),
-                        #       'cpu: ', psutil.cpu_percent(interval=1, percpu=True))
 
                     skip_indices += parallel_indices
                     parallelized_executor = ParallelizedScriptExecutor()
-                    update_queue = parallelized_executor.parallelized_execute(parallel_actions, start_index, stop_index)
+                    print('CONTROL FLOW: ', self.props['script_name'], 'starting parallel execution')
+                    success_index, update_queue = parallelized_executor.parallelized_execute(parallel_actions, start_index, stop_index)
                     self.parse_update_queue(update_queue)
+                    self.context["action_index"] = success_index
+                    action = self.actions[action_indices[success_index]]
+                    child_actions = self.get_children(action)
+                    self.context['child_actions'] = child_actions
                 else:
                     self.action, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
                     self.parse_update_queue(update_queue)
+                print('CONTROL FLOW: ', self.props['script_name'], 'completed parallel execution and returned status ', self.status)
                 # self.actions[action_indices[action_index]] =
-            # print('post handle : ', action)
+
             self.context["action_attempts"][action_index] += 1
             if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_FAILURE:
                 self.context['parent_action'] = action
