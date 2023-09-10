@@ -10,7 +10,6 @@ import tesserocr
 import random
 import re
 import glob
-import psutil
 
 
 import cv2
@@ -640,13 +639,14 @@ class ScriptExecutor:
                     success_index, update_queue = parallelized_executor.parallelized_execute(parallel_actions, start_index, stop_index)
                     self.parse_update_queue(update_queue)
                     self.context["action_index"] = success_index
+                    print()
                     action = self.actions[action_indices[success_index]]
                     child_actions = self.get_children(action)
                     self.context['child_actions'] = child_actions
                 else:
                     self.action, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
                     self.parse_update_queue(update_queue)
-                print('CONTROL FLOW: ', self.props['script_name'], 'completed parallel execution and returned status ', self.status)
+                print('CONTROL FLOW: ', self.props['script_name'], 'completed parallel execution and returned status ', self.status, ' assigned action ', action["actionGroup"])
                 # self.actions[action_indices[action_index]] =
 
             self.context["action_attempts"][action_index] += 1
