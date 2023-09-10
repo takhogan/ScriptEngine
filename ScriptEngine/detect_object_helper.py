@@ -106,6 +106,7 @@ class DetectObjectHelper:
             dir_path='./logs',
             lazy_eval=False
     ):
+        print('inside detectObject')
         screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
         if script_mode == "train" and log_level == 'info':
             cv2.imwrite(logs_path + '-search_img.png', screencap_search_bgr)
