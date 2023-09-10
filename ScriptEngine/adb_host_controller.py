@@ -808,7 +808,8 @@ class adb_host:
                     self.props['scriptMode'],
                     log_level,
                     logs_path,
-                    self.props['dir_path']
+                    self.props['dir_path'],
+                    True
                 )
             else:
                 action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_object(

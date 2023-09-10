@@ -231,8 +231,8 @@ class ImageMatcher:
         best_match_str = str(best_match)
         print('n matches : ', len(matches), ' best match : ', best_match_pt, best_match_str)
 
-        # with open(logs_path + '-best-' + best_match_str + '.txt', 'w') as log_file:
-        #     log_file.write('n matches : ' + str(len(matches)))
+        with open(logs_path + '-best-' + best_match_str + '.txt', 'w') as log_file:
+            log_file.write('n matches : ' + str(len(matches)))
         result_im_bgr = screencap_im_bgr.copy()
         matches.sort(reverse=True, key=lambda match: match[1])
         def adjust_box_to_bounds(pt, box_width, box_height, screen_width, screen_height, box_thickness):

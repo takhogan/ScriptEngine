@@ -24,7 +24,7 @@ class DetectSceneHelper:
             output_cropping=None):
         mask_size = np.count_nonzero(scene_screencap_mask_single_channel)
         original_height,original_width = screencap_im_bgr.shape[0],screencap_im_bgr.shape[1]
-        print('og height width ', screencap_im_bgr.shape)
+
         needs_rescale = screencap_im_bgr.shape != scene_screencap_mask.shape
         if needs_rescale:
             screencap_im_bgr = cv2.resize(
@@ -32,7 +32,7 @@ class DetectSceneHelper:
                 (scene_screencap_mask.shape[1], scene_screencap_mask.shape[0]),
                 interpolation=cv2.INTER_AREA
             )
-            print('not matching : ', screencap_im_bgr.shape, scene_screencap_mask.shape)
+            print('resized input : ', screencap_im_bgr.shape, scene_screencap_mask.shape)
         screencap_masked = cv2.bitwise_and(screencap_im_bgr, scene_screencap_mask)
         ssim_coeff = masked_mse(screencap_masked, screencap_compare, mask_size * 3 * 255)
 

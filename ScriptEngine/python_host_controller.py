@@ -126,95 +126,6 @@ class python_host:
             status, state, context = DeviceActionInterpreter.parse_keyboard_action(self, action, state, context)
             return action, status, state, context, run_queue, []
         elif action["actionName"] == "detectObject":
-            # # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
-            # # https://learnopencv.com/image-resizing-with-opencv/
-            # # TODO move this all into detectobject as a single method, call that when multicore is true
-            # # TODO remember to copy for adb and to put args for the other methods
-            # screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
-            # # print('get_detect_result', match_point, screencap_im_bgr.shape if screencap_im_bgr is not None else 'none')
-            # check_image_scale = screencap_im_bgr is None
-            # screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, screencap_im_bgr)
-            # if screencap_im_bgr is None:
-            #     print('detectObject-' + str(action["actionGroup"]) + ' taking screenshot')
-            #     screencap_im_bgr = self.screenshot()
-            #
-            # screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
-            # if self.props["scriptMode"] == "train" and log_level == 'info':
-            #     cv2.imwrite(logs_path + '-search_img.png', screencap_search_bgr)
-            # is_detect_object_first_match = (
-            #             action['actionData']['detectActionType'] == 'detectObject' and action['actionData'][
-            #         'matchMode'] == 'firstMatch'
-            # )
-            #
-            # #if is match mode firstMatch or is a detectScene
-            # if is_detect_object_first_match or \
-            #         action['actionData']['detectActionType'] == 'detectScene':
-            #     matches, ssim_coeff = DetectSceneHelper.get_match(
-            #         action,
-            #         screencap_im_bgr.copy(),
-            #         action["actionData"]["positiveExamples"][0]["sceneimg"],
-            #         action["actionData"]["positiveExamples"][0]["scenemask"],
-            #         action["actionData"]["positiveExamples"][0]["scenemask_single_channel"],
-            #         action["actionData"]["positiveExamples"][0]["mask_single_channel"],
-            #         action["actionData"]["positiveExamples"][0]["outputMask"],
-            #         self.props["dir_path"],
-            #         logs_path,
-            #         log_level=log_level,
-            #         check_image_scale=check_image_scale,
-            #         output_cropping=action["actionData"]["maskLocation"] if
-            #         (action["actionData"]["maskLocation"] != 'null' and
-            #          "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
-            #          ) else None
-            #     )
-            #     if ssim_coeff < float(action["actionData"]["threshold"]):
-            #         matches = []
-            #         if action['actionData']['detectActionType'] == 'detectScene':
-            #             print('detectObject-' + str(
-            #                 action["actionGroup"]) + ' FAILED, detect mode detect scene, match % : ' + str(ssim_coeff))
-            #         else:
-            #             print('detectObject-' + str(
-            #                 action["actionGroup"]) + ' first match failed, detect mode detect object, match % : ',
-            #                   str(ssim_coeff))
-            #     else:
-            #         print('detectObject-' + str(
-            #             action["actionGroup"]) + ' SUCCESS, detect mode detect scene, match % :' + str(ssim_coeff))
-            # # if is a detectObject and matchMode is bestMatch
-            # # or is a detectObject and matchMode firstMatch but did not find a firstmatch
-            # if (action['actionData']['detectActionType'] == 'detectObject' and action['actionData'][
-            #     'matchMode'] == 'bestMatch') or \
-            #         (is_detect_object_first_match and len(matches) == 0):
-            #     matches = self.image_matcher.template_match(
-            #         action,
-            #         screencap_im_bgr,
-            #         screencap_search_bgr,
-            #         action["actionData"]["positiveExamples"][0]["mask_single_channel"],
-            #         action["actionData"]["positiveExamples"][0]["outputMask"],
-            #         action["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
-            #         action['actionData']['detectorName'],
-            #         logs_path,
-            #         self.props["scriptMode"],
-            #         match_point,
-            #         log_level=log_level,
-            #         check_image_scale=check_image_scale,
-            #         output_cropping=action["actionData"]["maskLocation"] if
-            #         (action["actionData"]["maskLocation"] != 'null' and
-            #          "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
-            #          ) else None,
-            #         threshold=float(action["actionData"]["threshold"]),
-            #         use_color=action["actionData"]["useColor"] == "true" or action["actionData"]["useColor"]
-            #     )
-            # update_queue = []
-            # if len(matches) > 0:
-            #     update_queue = DetectObjectHelper.update_update_queue(
-            #         action, state, context, matches, update_queue
-            #     )
-            #     action_result = ScriptExecutionState.SUCCESS
-            # else:
-            #     action_result = ScriptExecutionState.FAILURE
-            #
-            # return action, action_result, state, context, run_queue, update_queue
-            # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
-            # https://learnopencv.com/image-resizing-with-opencv/
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
             check_image_scale = screencap_im_bgr is None
             screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, screencap_im_bgr)
@@ -235,7 +146,8 @@ class python_host:
                     self.props['scriptMode'],
                     log_level,
                     logs_path,
-                    self.props['dir_path']
+                    self.props['dir_path'],
+                    True
                 )
             else:
                 action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_object(

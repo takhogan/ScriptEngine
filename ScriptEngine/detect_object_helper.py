@@ -18,7 +18,7 @@ class DetectObjectHelper:
         var_name = action["actionData"]["inputExpression"]
         if var_name is not None and len(var_name) > 0:
             print('detectObject-' + str(action["actionGroup"]), ' fetching variable ', var_name, 'from state')
-            input_area = eval(var_name, state)
+            input_area = eval(var_name, state.copy())
             if len(input_area) > 0:
                 if action["actionData"]["targetContext"] == "detectResult":
                     if input_area["input_type"] == "rectangle":
@@ -38,37 +38,58 @@ class DetectObjectHelper:
     def update_update_queue(action, state, context, matches, update_queue):
         state_copy = state.copy()
         context_copy = context.copy()
+        print('updating update queue')
+        if len(matches) > 0:
 
-        if str(action['actionData']['maxMatches']).isdigit():
-            max_matches = int(action['actionData']['maxMatches'])
-        else:
-            max_matches = eval(action['actionData']['maxMatches'], state.copy())
-        excess_matches = len(matches) - max_matches
-        if excess_matches > 0:
-            print('truncated {} excess matches'.format(excess_matches))
-        for match in matches[1:max_matches]:
-            switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
-                "state": {
-                    action['actionData']['outputVarName']: match
-                }
-            })
+            if str(action['actionData']['maxMatches']).isdigit():
+                max_matches = int(action['actionData']['maxMatches'])
+            else:
+                max_matches = eval(action['actionData']['maxMatches'], state.copy())
+            excess_matches = len(matches) - max_matches
+            if excess_matches > 0:
+                print('truncated {} excess matches'.format(excess_matches))
+            for match in matches[1:max_matches]:
+                switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
+                    "state": {
+                        action['actionData']['outputVarName']: match
+                    }
+                })
+                update_queue.append(
+                    [
+                        'append',
+                        'run_queue',
+                        None,
+                        switch_action
+                    ]
+                )
             update_queue.append(
                 [
-                    'append',
-                    'run_queue',
-                    None,
-                    switch_action
+                    'update',
+                    'state',
+                    action['actionData']['outputVarName'],
+                    matches[0]
                 ]
             )
-        update_queue.append(
-            [
-                'update',
-                'state',
-                action['actionData']['outputVarName'],
-                matches[0]
-            ]
-        )
-        return update_queue
+            update_queue.append(
+                [
+                    'update',
+                    'status',
+                    None,
+                    ScriptExecutionState.SUCCESS
+                ]
+            )
+            status = ScriptExecutionState.SUCCESS
+        else:
+            update_queue.append(
+                [
+                    'update',
+                    'status',
+                    None,
+                    ScriptExecutionState.FAILURE
+                ]
+            )
+            status = ScriptExecutionState.FAILURE
+        return update_queue, status
 
     @staticmethod
     def handle_detect_object(
@@ -82,7 +103,9 @@ class DetectObjectHelper:
             script_mode='train',
             log_level='info',
             logs_path='./logs',
-            dir_path='./logs'):
+            dir_path='./logs',
+            lazy_eval=False
+    ):
         screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
         if script_mode == "train" and log_level == 'info':
             cv2.imwrite(logs_path + '-search_img.png', screencap_search_bgr)
@@ -149,11 +172,10 @@ class DetectObjectHelper:
                 use_color=action["actionData"]["useColor"] == "true" or action["actionData"]["useColor"]
             )
         update_queue = []
-        if len(matches) > 0:
-            update_queue = DetectObjectHelper.update_update_queue(
-                action, state, context, matches, update_queue
-            )
-            status = ScriptExecutionState.SUCCESS
+        update_queue, status = DetectObjectHelper.update_update_queue(
+            action, state, context, matches, update_queue
+        )
+        if lazy_eval:
+            return status, update_queue
         else:
-            status = ScriptExecutionState.FAILURE
-        return action, status, state, context, run_queue, update_queue
+            return action, status, state, context, run_queue, update_queue
