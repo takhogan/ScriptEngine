@@ -64,6 +64,8 @@ os.makedirs(app.config['UPLOAD_LIBRARY_BACKUPS_FOLDER'], exist_ok=True)
 app.secret_key = "Not reccomended to leave server running for too long as there may be security issues"
 
 app.config['TEMP_FOLDER'] = TEMP_FOLDER
+app.config['SCRIPT_HASHES_CACHE'] = TEMP_FOLDER + os_normalize_path('\\script_hashes_cache.json')
+
 app.config['ASSETS_FOLDER'] = ASSETS_FOLDER
 # app.config['MAX_CONTENT_LENGTH'] = 250 * 1024 * 1024
 with open(WHITELIST_PATH, 'r') as white_list_file:

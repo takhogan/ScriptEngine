@@ -7,6 +7,7 @@ from io import BytesIO
 import glob
 from zipfile import ZipFile
 import sys
+import re
 
 # from progressbar import ProgressBar
 from waitress import serve
@@ -30,6 +31,7 @@ from utils.file_transfer_host_utils import os_normalize_path
 from utils.script_status_utils import *
 
 ALLOWED_EXTENSIONS = set(['zip'])
+
 
 DEFAULT_HTML_HEADER = '''
     <head>
@@ -439,6 +441,66 @@ def list_run_scripts():
     # script_file_buttons = '<br>'.join()
     return (get_runnable_scripts(), 201)
 
+
+import os
+import json
+import hashlib
+
+def calculate_sha256(file_path):
+    """Calculate SHA-256 hash for a file."""
+    with open(file_path, 'rb') as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+def get_file_metadata(file_path):
+    """Get file size and modification time."""
+    stat_info = os.stat(file_path)
+    return {
+        'size': stat_info.st_size,
+        'last_modified': stat_info.st_mtime
+    }
+
+def has_file_changed(file_path, metadata, cache):
+    """Check if a file has changed based on its metadata."""
+    if file_path not in cache:
+        return True
+    return metadata != cache[file_path]['metadata']
+
+
+
+def get_script_hashes():
+    # Load existing cache
+    cache = {}
+    if os.path.exists(app.config['SCRIPT_HASHES_CACHE']):
+        with open(app.config['SCRIPT_HASHES_CACHE'], 'r') as f:
+            cache = json.load(f)
+
+    # Check and update cache for each .zip file
+    for root, _, files in os.walk(app.config['UPLOAD_SCRIPT_FOLDER']):
+        for file in files:
+            if file.endswith('.zip'):
+                file_path = os.path.join(root, file).replace('\\', '/')
+                metadata = get_file_metadata(file_path)
+
+                if has_file_changed(file_path, metadata, cache):
+                    print(f"File changed or not in cache, recalculating hash: {file_path}")
+                    file_hash = calculate_sha256(file_path)
+                    cache[file_path] = {
+                        'metadata': metadata,
+                        'hash': file_hash
+                    }
+                else:
+                    print(f"No change detected for {file_path}")
+
+    # Save the updated cache
+    with open(app.config['SCRIPT_HASHES_CACHE'], 'w') as f:
+        json.dump(cache, f, indent=4)
+    return cache
+
+
+@app.route('/list-scripts', methods=['GET'], strict_slashes=False)
+def list_scripts():
+    return get_script_hashes()
+
 def get_log_folders():
     script_files = subprocess.check_output([
        'dir',
@@ -595,7 +657,42 @@ def github_pull():
     return (subprocess.check_output('git pull'), 201)
 
 
+@app.route('/get-ping', methods=['GET'], strict_slashes=False)
+def get_ping():
+    s = subprocess.check_output('ping google.com').decode('utf-8')
+    # Extract the values for minimum, maximum, and average ping times
+    min_time_match = re.search(r"Minimum = (\d+)ms", s)
+    max_time_match = re.search(r"Maximum = (\d+)ms", s)
+    avg_time_match = re.search(r"Average = (\d+)ms", s)
+
+    # Check if the matches are found
+    if not (min_time_match and max_time_match and avg_time_match):
+        return ({
+            'Minimum' : 9999,
+            'Maximum' : 9999,
+            'Average' : 9999
+        }, 400)
+
+    # Convert the matched values to integers
+    min_time = int(min_time_match.group(1))
+    max_time = int(max_time_match.group(1))
+    avg_time = int(avg_time_match.group(1))
+
+    # Return the values in a dictionary
+    return ({
+        'Minimum': min_time,
+        'Maximum': max_time,
+        'Average': avg_time
+    }, 201)
+
+
+@app.route('/capture/<device_name>')
+@cross_origin()
+def capture_device(device_name):
+    pass
+
 @app.route('/capture', methods=['GET'], strict_slashes=False)
+@cross_origin()
 def capture():
     if request.method == 'OPTIONS':
         headers = {

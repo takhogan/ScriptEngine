@@ -56,10 +56,10 @@ class SystemHostController:
             print('condition : ', action["actionData"]["condition"], statement_strip, len(action["actionData"]["condition"].replace("\n", " ")), len(action["actionData"]["condition"]))
             condition = action["actionData"]["condition"].replace("\n", " ")
             if eval('(' + condition + ')', state_copy):
-                print('condition success!')
+                print('conditionalStatement-' + str(action["actionGroup"]), 'condition success!')
                 status = ScriptExecutionState.SUCCESS
             else:
-                print('condition failure!')
+                print('conditionalStatement-' + str(action["actionGroup"]), 'condition failure!')
                 status = ScriptExecutionState.FAILURE
             # print(' state (7) : ', state)
         elif action["actionName"] == "variableAssignment":
@@ -71,19 +71,19 @@ class SystemHostController:
                 status = ScriptExecutionState.SUCCESS
                 return action, status, state, context, run_queue, []
 
-            print('variableAssignment' + str(action["actionGroup"]),' inputExpression : ', action["actionData"]["inputExpression"], end = '')
+            print('variableAssignment-' + str(action["actionGroup"]),' inputExpression : ', action["actionData"]["inputExpression"], end = '')
             # print(' state (4) ', state)
             expression = action["actionData"]["inputExpression"].replace("\n", " ")
             if action["actionData"]["inputParser"] == 'eval':
                 expression = eval(expression, state.copy())
             elif action["actionData"]["inputParser"] == "jsonload":
                 expression = json.loads(expression)
-            print('variableAssignment' + str(action["actionGroup"]),' : result : ', expression)
+            print('variableAssignment-' + str(action["actionGroup"]),' : result : ', expression)
             # print(' state (5) ', state)
             # print(' expression : ', expression, ', ', type(expression))
 
 
-            print('state :', state)
+            print('variableAssignment-' + str(action["actionGroup"]), 'state :', list(state))
             outputVarName = action["actionData"]["outputVarName"].strip()
             if '[' in outputVarName and ']' in outputVarName:
                 keys = outputVarName.split('[')  # Split the key string by '][' to get individual keys
@@ -95,12 +95,12 @@ class SystemHostController:
 
                 # Assign the value to the corresponding key within the state dictionary
                 current = state
-                print('variableAssignment' + str(action["actionGroup"]) + ' keys', keys)
+                print('variableAssignment-' + str(action["actionGroup"]) + ' keys', keys)
                 for i in range(len(keys) - 1):
                     if keys[i] in current:
                         current = current[keys[i]]
                 current[keys[-1]] = expression
-                print('variableAssignment' + str(action["actionGroup"]), ' setting ', outputVarName, keys, ' to ', expression)
+                print('variableAssignment-' + str(action["actionGroup"]), ' setting ', outputVarName, keys, ' to ', expression)
             else:
                 state[outputVarName] = expression
             status = ScriptExecutionState.SUCCESS
@@ -225,13 +225,12 @@ class SystemHostController:
             status = ScriptExecutionState.FINISHED_FAILURE
         elif action["actionName"] == "forLoopAction":
             print('CONTROL FLOW: initiating forLoopAction-' + str(action["actionGroup"]))
-            if context["run_queue"] is None:
-                context["run_queue"] = []
+
             first_loop = True
             state_copy = state.copy()
             in_variable = eval(action["actionData"]["inVariables"], state_copy)
 
-            print('forLoopAction-' + str(action["actionGroup"]), ' inVariable : ', action["actionData"]["inVariables"], ' value: ', in_variable)
+            print('forLoopAction-' + str(action["actionGroup"]), 'input inVariable : ', action["actionData"]["inVariables"], ' value: ', in_variable)
             for_variable_list = action["actionData"]["forVariables"].split(',')
             for for_variables in in_variable:
                 state_update_dict = {
@@ -239,7 +238,7 @@ class SystemHostController:
                 } if len(for_variable_list) > 1 else {
                     for_variable_list[0]:for_variables
                 }
-                print('forLoopAction-' + str(action["actionGroup"]), ' forVariables : ', for_variable_list, ' values: ', for_variables)
+                print('forLoopAction-' + str(action["actionGroup"]), 'defining forVariables : ', for_variable_list, ' values: ', for_variables)
                 if first_loop:
                     state.update(state_update_dict)
                     first_loop = False
@@ -247,9 +246,7 @@ class SystemHostController:
                 switch_action = generate_context_switch_action(action["childGroups"], None, None, {
                     "state": state_update_dict
                 })
-                context["run_queue"] = [
-                    switch_action
-                ] + context["run_queue"]
+                run_queue.append(switch_action)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "codeBlock":
             state_copy = state.copy()

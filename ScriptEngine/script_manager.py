@@ -5,7 +5,7 @@ from dateutil import tz
 import os
 import json
 import traceback
-
+import multiprocessing, logging
 
 import datetime
 
@@ -71,6 +71,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
             'AUTO_DETECT_ADB_PORT' : True
         }
     device_manager = DeviceManager(script_name, script_object['props'], adb_args)
+    logger = multiprocessing.log_to_stderr()
+    logger.setLevel(multiprocessing.SUBDEBUG)
     main_script = ScriptExecutor(
         script_object,
         timeout,

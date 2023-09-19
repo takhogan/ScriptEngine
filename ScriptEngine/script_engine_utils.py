@@ -69,7 +69,9 @@ def apply_state_to_cmd_str(cmd_str, state):
     return formatted_command
 
 
-
+def is_parallelizeable(action):
+    return 'detect_run_type' in action['actionData'] and \
+            action['actionData']['detect_run_type'] == 'result_precalculation'
 
 
 def get_glob_digit_regex_string(start_index, stop_index, pad_zeros=False):
