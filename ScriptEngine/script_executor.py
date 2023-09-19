@@ -18,7 +18,7 @@ sys.path.append("..")
 from parallelized_script_executor import ParallelizedScriptExecutor
 from script_engine_constants import *
 from script_execution_state import ScriptExecutionState
-from script_engine_utils import generate_context_switch_action,get_running_scripts
+from script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable
 from script_logger import ScriptLogger
 
 
@@ -388,7 +388,7 @@ class ScriptExecutor:
             parsed_output_vars = list(
                 filter(lambda output_vars: output_vars != '', action["actionData"]["outputVars"].split(","))
             )
-            print(self.props['script_name'] + ' CONTROL FLOW: parsing output vars ', parsed_output_vars)
+            print(self.props['script_name'] + ' CONTROL FLOW: parsing child script', action['actionData']['scriptName'],' output vars ', parsed_output_vars)
             for output_var in parsed_output_vars:
                 output_var_val = ref_script_executor.state[
                     output_var] if output_var in ref_script_executor.state else None
@@ -613,9 +613,8 @@ class ScriptExecutor:
 
             if action_index not in skip_indices:
 
-                is_parallelizeable = lambda action: 'detect_run_type' in action['actionData'] and \
-                                   action['actionData']['detect_run_type'] == 'result_precalculation'
-                parallellizeable = is_parallelizeable(action)
+                # TODO debug multiprocessing
+                parallellizeable = is_parallelizeable(action) and False
 
                 if parallellizeable:
                     start_index = action_index
@@ -639,14 +638,27 @@ class ScriptExecutor:
                     success_index, update_queue = parallelized_executor.parallelized_execute(parallel_actions, start_index, stop_index)
                     self.parse_update_queue(update_queue)
                     self.context["action_index"] = success_index
-                    print()
                     action = self.actions[action_indices[success_index]]
                     child_actions = self.get_children(action)
                     self.context['child_actions'] = child_actions
+                    print('CONTROL FLOW: ', self.props['script_name'],
+                          'completed parallel execution',
+                          ' and returned status ',
+                          self.status,
+                          ' assigned action ',
+                          action["actionGroup"])
+
                 else:
                     self.action, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
                     self.parse_update_queue(update_queue)
-                print('CONTROL FLOW: ', self.props['script_name'], 'completed parallel execution and returned status ', self.status, ' assigned action ', action["actionGroup"])
+                    print('CONTROL FLOW: ',
+                          self.props['script_name'],
+                          'completed action',
+                          action['actionName'],
+                          action["actionGroup"],
+                          'and returned status ',
+                          self.status
+                    )
                 # self.actions[action_indices[action_index]] =
 
             self.context["action_attempts"][action_index] += 1

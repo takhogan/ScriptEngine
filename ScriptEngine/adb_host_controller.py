@@ -3,6 +3,9 @@ import configparser
 import datetime
 import math
 import subprocess
+import json
+import pickle
+
 
 import shutil
 
@@ -901,243 +904,240 @@ class adb_host:
             # print(state)
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "searchPatternContinueAction":
-            search_pattern_id = action["actionData"]["searchPatternID"]
-            raw_source_pt, raw_target_pt, displacement, context = self.search_pattern_helper.execute_pattern(search_pattern_id, context)
-            search_pattern_obj = context["search_patterns"][search_pattern_id]
-            step_index = search_pattern_obj["step_index"]
-            fitted_patterns = self.search_pattern_helper.fit_pattern_to_frame(self.width, self.height, search_pattern_obj["draggable_area"], [(raw_source_pt, raw_target_pt)])
-
-            # print(search_pattern_obj["draggable_area"].shape)
-            # print(cv2.cvtColor(np.array(self.screenshot()), cv2.COLOR_BGR2RGB).shape)
-            # exit(0)
-            def apply_draggable_area_mask(img):
-                return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2BGR))
-
-            def create_and_save_screencap(self_ref, savename):
-                img_unmasked_bgr = self.screenshot()
-                img_masked_bgr = apply_draggable_area_mask(img_unmasked_bgr)
-                cv2.imwrite(
-                    savename,
-                    img_masked_bgr
-                )
-                return img_masked_bgr
-
-            def read_and_apply_mask(img_path):
-                return apply_draggable_area_mask(cv2.imread(img_path))
-
-            log_folder + 'search_patterns/' + search_pattern_id + '/{}-*complete.png'.format(step_index - 1)
-            def get_longest_path(search_string):
-                search_result = remove_forward_slashes(glob.glob(search_string))
-                if len(search_result) > 1:
-                    search_path_lens = list(map(len, search_result))
-                    max_search_path_len = max(search_path_lens)
-                    max_search_path = search_result[search_path_lens.index(max_search_path_len)]
-                else:
-                    max_search_path = search_result[0]
-                return max_search_path
-
-            def record_movement(search_pattern_obj, x_displacement, y_displacement):
-                curr_x,curr_y = search_pattern_obj["actual_current_point"]
-                base_displacement_is_x = x_displacement > y_displacement
-                slope = y_displacement / x_displacement
-                if base_displacement_is_x:
-                    base_5_curr_x = curr_x // 5
-                    base_5_displaced_x = (curr_x + x_displacement) // 5
-                    displacement_range = range(base_5_curr_x, base_5_displaced_x, int(math.copysign(1, base_5_displaced_x - base_5_curr_x)))
-                    displacement_func = lambda displacement_leg: (slope * (displacement_leg - x_displacement) + y_displacement) // 5
-                else:
-                    base_5_curr_y = curr_y // 5
-                    base_5_displaced_y = (curr_y + y_displacement) // 5
-                    displacement_range = range(base_5_curr_y, base_5_displaced_y,
-                                               int(math.copysign(1, base_5_displaced_y - base_5_curr_y)))
-                    displacement_func = lambda displacement_leg: (((displacement_leg - y_displacement) / slope) + x_displacement) // 5
-                for displacement_leg in displacement_range:
-                    displacement_leg_dependant = displacement_func(displacement_leg)
-                    locations = [
-                        (displacement_leg * 5, displacement_leg_dependant * 5),
-                        (displacement_leg * 5, displacement_leg_dependant * 5 + 1),
-                        (displacement_leg * 5, displacement_leg_dependant * 5 - 1)
-                    ] if base_displacement_is_x else [
-                        (displacement_leg_dependant * 5, displacement_leg * 5),
-                        (displacement_leg_dependant * 5 + 1, displacement_leg * 5),
-                        (displacement_leg_dependant * 5 - 1, displacement_leg * 5),
-                    ]
-                    for location in locations:
-                        if location not in search_pattern_obj["area_map"]:
-                            search_pattern_obj["area_map"][
-                                location
-                            ] = {
-                                "x": location[0],
-                                "y": location[1],
-                                "val": 255
-                            }
-                        else:
-                            search_pattern_obj["area_map"][
-                                location
-                            ]["val"] = max(
-                                search_pattern_obj["area_map"][
-                                    location
-                                ]["val"] - 60, 60)
-            def remove_forward_slashes(slash_list):
-                return list(map(lambda slash_path: slash_path.replace('\\', '/'), list(slash_list)))
-            if search_pattern_obj["stitcher_status"] != "STITCHER_OK" and step_index > 0:
-                prev_post_img_path = get_longest_path(log_folder + 'search_patterns/' + search_pattern_id + '/{}-*complete.png'.format(step_index - 1))
-                prev_post_img_path_split = prev_post_img_path.split('/')
-                pre_img_name = prev_post_img_path_split[-1]
-                pre_img_path = prev_post_img_path
-                pre_img = read_and_apply_mask(pre_img_path)
-            else:
-                pre_img_name = str(step_index) + \
-                    '-' + str(raw_source_pt[0]) + '-' + str(raw_source_pt[1]) + '-search-step-init.png'
-                pre_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + pre_img_name
-                print('pre_path', pre_img_name, ':', raw_source_pt, ':', step_index)
-                pre_img = create_and_save_screencap(
-                    self, pre_img_path
-                )
-
-            for fitted_pattern in fitted_patterns:
-                (fitted_source_pt, fitted_target_pt) = fitted_pattern
-                if self.width > self.height:
-                    search_unit_scale = self.height
-                else:
-                    search_unit_scale = self.width
-                src_x = fitted_source_pt[0] * search_unit_scale
-                src_y = fitted_source_pt[1] * search_unit_scale
-                tgt_x = fitted_target_pt[0] * search_unit_scale
-                tgt_y = fitted_target_pt[1] * search_unit_scale
-                print('desired move: (', tgt_x - src_x,',', tgt_y - src_y, ')')
-                self.click_and_drag(src_x, src_y, tgt_x, tgt_y)
-                time.sleep(0.25)
-            post_img_name = str(step_index) + '-' +\
-                str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-complete.png'
-            post_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + post_img_name
-            print('post_img_path', post_img_path, ':', raw_target_pt, ':', step_index)
-            post_img = create_and_save_screencap(
-                self, post_img_path
-            )
-            stitch_attempts = 0
-            stitch_imgs = [pre_img, post_img]
-            stitching_complete = False
-            retaken_post_img_name = None
-            retaken_post_img_path = None
-            while not stitching_complete:
-                print('len : stitch imgs', len(stitch_imgs), pre_img.shape, post_img.shape)
-                err_code, result_im = search_pattern_obj["stitcher"].stitch(stitch_imgs, [search_pattern_obj["draggable_area"]] * len(stitch_imgs))
-                draggable_area_path = search_pattern_obj["draggable_area_path"]
-
-                if err_code == cv2.STITCHER_OK:
-                    search_pattern_obj["stitcher_status"] = "STITCHER_OK"
-                    search_pattern_obj["stitch"] = result_im
-                    cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/' + str(step_index) + '-pano.png', result_im)
-                    # print(subprocess.run([self.image_stitch_calculator_path,
-                    #                       pre_img_path, post_img_path, '-m',
-                    #                       draggable_area_path, draggable_area_path],
-                    #                       capture_output=True,shell=False).stdout)
-                    break
-                elif err_code == cv2.STITCHER_ERR_NEED_MORE_IMGS:
-                    search_pattern_obj["stitcher_status"] = "STITCHER_ERR_NEED_MORE_IMGS"
-                    retaken_post_img_name = str(step_index) + '-' + \
-                                            str(raw_target_pt[0]) + '-' + str(
-                        raw_target_pt[1]) + '-retaken-search-step-complete.png'
-                    retaken_post_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + retaken_post_img_name
-                    if stitch_attempts > 1:
-                        print('need more imgs: ', len(stitch_imgs))
-                        search_pattern_obj["step_index"] -= 1
-                        shutil.move(pre_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + pre_img_name)
-                        shutil.move(post_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + post_img_name)
-                        shutil.move(retaken_post_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + retaken_post_img_name)
-                        break
-                    retaken_post_img = create_and_save_screencap(
-                        self, retaken_post_img_path
-                    )
-
-                    stop_index = max(0, step_index - 1)
-                    start_index = max(0, step_index - 4)
-                    glob_patterns = get_glob_digit_regex_string(start_index, stop_index)
-                    print('glob_patterns', glob_patterns)
-                    stitch_imgs = remove_forward_slashes(
-                        itertools.chain.from_iterable(
-                            (glob.glob(
-                                log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
-                                    glob_pattern) + '*-complete.png'
-                            ) + glob.glob(
-                                log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
-                                    glob_pattern
-                                ) + '*-init.png'
-                            )) for glob_pattern in glob_patterns
-                        )
-                    )
-                    print('stitch_ims ', stitch_imgs)
-                    if step_index > 0:
-                        prev_post_img_path = get_longest_path(log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(stop_index) + '*-complete.png')
-                        print('prev_post_img_path', prev_post_img_path)
-                        stitch_imgs.remove(prev_post_img_path)
-                        new_step_imgs = [pre_img, read_and_apply_mask(prev_post_img_path), retaken_post_img]
-                    else:
-                        new_step_imgs = [pre_img, retaken_post_img]
-                    stitch_imgs = new_step_imgs + (list(map(read_and_apply_mask, stitch_imgs)) if stop_index > 0 else [])
-                    # print('post stitch_ims: ', stitch_imgs)
-                    stitch_attempts += 1
-                else:
-                    search_pattern_obj["stitcher_status"] = "STITCHER_ERR"
-                    search_pattern_obj["step_index"] -= 1
-                    shutil.move(pre_img_path,
-                                log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + pre_img_name)
-                    shutil.move(post_img_path,
-                                log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + post_img_name)
-                    if retaken_post_img_path is not None and retaken_post_img_name is not None:
-                        shutil.move(retaken_post_img_path,
-                                    log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + retaken_post_img_name)
-                    print('special error! ' + err_code)
-                    break
-
-            context["search_patterns"][search_pattern_id] = search_pattern_obj
+            # search_pattern_id = action["actionData"]["searchPatternID"]
+            # raw_source_pt, raw_target_pt, displacement, context = self.search_pattern_helper.execute_pattern(search_pattern_id, context)
+            # search_pattern_obj = context["search_patterns"][search_pattern_id]
+            # step_index = search_pattern_obj["step_index"]
+            # fitted_patterns = self.search_pattern_helper.fit_pattern_to_frame(self.width, self.height, search_pattern_obj["draggable_area"], [(raw_source_pt, raw_target_pt)])
+            #
+            # def apply_draggable_area_mask(img):
+            #     return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2BGR))
+            #
+            # def create_and_save_screencap(self_ref, savename):
+            #     img_unmasked_bgr = self.screenshot()
+            #     img_masked_bgr = apply_draggable_area_mask(img_unmasked_bgr)
+            #     cv2.imwrite(
+            #         savename,
+            #         img_masked_bgr
+            #     )
+            #     return img_masked_bgr
+            #
+            # def read_and_apply_mask(img_path):
+            #     return apply_draggable_area_mask(cv2.imread(img_path))
+            #
+            # log_folder + 'search_patterns/' + search_pattern_id + '/{}-*complete.png'.format(step_index - 1)
+            # def get_longest_path(search_string):
+            #     search_result = remove_forward_slashes(glob.glob(search_string))
+            #     if len(search_result) > 1:
+            #         search_path_lens = list(map(len, search_result))
+            #         max_search_path_len = max(search_path_lens)
+            #         max_search_path = search_result[search_path_lens.index(max_search_path_len)]
+            #     else:
+            #         max_search_path = search_result[0]
+            #     return max_search_path
+            #
+            # def record_movement(search_pattern_obj, x_displacement, y_displacement):
+            #     curr_x,curr_y = search_pattern_obj["actual_current_point"]
+            #     base_displacement_is_x = x_displacement > y_displacement
+            #     slope = y_displacement / x_displacement
+            #     if base_displacement_is_x:
+            #         base_5_curr_x = curr_x // 5
+            #         base_5_displaced_x = (curr_x + x_displacement) // 5
+            #         displacement_range = range(base_5_curr_x, base_5_displaced_x, int(math.copysign(1, base_5_displaced_x - base_5_curr_x)))
+            #         displacement_func = lambda displacement_leg: (slope * (displacement_leg - x_displacement) + y_displacement) // 5
+            #     else:
+            #         base_5_curr_y = curr_y // 5
+            #         base_5_displaced_y = (curr_y + y_displacement) // 5
+            #         displacement_range = range(base_5_curr_y, base_5_displaced_y,
+            #                                    int(math.copysign(1, base_5_displaced_y - base_5_curr_y)))
+            #         displacement_func = lambda displacement_leg: (((displacement_leg - y_displacement) / slope) + x_displacement) // 5
+            #     for displacement_leg in displacement_range:
+            #         displacement_leg_dependant = displacement_func(displacement_leg)
+            #         locations = [
+            #             (displacement_leg * 5, displacement_leg_dependant * 5),
+            #             (displacement_leg * 5, displacement_leg_dependant * 5 + 1),
+            #             (displacement_leg * 5, displacement_leg_dependant * 5 - 1)
+            #         ] if base_displacement_is_x else [
+            #             (displacement_leg_dependant * 5, displacement_leg * 5),
+            #             (displacement_leg_dependant * 5 + 1, displacement_leg * 5),
+            #             (displacement_leg_dependant * 5 - 1, displacement_leg * 5),
+            #         ]
+            #         for location in locations:
+            #             if location not in search_pattern_obj["area_map"]:
+            #                 search_pattern_obj["area_map"][
+            #                     location
+            #                 ] = {
+            #                     "x": location[0],
+            #                     "y": location[1],
+            #                     "val": 255
+            #                 }
+            #             else:
+            #                 search_pattern_obj["area_map"][
+            #                     location
+            #                 ]["val"] = max(
+            #                     search_pattern_obj["area_map"][
+            #                         location
+            #                     ]["val"] - 60, 60)
+            # def remove_forward_slashes(slash_list):
+            #     return list(map(lambda slash_path: slash_path.replace('\\', '/'), list(slash_list)))
+            # if search_pattern_obj["stitcher_status"] != "STITCHER_OK" and step_index > 0:
+            #     prev_post_img_path = get_longest_path(log_folder + 'search_patterns/' + search_pattern_id + '/{}-*complete.png'.format(step_index - 1))
+            #     prev_post_img_path_split = prev_post_img_path.split('/')
+            #     pre_img_name = prev_post_img_path_split[-1]
+            #     pre_img_path = prev_post_img_path
+            #     pre_img = read_and_apply_mask(pre_img_path)
+            # else:
+            #     pre_img_name = str(step_index) + \
+            #         '-' + str(raw_source_pt[0]) + '-' + str(raw_source_pt[1]) + '-search-step-init.png'
+            #     pre_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + pre_img_name
+            #     print('pre_path', pre_img_name, ':', raw_source_pt, ':', step_index)
+            #     pre_img = create_and_save_screencap(
+            #         self, pre_img_path
+            #     )
+            #
+            # for fitted_pattern in fitted_patterns:
+            #     (fitted_source_pt, fitted_target_pt) = fitted_pattern
+            #     if self.width > self.height:
+            #         search_unit_scale = self.height
+            #     else:
+            #         search_unit_scale = self.width
+            #     src_x = fitted_source_pt[0] * search_unit_scale
+            #     src_y = fitted_source_pt[1] * search_unit_scale
+            #     tgt_x = fitted_target_pt[0] * search_unit_scale
+            #     tgt_y = fitted_target_pt[1] * search_unit_scale
+            #     print('desired move: (', tgt_x - src_x,',', tgt_y - src_y, ')')
+            #     self.click_and_drag(src_x, src_y, tgt_x, tgt_y)
+            #     time.sleep(0.25)
+            # post_img_name = str(step_index) + '-' +\
+            #     str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-complete.png'
+            # post_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + post_img_name
+            # print('post_img_path', post_img_path, ':', raw_target_pt, ':', step_index)
+            # post_img = create_and_save_screencap(
+            #     self, post_img_path
+            # )
+            # stitch_attempts = 0
+            # stitch_imgs = [pre_img, post_img]
+            # stitching_complete = False
+            # retaken_post_img_name = None
+            # retaken_post_img_path = None
+            # while not stitching_complete:
+            #     print('len : stitch imgs', len(stitch_imgs), pre_img.shape, post_img.shape)
+            #     err_code, result_im = search_pattern_obj["stitcher"].stitch(stitch_imgs, [search_pattern_obj["draggable_area"]] * len(stitch_imgs))
+            #     draggable_area_path = search_pattern_obj["draggable_area_path"]
+            #
+            #     if err_code == cv2.STITCHER_OK:
+            #         search_pattern_obj["stitcher_status"] = "STITCHER_OK"
+            #         search_pattern_obj["stitch"] = result_im
+            #         cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/' + str(step_index) + '-pano.png', result_im)
+            #         # print(subprocess.run([self.image_stitch_calculator_path,
+            #         #                       pre_img_path, post_img_path, '-m',
+            #         #                       draggable_area_path, draggable_area_path],
+            #         #                       capture_output=True,shell=False).stdout)
+            #         break
+            #     elif err_code == cv2.STITCHER_ERR_NEED_MORE_IMGS:
+            #         search_pattern_obj["stitcher_status"] = "STITCHER_ERR_NEED_MORE_IMGS"
+            #         retaken_post_img_name = str(step_index) + '-' + \
+            #                                 str(raw_target_pt[0]) + '-' + str(
+            #             raw_target_pt[1]) + '-retaken-search-step-complete.png'
+            #         retaken_post_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + retaken_post_img_name
+            #         if stitch_attempts > 1:
+            #             print('need more imgs: ', len(stitch_imgs))
+            #             search_pattern_obj["step_index"] -= 1
+            #             shutil.move(pre_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + pre_img_name)
+            #             shutil.move(post_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + post_img_name)
+            #             shutil.move(retaken_post_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + retaken_post_img_name)
+            #             break
+            #         retaken_post_img = create_and_save_screencap(
+            #             self, retaken_post_img_path
+            #         )
+            #
+            #         stop_index = max(0, step_index - 1)
+            #         start_index = max(0, step_index - 4)
+            #         glob_patterns = get_glob_digit_regex_string(start_index, stop_index)
+            #         print('glob_patterns', glob_patterns)
+            #         stitch_imgs = remove_forward_slashes(
+            #             itertools.chain.from_iterable(
+            #                 (glob.glob(
+            #                     log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
+            #                         glob_pattern) + '*-complete.png'
+            #                 ) + glob.glob(
+            #                     log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
+            #                         glob_pattern
+            #                     ) + '*-init.png'
+            #                 )) for glob_pattern in glob_patterns
+            #             )
+            #         )
+            #         print('stitch_ims ', stitch_imgs)
+            #         if step_index > 0:
+            #             prev_post_img_path = get_longest_path(log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(stop_index) + '*-complete.png')
+            #             print('prev_post_img_path', prev_post_img_path)
+            #             stitch_imgs.remove(prev_post_img_path)
+            #             new_step_imgs = [pre_img, read_and_apply_mask(prev_post_img_path), retaken_post_img]
+            #         else:
+            #             new_step_imgs = [pre_img, retaken_post_img]
+            #         stitch_imgs = new_step_imgs + (list(map(read_and_apply_mask, stitch_imgs)) if stop_index > 0 else [])
+            #         # print('post stitch_ims: ', stitch_imgs)
+            #         stitch_attempts += 1
+            #     else:
+            #         search_pattern_obj["stitcher_status"] = "STITCHER_ERR"
+            #         search_pattern_obj["step_index"] -= 1
+            #         shutil.move(pre_img_path,
+            #                     log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + pre_img_name)
+            #         shutil.move(post_img_path,
+            #                     log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + post_img_name)
+            #         if retaken_post_img_path is not None and retaken_post_img_name is not None:
+            #             shutil.move(retaken_post_img_path,
+            #                         log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + retaken_post_img_name)
+            #         print('special error! ' + err_code)
+            #         break
+            #
+            # context["search_patterns"][search_pattern_id] = search_pattern_obj
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "searchPatternEndAction":
-            search_pattern_id = action["actionData"]["searchPatternID"]
-            if context["parent_action"] is not None and \
-                context["parent_action"]["actionName"] == "searchPatternContinueAction" and \
-                context["parent_action"]["actionData"]["searchPatternID"] == search_pattern_id and \
-                not context["search_patterns"][search_pattern_id]["stitcher_status"] == "stitching_finished":
-                # TODO haven't decided what the stiching_finished status should be yet (ie should always just return)
-                return ScriptExecutionState.RETURN, state, context
-
-            step_index = context["search_patterns"][search_pattern_id]["step_index"]
-            search_pattern_obj = context["search_patterns"][search_pattern_id]
-            def apply_draggable_area_mask(img):
-                return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2BGR))
-            def read_and_apply_mask(img_path):
-                return apply_draggable_area_mask(cv2.imread(img_path))
-            def generate_greater_pano(start_index, stop_index):
-                glob_patterns = get_glob_digit_regex_string(start_index, stop_index)
-                greater_pano_paths = remove_forward_slashes(
-                    itertools.chain.from_iterable(
-                        glob.glob(
-                            log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
-                                glob_pattern
-                            ) + '*-complete.png'
-                        ) + glob.glob(
-                            log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
-                                glob_pattern
-                            ) + '*-init.png'
-                        ) for glob_pattern in glob_patterns
-                    )
-                )
-                greater_pano_imgs = list(map(read_and_apply_mask, greater_pano_paths))
-                err_code, result_im = search_pattern_obj["stitcher"].stitch(greater_pano_imgs, [search_pattern_obj["draggable_area"]] * len(stitch_imgs))
-                if err_code == cv2.STITCHER_OK:
-                    print('generating full panorama...')
-                    cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/full-pano.png', result_im)
-                    # print(subprocess.run([self.image_stitch_calculator_path] + \
-                    #                      greater_pano_paths + ['-m'] + \
-                    #                      [draggable_area_path] * len(greater_pano_paths),
-                    #                      capture_output=True, shell=False).stdout)
-                    pass
-                else:
-                    print('failed to greater pano: ', err_code)
-            generate_greater_pano(0, step_index)
-
-            del context["search_patterns"][action["actionData"]["searchPatternID"]]
+            # search_pattern_id = action["actionData"]["searchPatternID"]
+            # if context["parent_action"] is not None and \
+            #     context["parent_action"]["actionName"] == "searchPatternContinueAction" and \
+            #     context["parent_action"]["actionData"]["searchPatternID"] == search_pattern_id and \
+            #     not context["search_patterns"][search_pattern_id]["stitcher_status"] == "stitching_finished":
+            #     # TODO haven't decided what the stiching_finished status should be yet (ie should always just return)
+            #     return ScriptExecutionState.RETURN, state, context
+            #
+            # step_index = context["search_patterns"][search_pattern_id]["step_index"]
+            # search_pattern_obj = context["search_patterns"][search_pattern_id]
+            # def apply_draggable_area_mask(img):
+            #     return cv2.bitwise_and(img, cv2.cvtColor(search_pattern_obj["draggable_area"], cv2.COLOR_GRAY2BGR))
+            # def read_and_apply_mask(img_path):
+            #     return apply_draggable_area_mask(cv2.imread(img_path))
+            # def generate_greater_pano(start_index, stop_index):
+            #     glob_patterns = get_glob_digit_regex_string(start_index, stop_index)
+            #     greater_pano_paths = remove_forward_slashes(
+            #         itertools.chain.from_iterable(
+            #             glob.glob(
+            #                 log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
+            #                     glob_pattern
+            #                 ) + '*-complete.png'
+            #             ) + glob.glob(
+            #                 log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(
+            #                     glob_pattern
+            #                 ) + '*-init.png'
+            #             ) for glob_pattern in glob_patterns
+            #         )
+            #     )
+            #     greater_pano_imgs = list(map(read_and_apply_mask, greater_pano_paths))
+            #     err_code, result_im = search_pattern_obj["stitcher"].stitch(greater_pano_imgs, [search_pattern_obj["draggable_area"]] * len(stitch_imgs))
+            #     if err_code == cv2.STITCHER_OK:
+            #         print('generating full panorama...')
+            #         cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/full-pano.png', result_im)
+            #         # print(subprocess.run([self.image_stitch_calculator_path] + \
+            #         #                      greater_pano_paths + ['-m'] + \
+            #         #                      [draggable_area_path] * len(greater_pano_paths),
+            #         #                      capture_output=True, shell=False).stdout)
+            #         pass
+            #     else:
+            #         print('failed to greater pano: ', err_code)
+            # generate_greater_pano(0, step_index)
+            #
+            # del context["search_patterns"][action["actionData"]["searchPatternID"]]
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
