@@ -75,6 +75,8 @@ print('whitelist :', whitelist)
 app.config['WHITELIST_IPS'] = whitelist
 
 
+app.config['CLIENT_ID'] = '385853255059-04b584cap2i2amg8s6h3puprqeosr08a.apps.googleusercontent.com'
+
 for retries in range(0, 5):
     try:
         hostname = socket.gethostbyname(socket.gethostname())

@@ -25,6 +25,9 @@ import threading
 import sys
 import platform
 
+from google.oauth2 import id_token
+from google.auth.transport import requests
+
 sys.path.append('.')
 from ScriptEngine.messaging_helper import MessagingHelper
 from utils.file_transfer_host_utils import os_normalize_path
@@ -794,6 +797,77 @@ def upload_file():
         # resp.status_code = 400
         return make_response(resp, 400)
 
+
+def validate_google_token(google_token):
+    try:
+        # Specify the CLIENT_ID of the app that accesses the backend:
+        idinfo = id_token.verify_oauth2_token(google_token, google.auth.transport.requests.Request(), app.config['CLIENT_ID'])
+
+        # Or, if multiple clients access the backend server:
+        # idinfo = id_token.verify_oauth2_token(token, requests.Request())
+        # if idinfo['aud'] not in [CLIENT_ID_1, CLIENT_ID_2, CLIENT_ID_3]:
+        #     raise ValueError('Could not verify audience.')
+
+        # If auth request is from a G Suite domain:
+        # if idinfo['hd'] != GSUITE_DOMAIN_NAME:
+        #     raise ValueError('Wrong hosted domain.')
+
+        # ID token is valid. Get the user's Google Account ID from the decoded token.
+        userid = idinfo['sub']
+        return True
+    except ValueError:
+        # Invalid token
+        return False
+        pass
+
+
+@app.route('/request-upload', methods=['POST'], strict_slashes=False)
+@cross_origin()  # Allow cross-origin requests for development purposes
+def request_upload():
+    # Validate Google Token from httpOnly cookie
+    print('request.cookies', request.cookies, request.headers)
+    google_token = request.cookies.get('google_token')
+    if not google_token or not validate_google_token(google_token):
+        return jsonify({"error": "Authentication failed"}), 401
+
+    signed_url = request.json.get('signedUrl')
+    scriptName = request.json.get('scriptName')
+    script_path = app.config['UPLOAD_LIBRARY_FOLDER'] + '/' + scriptName
+    if os.path.exists(script_path):
+        with open(script_path, 'rb') as file:
+            response = requests.put(signed_url, data=file.read())
+    else:
+        print('request file', script_path, 'not found')
+        return jsonify({"error": "file not found"}), 401
+    # Upload the file to the signed URL
+
+
+    # Check if the upload was successful
+    if response.status_code != 200:
+        return jsonify({"error": "Failed to upload file"}), 500
+
+    return jsonify({"message": "Upload successful"})
+
+
+@app.route('/request-script', methods=['GET'], strict_slashes=False)
+@cross_origin
+def request_script():
+    scriptName = request.args.get('scriptName')
+    script_path = app.config['UPLOAD_LIBRARY_FOLDER'] + '/' + scriptName
+    if os.path.exists(script_path):
+        stream = BytesIO()
+        with open(script_path, 'rb') as script_zip:
+            print('writing library zip to stream')
+            stream.write(script_zip.read())
+            stream.seek(0)
+        return send_file(
+            stream,
+            as_attachment=False,
+            mimetype='.zip'
+        )
+    else:
+        print('request file', script_path, 'not found')
+        return jsonify({"error": "file not found"}), 401
 # Serving static files
 # @app.route('/', defaults={'path': ''})
 # @app.route('/<string:path>')
