@@ -17,6 +17,14 @@ from collections import OrderedDict
 from bs4 import BeautifulSoup
 from dateutil import tz
 
+from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
+from google.oauth2.credentials import Credentials
+from google.auth.exceptions import TransportError
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 CALENDAR_NAME = 'ScriptScheduler'
@@ -26,8 +34,6 @@ REFRESH_EVENT_NAME = "REFRESH_GOOGLE_TOKEN_SCRIPT"
 EXCLUDED_EVENTS = {
     REFRESH_EVENT_NAME
 }
-
-EVENTS_FILE_PATH = './tmp/activeEvents.json'
 
 TEST_EVENT = """
 [startDelay:0,240]
@@ -91,6 +97,140 @@ class ScriptScheduler:
             print('loaded existing calendar: ', CALENDAR_NAME)
         return calendars[CALENDAR_NAME]
 
+    def initialize_service(self, force_refresh=False):
+        creds = None
+        # The file token.json stores the user's access and refresh tokens, and is
+        # created automatically when the authorization flow completes for the first
+        # time.
+        if os.path.exists('assets/token.json'):
+            creds = Credentials.from_authorized_user_file('assets/token.json', SCOPES)
+        # If there are no (valid) credentials available, let the user log in.
+        if not creds or not creds.valid or force_refresh:
+            print('loaded creds were not valid, starting refresh')
+            if not force_refresh:
+                needs_refresh = True
+            else:
+                needs_refresh = False
+
+            if (creds and creds.expired and creds.refresh_token) or force_refresh:
+                try:
+                    creds.refresh(Request())
+                    needs_refresh = False
+                except RefreshError as r:
+                    print('refresh error!', r)
+                    needs_refresh = True
+                    pass
+            if needs_refresh:
+                print('calling refresh script')
+                await_event_queue_availability()
+                self.parse_and_run_script_sequence_def(
+                    REFRESH_EVENT_NAME,
+                    self.clean_description(REFRESH_GOOGLE_TOKEN_SCRIPT),
+                    '1',
+                    datetime.datetime.utcnow().strftime(
+                        "%Y-%m-%dT%H:%M:%S") + 'Z',
+                    (datetime.datetime.utcnow() + datetime.timedelta(minutes=10)).strftime(
+                        "%Y-%m-%dT%H:%M:%S") + 'Z'
+                )
+                self.parse_event_queue()
+                await_event_start(REFRESH_EVENT_NAME)
+                # running_events['REFRESH_GOOGLE_TOKEN_SCRIPT'] = {}
+
+            if force_refresh or needs_refresh:
+                print('running local refresh server')
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    'assets/credentials.json', SCOPES
+                )
+                # if issues here: https://github.com/googleapis/google-auth-library-python-oauthlib/issues/69
+                creds = flow.run_local_server(port=0)
+                await_script_completion(REFRESH_EVENT_NAME, REFRESH_GOOGLE_TOKEN_SCRIPT)
+
+            if (creds and creds.expired and creds.refresh_token) or force_refresh:
+                print('reauthorizing with credentials')
+                try:
+                    creds.refresh(Request())
+                except RefreshError as r:
+                    print('refresh error!', r)
+                    exit(1)
+
+            # Save the credentials for the next run
+            with open('assets/token.json', 'w') as token:
+                token.write(creds.to_json())
+        print('running with creds')
+        service = build('calendar', 'v3', credentials=creds)
+
+        try:
+
+            calendar_id = self.create_calendar_if_not_exists(service)
+
+        except HttpError as error:
+            print('An error occurred: %s' % error)
+            exit(0)
+
+
+        return service,calendar_id
+
+
+
+    def check_and_execute_active_tasks(self, service, calendar_id):
+        now_datetime = datetime.datetime.utcnow()
+        now_minus_five_datetime = now_datetime - datetime.timedelta(minutes=5)
+
+        now = now_datetime.isoformat() + 'Z'
+        now_minus_five = now_minus_five_datetime.isoformat() + 'Z'
+        try:
+            events_result = service.events().list(calendarId=calendar_id,
+                                                  timeMin=now_minus_five,
+                                                  timeMax=now,
+                                                  singleEvents=True,
+                                                  timeZone='UTC',
+                                                  orderBy='startTime').execute()
+        except RefreshError as r_error:
+            print('Encountered Token error while calling calendar API: ',r_error)
+            print('Renewing Token')
+            service,calendar_id = self.initialize_service(force_refresh=True)
+            return service,calendar_id
+        except ConnectionResetError as cr_error:
+            print('Encountered Connection Reset error while calling calendar API : ',cr_error)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return service,calendar_id
+        except socket.gaierror as gaierror:
+            print('Encountered Socket error while calling calendar API : ',gaierror)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return service,calendar_id
+        except httplib2.error.ServerNotFoundError as sr_error:
+            print('Encountered Server Not Found error while calling calendar API : ', sr_error)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return service,calendar_id
+        except TransportError as transport_error:
+            print('Encountered Transport error while calling calendar API : ', transport_error)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return service, calendar_id
+        except ssl.SSLEOFError as ssl_error:
+            print('Encountered SSL Error while calling calendar API : ', ssl_error)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return service,calendar_id
+        except TimeoutError as timeout_error:
+            print('Encountered Timeout Error while calling calendar API : ', timeout_error)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return service,calendar_id
+        except googleapiclient.errors.HttpError as http_error:
+            print('Encountered googleapiclient.errors.HttpError while calling calendar API : ', http_error)
+            print('Waiting 60 seconds')
+            time.sleep(60)
+            return service, calendar_id
+
+        events = events_result.get('items', [])
+
+        self.execute_active_tasks(events)
+
+        return service,calendar_id
 
     def execute_active_tasks(self, events):
 
@@ -351,13 +491,16 @@ class ScriptScheduler:
             run_event_process.start()
 
     def run(self):
-        server_settings = get_server_settings()
-        if server_settings['stop_event_processing']:
-            return
-        events = []
-        with open(EVENTS_FILE_PATH, 'r') as events_file:
-            events = json.load(events_file)
-        self.execute_active_tasks(events)
+        print("Starting script scheduling service")
+        service,calendar_id = self.initialize_service()
+        print("Completed script scheduler setup, entering scheduler loop")
+        while True:
+            server_settings = get_server_settings()
+            if not server_settings['stop_event_processing']:
+                service,calendar_id = self.check_and_execute_active_tasks(service, calendar_id)
+            else:
+                print(datetime.datetime.now(), 'event processing paused')
+            time.sleep(60)
 
 
 
