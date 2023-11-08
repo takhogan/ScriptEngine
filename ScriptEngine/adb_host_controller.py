@@ -725,8 +725,7 @@ class adb_host:
             self.full_ip,
             'shell'
         ], stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        print('click command', (''.join(click_command)))
-        print('ADB CONTROLLER : sending click command ', shell_process.communicate((''.join(click_command)).encode('utf-8')))
+        print('ADB CONTROLLER : sending click command ',''.join(click_command)), shell_process.communicate((''.join(click_command)).encode('utf-8')))
         # print((''.join(click_command)).encode('utf-8'))
         self.event_counter += 1
 
