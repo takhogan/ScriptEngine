@@ -1,13 +1,9 @@
-import base64
-import configparser
+import threading
 import datetime
-import math
+import queue
 import subprocess
-import json
-import pickle
 
 
-import shutil
 
 from configobj import ConfigObj
 from PIL import Image
@@ -15,16 +11,11 @@ from PIL import UnidentifiedImageError
 from io import BytesIO
 import cv2
 import numpy as np
-from skimage.metrics import structural_similarity as ssim
 import random
 import time
 import sys
 from scipy.stats import truncnorm
 from script_engine_utils import get_glob_digit_regex_string, is_null, masked_mse
-from os import path
-import os
-import glob
-import itertools
 import pyautogui
 
 sys.path.append("..")
@@ -34,7 +25,6 @@ from click_path_generator import ClickPathGenerator
 from image_matcher import ImageMatcher
 from search_pattern_helper import SearchPatternHelper
 from click_action_helper import ClickActionHelper
-from detect_scene_helper import DetectSceneHelper
 from detect_object_helper import DetectObjectHelper
 from forward_detect_peek_helper import ForwardDetectPeekHelper
 
@@ -270,22 +260,19 @@ class adb_host:
                     # state['ADB_PORT'] = self.adb_port
             print('ADB CONTROLLER: initializing/reinitializing adb')
             print('ADB PATH : ', self.adb_path)
-            get_device_list = lambda: subprocess.run(self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True, timeout=30)
+            get_device_list = lambda: subprocess.run(self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True, timeout=15)
             get_device_list_output = lambda: bytes.decode(get_device_list().stdout, 'utf-8')
-            run_connect_command = lambda: subprocess.run(
-                self.adb_path + ' connect ' + self.full_ip, cwd="/", shell=True
-            )
 
 
             devices_output = get_device_list_output()
             print('ADB CONTROLLER: listing devices')
             if not self.full_ip in devices_output:
-                run_connect_command()
+                self.run_connect_command()
                 time.sleep(3)
                 devices_output = get_device_list_output()
 
-            run_kill_command = lambda: subprocess.run(self.adb_path + ' kill-server', cwd="/", shell=True)
-            run_start_command = lambda: subprocess.run(self.adb_path + ' start-server', cwd="/", shell=True)
+            run_kill_command = lambda: subprocess.run(self.adb_path + ' kill-server', cwd="/", shell=True, timeout=30)
+            run_start_command = lambda: subprocess.run(self.adb_path + ' start-server', cwd="/", shell=True, timeout=30)
 
             def restart_adb():
                 print('ADB CONTROLLER restarting adb server')
@@ -293,7 +280,7 @@ class adb_host:
                 run_start_command()
                 time.sleep(3)
                 print('ADB CONTROLLER: connecting to adb device')
-                run_connect_command()
+                self.run_connect_command()
                 time.sleep(3)
 
 
@@ -328,7 +315,8 @@ class adb_host:
                 self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip),
                 cwd="/",
                 shell=True,
-                capture_output=True
+                capture_output=True,
+                timeout=15
             )
             screencap_succesful = False
             bytes_im = BytesIO(get_im_command.stdout)
@@ -371,7 +359,8 @@ class adb_host:
                     self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip),
                     cwd="/",
                     shell=True,
-                    capture_output=True
+                    capture_output=True,
+                    timeout=15
                 )
                 bytes_im = BytesIO(get_im_command.stdout)
                 try:
@@ -381,20 +370,83 @@ class adb_host:
                     exit(478)
             self.width = source_im.shape[1]
             self.height = source_im.shape[0]
+
+            self.set_bluestacks_device()
+
             print('ADB CONTROLLER: adb configuration successful ', self.full_ip, devices_output)
         if is_null(self.props['width']):
             self.props['width'] = self.width
         if is_null(self.props['height']):
             self.props['height'] = self.height
+
+        # self.set_bluestacks_device()
+
         self.status = 'ready'
         return source_im
 
+    def run_connect_command(self):
+        return subprocess.run(
+            self.adb_path + ' connect ' + self.full_ip, cwd="/", shell=True, timeout=30
+        )
+
+    @staticmethod
+    def enqueue_output(out, queue):
+        for line in iter(out.readline, b''):
+            queue.put(line)
+        out.close()
+    def set_bluestacks_device(self, timeout=1):
+        # Run the adb getevent command
+        process = subprocess.Popen(['adb', 'shell','getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                   bufsize=1)
+
+        # Use a selector to wait for I/O readiness without blocking
+        q = queue.Queue()
+
+        # Start a daemon thread to read stdout from the subprocess
+        t = threading.Thread(target=self.enqueue_output, args=(process.stdout, q))
+        t.daemon = True
+        t.start()
+
+        output = []
+        device_line = False
+        device_path = ""
+        start_time = time.time()
+
+        # Read output from the queue for the duration of the timeout
+        while (time.time() - start_time) < timeout:
+            try:
+                line = q.get_nowait()
+            except queue.Empty:
+                time.sleep(0.1)  # Add a small delay to prevent busy-waiting
+            else:
+                output.append(line)
+                if 'add device' in line:
+                    device_line = True  # Next line should have the device name
+                elif device_line:
+                    if "BlueStacks Virtual Touch" in line:
+                        # Extract the device path from the previous 'add device' line
+                        device_path = output[-2].split()[3].strip(':')
+                        break
+                    device_line = False  # Reset for the next device
+
+        # Ensure the subprocess is terminated
+        process.terminate()
+        process.wait()
+        if device_path:
+            print('ADB CONTROLLER:', 'configured input device ', device_path)
+            self.sendevent_command = 'sendevent ' + device_path +' {} {} {};'
+            return device_path
+        else:
+            return None
+
     def screenshot(self):
+        print('ADB CONTROLLER', 'taking screenshot')
         get_im_command = subprocess.run(
             self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip),
             cwd="/",
             shell=True,
-            capture_output=True
+            capture_output=True,
+            timeout=15
         )
         bytes_im = BytesIO(get_im_command.stdout)
         try:
@@ -1160,7 +1212,6 @@ class adb_host:
             print("action uninplemented on adb " + action["actionName"])
             exit(0)
 
-
 if __name__ == '__main__':
     adb_host = adb_host({
         "videoDims": "null",
@@ -1177,6 +1228,7 @@ if __name__ == '__main__':
         "deploymentToLibrary": "true"
     }, None, '127.0.0.1:5556')
     adb_host.init_system()
-    adb_host.click(200, 200)
+
+    # adb_host.click(200, 200)
     # (633.3333333333333, 858.6666666666666),
     exit(0)
