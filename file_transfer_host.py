@@ -223,6 +223,7 @@ def run_in_thread(script_object):
                 'venv\\Scripts\\python' if platform.system() == 'Windows' else
                 'venv/bin/python3'
             ),
+            '-u',
             os_normalize_path('ScriptEngine\\script_manager.py'),
             script_object["script_name"],
             script_object["start_time_str"],
@@ -886,4 +887,4 @@ if __name__ == "__main__":
     # app.run(host="0.0.0.0", port="3849")
     if len(sys.argv) > 1:
         PORT = sys.argv[1]
-    serve(app, host="0.0.0.0", port=app.config["SCRIPT_SERVER_PORT"])
+    serve(app, host="0.0.0.0", port=app.config["SCRIPT_SERVER_PORT"], threads=8)
