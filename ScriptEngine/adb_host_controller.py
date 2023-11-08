@@ -136,19 +136,6 @@ class adb_host:
         # exit(0)
         # shell_process = subprocess.Popen([self.adb_path, 'shell'],stdin=subprocess.PIPE)
         # device_name = shell_process.communicate(b"getevent -pl 2>&1 | sed -n '/^add/{h}/ABS_MT_TOUCH/{x;s/[^/]*//p}'")
-        self.sendevent_command = 'sendevent /dev/input/event5 {} {} {};'
-
-        self.commands = {
-            "tracking_id_mousedown": self.sendevent_command.format(3, int('39', 16), 0),
-            "touch_major_func": self.touch_major_func,
-            "abs_mt_pressure_down" : self.sendevent_command.format(3, int('3a', 16), int('81', 16)),
-            "x_command_func" : self.x_command_func,
-            "y_command_func" : self.y_command_func,
-            "action_terminate_command" : self.sendevent_command.format(0, 0, 0),
-            "abs_mt_pressure_up" : self.sendevent_command.format(3, int('3a', 16), 0),
-            "tracking_id_mouseup" : self.sendevent_command.format(3, int('39', 16), '-1'),
-            "syn_mt_report" : self.sendevent_command.format(0, 2, 0)
-        }
         self.props['scriptMode'] = 'train'
 
         #default configuration
@@ -371,7 +358,7 @@ class adb_host:
             self.width = source_im.shape[1]
             self.height = source_im.shape[0]
 
-            self.set_bluestacks_device()
+            self.set_commands()
 
             print('ADB CONTROLLER: adb configuration successful ', self.full_ip, devices_output)
         if is_null(self.props['width']):
@@ -394,7 +381,7 @@ class adb_host:
         for line in iter(out.readline, b''):
             queue.put(line)
         out.close()
-    def set_bluestacks_device(self, timeout=1):
+    def set_commands(self, timeout=1):
         # Run the adb getevent command
         process = subprocess.Popen(['adb', 'shell','getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                    bufsize=1)
@@ -435,8 +422,31 @@ class adb_host:
         if device_path:
             print('ADB CONTROLLER:', 'configured input device ', device_path)
             self.sendevent_command = 'sendevent ' + device_path +' {} {} {};'
+            self.commands = {
+                "tracking_id_mousedown": self.sendevent_command.format(3, int('39', 16), 0),
+                "touch_major_func": self.touch_major_func,
+                "abs_mt_pressure_down": self.sendevent_command.format(3, int('3a', 16), int('81', 16)),
+                "x_command_func": self.x_command_func,
+                "y_command_func": self.y_command_func,
+                "action_terminate_command": self.sendevent_command.format(0, 0, 0),
+                "abs_mt_pressure_up": self.sendevent_command.format(3, int('3a', 16), 0),
+                "tracking_id_mouseup": self.sendevent_command.format(3, int('39', 16), '-1'),
+                "syn_mt_report": self.sendevent_command.format(0, 2, 0)
+            }
             return device_path
         else:
+            self.sendevent_command = 'sendevent /dev/input/event5 {} {} {};'
+            self.commands = {
+                "tracking_id_mousedown": self.sendevent_command.format(3, int('39', 16), 0),
+                "touch_major_func": self.touch_major_func,
+                "abs_mt_pressure_down": self.sendevent_command.format(3, int('3a', 16), int('81', 16)),
+                "x_command_func": self.x_command_func,
+                "y_command_func": self.y_command_func,
+                "action_terminate_command": self.sendevent_command.format(0, 0, 0),
+                "abs_mt_pressure_up": self.sendevent_command.format(3, int('3a', 16), 0),
+                "tracking_id_mouseup": self.sendevent_command.format(3, int('39', 16), '-1'),
+                "syn_mt_report": self.sendevent_command.format(0, 2, 0)
+            }
             return None
 
     def screenshot(self):
@@ -715,6 +725,7 @@ class adb_host:
             self.full_ip,
             'shell'
         ], stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        print('click command', (''.join(click_command)))
         print('ADB CONTROLLER : sending click command ', shell_process.communicate((''.join(click_command)).encode('utf-8')))
         # print((''.join(click_command)).encode('utf-8'))
         self.event_counter += 1
