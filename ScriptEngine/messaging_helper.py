@@ -1,11 +1,8 @@
 import sys
 
-# Personally, I don't understand this. I thought it should be the opposite...
 if __package__ is None or __package__ == '':
-    # Script is executed from the parent directory
     from script_engine_constants import *
 else:
-    # Script is executed from within the subdirectory
     from .script_engine_constants import *
 
 
@@ -24,6 +21,14 @@ class MessagingHelper:
             'payload': message
         }, headers={
             'SECRET': creds['SECRET']
-            # 'Authorization' : 'Bearer ' + creds['AUTHORIZATION']
         }).text)
         del creds
+
+
+if __name__ == '__main__':
+    if len(sys.argv) > 2 and sys.argv[1] == 'sendmessage':
+        message = sys.argv[2]
+        helper = MessagingHelper()
+        helper.send_viber_message(message)
+    else:
+        print("Usage: python messaging_helper.py sendmessage 'Your Message Here'")
