@@ -376,10 +376,15 @@ class ScriptScheduler:
             exit(0)
 
     def create_script_event_object(self, script_event_obj, sequence_name):
+        print('script_event_obj', script_event_obj)
         if 'onInit' in script_event_obj['sequences'] and script_event_obj['sequence'][0] != 'onInit':
             script_event_obj['sequence'] = [self.create_script_event_object(script_event_obj['sequences']['onInit'], 'onInit')] + script_event_obj['sequence']
+
         for item_index,script_or_sequence in enumerate(script_event_obj['sequence']):
-            if script_or_sequence in script_event_obj['sequences']:
+            if isinstance(script_or_sequence, dict):
+                #onInit
+                continue
+            elif script_or_sequence in script_event_obj['sequences']:
                 script_event_obj['sequence'][item_index] = self.create_script_event_object(script_event_obj['sequences'][script_or_sequence], script_or_sequence)
             else:
                 script_event_obj['sequence'][item_index] = {
