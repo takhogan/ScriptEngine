@@ -6,7 +6,7 @@ import os
 import json
 import traceback
 import multiprocessing, logging
-
+import uuid
 import datetime
 
 from script_loader import parse_zip
@@ -114,9 +114,9 @@ if __name__=='__main__':
     else:
         log_level = 'info'
     if n_args > 5:
-        script_id = int(sys.argv[5])
+        script_id = sys.argv[5]
     else:
-        script_id = 1
+        script_id = uuid.uuid4()
 
     if n_args > 6:
         for arg_index in range(6, n_args):
