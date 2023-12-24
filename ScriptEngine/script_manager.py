@@ -14,6 +14,8 @@ from script_executor import ScriptExecutor
 from script_engine_constants import *
 from device_manager import DeviceManager
 
+DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
+
 def str_timeout_to_datetime_timeout(timeout, src=None):
     if not isinstance(timeout, str):
         return timeout
@@ -56,23 +58,41 @@ def update_running_scripts_file(scriptname, action):
                 with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
                     json.dump(running_scripts, running_script_file)
 
-def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, log_level='info'):
+def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, log_level='info', device_details=None, system_script=False):
     # if you want to open zip then you pass .zip in command line args
     # update_running_scripts_file(script_name, 'push')
     print('SCRIPT_MANAGER: script start time: ', datetime.datetime.now(), ' script trigger time: ', start_time, ' scheduled end time: ', timeout)
     print('constants : ', constants)
-    script_object = parse_zip(script_name)
+    script_object = parse_zip(script_name, system_script)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
     adb_args = {}
-    if 'DEVICE_NAME' in constants and 'AUTO_DETECT_ADB_PORT' in constants and constants['AUTO_DETECT_ADB_PORT'] == 'True':
+    if device_details is not None and device_details != '':
+        with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
+            devices_config = json.load(devices_config_file)
+            if device_details in devices_config:
+                adb_args = devices_config[device_details]
+            else:
+                print('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
+    elif 'DEVICE_NAME' in constants and 'AUTO_DETECT_ADB_PORT' in constants and constants['AUTO_DETECT_ADB_PORT'] == 'True':
         adb_args = {
             'DEVICE_NAME' : constants['DEVICE_NAME'],
             'AUTO_DETECT_ADB_PORT' : True
         }
+        print('SCRIPT MANAGER: setting params through inputs is deprecated ', adb_args)
+    print('SCRIPT MANAGER: loading adb_args', adb_args)
     device_manager = DeviceManager(script_name, script_object['props'], adb_args)
     logger = multiprocessing.log_to_stderr()
     logger.setLevel(multiprocessing.SUBDEBUG)
+
+    if system_script:
+        if script_name == 'startDevice':
+            device_manager.adb_host.start_device()
+            return
+        elif script_name == 'stopDevice':
+            device_manager.adb_host.stop_device()
+            return
+
     main_script = ScriptExecutor(
         script_object,
         timeout,
@@ -119,7 +139,17 @@ if __name__=='__main__':
         script_id = uuid.uuid4()
 
     if n_args > 6:
-        for arg_index in range(6, n_args):
+        device_details = None if sys.argv[6] == '' else sys.argv[6]
+    else:
+        device_details = None
+
+    if n_args > 7:
+        system_script = (sys.argv[7] if isinstance(sys.argv[7], bool) else sys.argv[7] == 'true')
+    else:
+        system_script = False
+
+    if n_args > 8:
+        for arg_index in range(8, n_args):
             arg_split = sys.argv[arg_index].strip().split(':')
             constants[arg_split[0]] = arg_split[1]
     print('SCRIPT MANAGER: loading script and running with log level ', log_level)
@@ -129,5 +159,7 @@ if __name__=='__main__':
         (start_time + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal()) if end_time is None else end_time,
         start_time=start_time_str,
         constants=constants,
-        log_level=log_level
+        log_level=log_level,
+        device_details=device_details,
+        system_script=system_script
     )

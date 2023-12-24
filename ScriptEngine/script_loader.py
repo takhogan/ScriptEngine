@@ -110,9 +110,12 @@ def parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_
     }
 # self.use_library = use_library if use_library is not None \
 #             else (True if self.props['deploymentToLibrary'] == 'true' else False)
-def parse_zip(script_name):
+def parse_zip(script_name, system_script=False):
     # is_backslash_system = script_file_path.count('/') > script_file_path.count('\\')
-    script_file_path = './scripts/scriptFolders/' + script_name
+    script_file_path = (
+        './scripts/scriptFolders/' if not system_script else
+        './scripts/systemScripts/'
+    ) + script_name
     dir_path = os.path.splitext(script_file_path)[0]
     if os.path.splitext(script_file_path)[1] == '.zip':
         script_path = os.path.splitext(os.path.basename(script_file_path))[0]

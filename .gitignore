@@ -1,6 +1,8 @@
 # Default ignored files
 /shelf/
 /.idea/
+.vscode/
+.idea/
 figs/
 logs/
 .DS_Store

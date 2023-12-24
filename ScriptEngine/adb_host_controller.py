@@ -1,8 +1,14 @@
+import asyncio
 import threading
 import datetime
 import queue
 import subprocess
+import select
+import json
+import platform
+import shlex
 
+DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
 
 
 from configobj import ConfigObj
@@ -137,32 +143,46 @@ class adb_host:
         # shell_process = subprocess.Popen([self.adb_path, 'shell'],stdin=subprocess.PIPE)
         # device_name = shell_process.communicate(b"getevent -pl 2>&1 | sed -n '/^add/{h}/ABS_MT_TOUCH/{x;s/[^/]*//p}'")
         self.props['scriptMode'] = 'train'
+        self.emulator_type = None
+        self.adb_path = None
+        self.emulator_path = None
+        self.device_name = None
+        self.window_name = None
+        self.auto_detect_adb_port = None
+        self.adb_port = None
+        self.full_ip = None
 
         #default configuration
-        self.configure_adb({
-            'actionData' : {
-                'adbPath' : "'adb'",
-                'emulatorType' : 'bluestacks',
-                'emulatorPath' : "'C:\\Program Files\\BlueStacks_nxt\\HD-Player.exe'",
-                'deviceName' : "'Pie64'" if 'DEVICE_NAME' not in adb_args else '\'' + adb_args['DEVICE_NAME'] + '\'',
-                'windowName' : "'BlueStacks App Player 1'",
-                'adbPort' : '5555',
-                'autoDetectAdbPort' : False if 'AUTO_DETECT_ADB_PORT' not in adb_args else adb_args['AUTO_DETECT_ADB_PORT']
-            }
-        }, {}, {})
+        try:
+            status, _, _ = self.configure_adb({
+                'actionData' : {
+                    'adbPath' : "'adb'",
+                    'emulatorType' : '"' + adb_args['type'] + '"',
+                    'emulatorPath' : "'C:\\Program Files\\BlueStacks_nxt\\HD-Player.exe'",
+                    'deviceName' : '"' + adb_args['devicename'] + '"',
+                    'windowName' : '"' + adb_args['name'] + '"',
+                    'adbPort' : '"' + adb_args['port'] + '"'
+                }
+            }, {}, {})
+        except Exception as e:
+            print('ADB HOST CONTROLLER: exception', e)
+            status = ScriptExecutionState.FAILURE
+        if status == ScriptExecutionState.FAILURE:
+            print('ADB HOST CONTROLLER: adb configuration failed')
+            exit(1)
 
 
     def configure_adb(self, configurationAction, state, context):
+        state_copy = state.copy()
+        emulator_type = eval(configurationAction['actionData']['emulatorType'], state_copy)
 
-        if configurationAction['actionData']['emulatorType'] != 'bluestacks':
+        if emulator_type != 'bluestacks':
             print('emulator type not supported!')
             return ScriptExecutionState.FAILURE, state, context
 
-        emulator_type = configurationAction['actionData']['emulatorType']
         self.emulator_type = emulator_type
         state['EMULATOR_TYPE'] = emulator_type
 
-        state_copy = state.copy()
         adb_path = eval(configurationAction['actionData']["adbPath"], state_copy)
         self.adb_path = adb_path
         state['ADB_PATH'] = adb_path
@@ -175,31 +195,89 @@ class adb_host:
         self.device_name = device_name
         state['DEVICE_NAME'] = device_name
 
-        window_name = eval(configurationAction['actionData']["windowName"], state_copy)
-        self.window_name = window_name
-        state['WINDOW_NAME'] = window_name
+        init_bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
+        instance_window_name = init_bluestacks_config['bst.instance.{}.display_name'.format(
+            self.device_name
+        )]
+        print('ADB CONTROLLER: detected window name {} for device {}'.format(
+            instance_window_name,
+            self.device_name
+        ))
+        self.window_name = instance_window_name
+        state['WINDOW_NAME'] = instance_window_name
 
         adb_port = str(eval(configurationAction['actionData']['adbPort'], state_copy))
-        self.adb_port = adb_port
-        state['ADB_PORT'] = adb_port
-        self.full_ip = self.adb_ip + ':' + adb_port
-
-        auto_detect_adb_port = configurationAction['actionData']['autoDetectAdbPort']
-        if isinstance(auto_detect_adb_port, str):
-            auto_detect_adb_port = eval(auto_detect_adb_port, state_copy)
-        self.auto_detect_adb_port = auto_detect_adb_port
-        state['AUTO_DETECT_ADB_PORT'] = auto_detect_adb_port
+        self.auto_detect_adb_port = (adb_port == 'auto')
+        if self.auto_detect_adb_port:
+            og_port = adb_port
+            bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
+            self.adb_port = bluestacks_config['bst.instance.{}.status.adb_port'.format(
+                self.device_name
+            )]
+            print('ADB CONTROLLER: changed adb port from {} to auto detected port {}'.format(
+                og_port,
+                self.adb_port
+            ))
+        else:
+            self.adb_port = adb_port
+        state['ADB_PORT'] = self.adb_port
+        self.full_ip = self.adb_ip + ':' + self.adb_port
+        state['AUTO_DETECT_ADB_PORT'] = self.auto_detect_adb_port
 
         self.status = 'initialized'
         print('Configured ADB: ',
               'adb_path', adb_path,
               'emulator_path', emulator_path,
               'device_name', device_name,
-              'window_name', window_name,
+              'window_name', instance_window_name,
               'adb_port', adb_port,
-              'auto_detect_adb_port', auto_detect_adb_port)
+              'auto_detect_adb_port', self.auto_detect_adb_port)
         return ScriptExecutionState.SUCCESS, state, context
 
+    def start_device(self):
+        # check if window is open
+        if self.emulator_type == 'bluestacks':
+            start_device_command = subprocess.run('"{}" --instance "{}"'.format(
+                self.emulator_path,
+                self.device_name
+            ), cwd="/", shell=True, capture_output=True, timeout=15)
+            print('ADB CONTROLLER: started device', self.device_name, 'with result', start_device_command.returncode, start_device_command)
+        else:
+            print('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
+
+    def close_device(self):
+        if platform.system() == 'Windows':
+            if self.emulator_type == 'bluestacks':
+                init_bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
+                instance_window_name = init_bluestacks_config['bst.instance.{}.display_name'.format(
+                    self.device_name
+                )]
+                print('ADB CONTROLLER: detected window name {} for device {}'.format(
+                    instance_window_name,
+                    self.device_name
+                ))
+                self.window_name = instance_window_name
+                stop_device_command = subprocess.run('taskkill /fi "WINDOWTITLE eq {}" /IM "HD-Player.exe" /F'.format(
+                    self.window_name
+                ), cwd="/", shell=True, capture_output=True, timeout=15)
+                print('ADB CONTROLLER: stopped device', self.device_name, 'with result',
+                      stop_device_command.returncode, stop_device_command)
+            else:
+                print('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
+
+    def get_status(self):
+        devices_output = self.get_device_list_output()
+        if not self.full_ip in devices_output:
+            self.run_connect_command()
+            time.sleep(3)
+            devices_output = self.get_device_list_output()
+        emulator_active = (
+                (self.full_ip in devices_output) and 'offline' not in devices_output
+        )
+        if emulator_active:
+            return 'online'
+        else:
+            return 'offline'
 
     def init_system(self, reinitialize=False):
         max_adb_attempts = 6
@@ -220,6 +298,7 @@ class adb_host:
                         self.device_name
                     ))
                     self.window_name = instance_window_name
+
                     check_for_window = lambda window_name: "HD-Player" in bytes.decode(subprocess.run(
                         'tasklist /FI "WINDOWTITLE eq {}"'.format(window_name),
                         capture_output=True,
@@ -247,16 +326,14 @@ class adb_host:
                     # state['ADB_PORT'] = self.adb_port
             print('ADB CONTROLLER: initializing/reinitializing adb')
             print('ADB PATH : ', self.adb_path)
-            get_device_list = lambda: subprocess.run(self.adb_path + ' devices ', cwd="/", shell=True, capture_output=True, timeout=15)
-            get_device_list_output = lambda: bytes.decode(get_device_list().stdout, 'utf-8')
 
 
-            devices_output = get_device_list_output()
+            devices_output = self.get_device_list_output()
             print('ADB CONTROLLER: listing devices')
             if not self.full_ip in devices_output:
                 self.run_connect_command()
                 time.sleep(3)
-                devices_output = get_device_list_output()
+                devices_output = self.get_device_list_output()
 
             run_kill_command = lambda: subprocess.run(self.adb_path + ' kill-server', cwd="/", shell=True, timeout=30)
             run_start_command = lambda: subprocess.run(self.adb_path + ' start-server', cwd="/", shell=True, timeout=30)
@@ -278,7 +355,7 @@ class adb_host:
             if not emulator_active:
                 print('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
                 restart_adb()
-                devices_output = get_device_list_output()
+                devices_output = self.get_device_list_output()
                 emulator_active = (
                     (self.full_ip in devices_output) and 'offline' not in devices_output
                 )
@@ -291,7 +368,7 @@ class adb_host:
                     adb_attempts += 1
                 print('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
                 restart_adb()
-                devices_output = get_device_list_output()
+                devices_output = self.get_device_list_output()
                 emulator_active = (
                     ('emulator' in devices_output or
                      self.full_ip in devices_output) and 'offline' not in devices_output
@@ -314,7 +391,7 @@ class adb_host:
             except UnidentifiedImageError:
                 print('ADB CONTROLLER: Scrrencap Failed, trying again in 30 seconds, get_im_command: ', get_im_command)
                 restart_adb()
-                devices_output = get_device_list_output()
+                devices_output = self.get_device_list_output()
                 emulator_active = (
                         (self.full_ip in devices_output) and 'offline' not in devices_output
                 )
@@ -322,7 +399,7 @@ class adb_host:
             if not emulator_active:
                 print('ADB CONTROLLER: problem found in devices output : ', devices_output)
                 restart_adb()
-                devices_output = get_device_list_output()
+                devices_output = self.get_device_list_output()
                 emulator_active = (
                         (self.full_ip in devices_output) and 'offline' not in devices_output
                 )
@@ -335,7 +412,7 @@ class adb_host:
                     adb_attempts += 1
                 print('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
                 restart_adb()
-                devices_output = get_device_list_output()
+                devices_output = self.get_device_list_output()
                 emulator_active = (
                         (self.full_ip in devices_output) and 'offline' not in devices_output
                 )
@@ -376,11 +453,19 @@ class adb_host:
             self.adb_path + ' connect ' + self.full_ip, cwd="/", shell=True, timeout=30
         )
 
+    def get_device_list_output(self):
+        device_list = subprocess.run(
+            self.adb_path + ' devices ',
+            cwd="/", shell=True, capture_output=True, timeout=15
+        )
+        return bytes.decode(device_list.stdout, 'utf-8')
+
     @staticmethod
     def enqueue_output(out, queue):
         for line in iter(out.readline, b''):
             queue.put(line)
         out.close()
+
     def set_commands(self, timeout=1):
         # Run the adb getevent command
         process = subprocess.Popen(['adb', 'shell','getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -1222,23 +1307,67 @@ class adb_host:
             print("action uninplemented on adb " + action["actionName"])
             exit(0)
 
-if __name__ == '__main__':
-    adb_host = adb_host({
-        "videoDims": "null",
-        "windowBounds": "null",
-        "emulatorPath": "/Users/Tak/Library/Android/sdk/emulator/emulator",
-        "adbPath": "adb",
-        "deviceName": "Pixel_2_API_30",
-        "targetSystem": "none",
-        "scriptName": "Windows_BlueStacks_Open",
-        "width": 1920,
-        "height": 1080,
-        "scriptMode": "train",
-        "deploymentTarget": "http://10.147.17.223:3849",
-        "deploymentToLibrary": "true"
-    }, None, '127.0.0.1:5556')
-    adb_host.init_system()
+@staticmethod
+def set_adb_args(device_key):
+    adb_args = None
+    with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
+        devices_config = json.load(devices_config_file)
+        if device_key in devices_config:
+            adb_args = devices_config[device_key]
+        else:
+            print('ADB HOST CONTROLLER: device config for ', device_key, ' not found! ')
+    print('ADB HOST CONTROLLER: loading args', adb_args)
+    return adb_args
 
-    # adb_host.click(200, 200)
-    # (633.3333333333333, 858.6666666666666),
-    exit(0)
+@staticmethod
+def parse_inputs(process_adb_host, inputs):
+    device_action = inputs[1]
+    if device_action == 'check_status':
+        return {
+            "data": process_adb_host.get_status()
+        }
+    elif device_action == 'screen_capture':
+        if process_adb_host.check_status() == 'offline':
+            return {
+
+            }
+        process_adb_host.init_system()
+        return {
+            "data": process_adb_host.screenshot()
+        }
+
+PROCESS_DELIMITER = '<--DEVICE-RESPONSE-->'
+
+async def read_input():
+    print("ADB CONTROLLER PROCESS: listening for input")
+    process_adb_host = None
+    device_key = None
+    while True:
+        input_line = await asyncio.to_thread(sys.stdin.readline)
+        # Process the input
+        if not input_line:  # EOF, if the pipe is closed
+            break
+        inputs = shlex.split(input_line)
+        print('ADB CONTROLLER PROCESS: received inputs ', inputs)
+        if device_key is None:
+            device_key = inputs[0]
+        elif device_key != inputs[0]:
+            print('ADB CONTROLLER: device key mismatch ', device_key, inputs[0])
+            continue
+        if process_adb_host is None:
+            print('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
+            with open('adb-host-controller-{}-process.txt'.format(device_key.replace(':', '-')), 'w') as process_file:
+                process_file.write(str(datetime.datetime.now()) + '\n')
+                # process_file.write(json.dumps(adb_args) + '\n')
+            adb_args = set_adb_args(inputs[0])
+            process_adb_host = adb_host({
+                "dir_path": "./"
+            }, None, adb_args)
+        if len(inputs) > 1:
+            print(PROCESS_DELIMITER + json.dumps(parse_inputs(process_adb_host, inputs)) + PROCESS_DELIMITER)
+
+async def adb_controller_main():
+    await asyncio.gather(read_input())
+
+if __name__ == '__main__':
+    asyncio.run(adb_controller_main())
