@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import threading
 import datetime
 import queue
@@ -1327,14 +1328,50 @@ def parse_inputs(process_adb_host, inputs):
             "data": process_adb_host.get_status()
         }
     elif device_action == 'screen_capture':
-        if process_adb_host.check_status() == 'offline':
+        if process_adb_host.get_status() == 'offline':
             return {
 
             }
         process_adb_host.init_system()
+        screenshot = process_adb_host.screenshot()
+        _, buffer = cv2.imencode('.jpg', screenshot)
+        byte_array = buffer.tobytes()
+        base64_encoded_string = base64.b64encode(byte_array).decode('utf-8')
         return {
-            "data": process_adb_host.screenshot()
+            "data": base64_encoded_string
         }
+    elif device_action == "click":
+        if process_adb_host.get_status() == 'offline':
+            return {
+
+            }
+        process_adb_host.init_system()
+        process_adb_host.click(inputs[2], inputs[3])
+        return {
+            "data" : "success"
+        }
+    elif device_action == "click_and_drag":
+        if process_adb_host.get_status() == 'offline':
+            return {
+
+            }
+        process_adb_host.init_system()
+        process_adb_host.click_and_drag(inputs[2], inputs[3], inputs[4], inputs[5])
+        return {
+            "data" : "success"
+        }
+    elif device_action == "send_keys":
+        if process_adb_host.get_status() == 'offline':
+            return {
+
+            }
+        process_adb_host.init_system()
+        for c in inputs[2]:
+            process_adb_host.press(c)
+        return {
+            "data": "success"
+        }
+
 
 PROCESS_DELIMITER = '<--DEVICE-RESPONSE-->'
 
@@ -1361,7 +1398,9 @@ async def read_input():
                 # process_file.write(json.dumps(adb_args) + '\n')
             adb_args = set_adb_args(inputs[0])
             process_adb_host = adb_host({
-                "dir_path": "./"
+                "dir_path": "./",
+                "width" : None,
+                "height" : None
             }, None, adb_args)
         if len(inputs) > 1:
             print(PROCESS_DELIMITER + json.dumps(parse_inputs(process_adb_host, inputs)) + PROCESS_DELIMITER)
