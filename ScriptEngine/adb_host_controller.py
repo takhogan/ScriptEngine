@@ -238,11 +238,11 @@ class adb_host:
     def start_device(self):
         # check if window is open
         if self.emulator_type == 'bluestacks':
-            start_device_command = subprocess.run('"{}" --instance "{}"'.format(
+            start_device_command = subprocess.Popen('"{}" --instance "{}"'.format(
                 self.emulator_path,
                 self.device_name
-            ), cwd="/", shell=True, capture_output=True, timeout=15)
-            print('ADB CONTROLLER: started device', self.device_name, 'with result', start_device_command.returncode, start_device_command)
+            ), cwd="/", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            print('ADB CONTROLLER: started device', self.device_name, 'PID:', start_device_command.pid)
         else:
             print('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
 
