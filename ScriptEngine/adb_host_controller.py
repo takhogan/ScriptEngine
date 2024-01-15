@@ -246,7 +246,7 @@ class adb_host:
         else:
             print('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
 
-    def close_device(self):
+    def stop_device(self):
         if platform.system() == 'Windows':
             if self.emulator_type == 'bluestacks':
                 init_bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
