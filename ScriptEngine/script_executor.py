@@ -18,9 +18,9 @@ sys.path.append("..")
 from parallelized_script_executor import ParallelizedScriptExecutor
 from script_engine_constants import *
 from script_execution_state import ScriptExecutionState
-from script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable
+from script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str
 from script_logger import ScriptLogger
-
+from script_loader import parse_zip
 
 
 
@@ -57,24 +57,24 @@ class ScriptExecutor:
                  script_obj,
                  timeout,
                  base_script_name,
-                 base_start_time,
+                 base_start_time_str,
                  script_id,
                  device_manager,
                  log_level='INFO',
                  parent_folder='',
-                 start_time=None,
+                 script_start_time=None,
                  context=None,
                  state=None,
                  create_log_folders=True):
         self.script_id = script_id
         self.base_script_name = base_script_name
-        self.base_start_time = base_start_time
+        self.base_start_time_str = base_start_time_str
         self.device_manager = device_manager
         self.props = script_obj['props']
-        if start_time is None:
+        if script_start_time is None:
             self.refresh_start_time()
         else:
-            self.props['start_time'] = start_time
+            self.props['script_start_time'] = script_start_time
         self.timeout = timeout
         self.props["timeout"] = timeout
         self.log_level = log_level
@@ -121,14 +121,14 @@ class ScriptExecutor:
             self.create_log_folders(parent_folder)
 
     def refresh_start_time(self):
-        self.props["start_time"] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+        self.props["start_time"] = datetime.datetime.now().astimezone(tz=tz.tzutc())
 
     def create_log_folders(self, parent_folder='', refresh_start_time=False):
         if refresh_start_time:
             self.refresh_start_time()
         self.log_folder = ('./logs/' if parent_folder == '' else parent_folder) +\
               str(self.context['script_counter']).zfill(5) + '-' +\
-              self.props['script_name'] + '-' + self.props['start_time']
+              self.props['script_name'] + '-' + datetime_to_local_str(self.props['script_start_time'], delim='-')
 
         os.makedirs(self.log_folder + '/search_patterns', exist_ok=True)
         self.log_folder += '/'
@@ -303,7 +303,14 @@ class ScriptExecutor:
                 script_name = action["actionData"]["scriptName"].strip()
                 if script_name[0] == '{' and script_name[-1] == '}':
                     script_name = eval(script_name[1:-1], self.state.copy())
-                ref_script = self.include_scripts[script_name]
+                if script_name[0] == '[' and script_name[-1] == ']':
+                    script_name = script_name[1:-1]
+                    system_script = True
+                    ref_script = parse_zip(script_name, system_script)
+                elif script_name in self.include_scripts:
+                    ref_script = self.include_scripts[script_name]
+                else:
+                    ref_script = parse_zip(script_name, False)
                 ref_script['include'] = self.include_scripts
                 child_context["actionOrder"] = action["actionData"]["actionOrder"] if "actionOrder" in action["actionData"] else "sequential"
                 child_context["scriptMaxActionAttempts"] = action["actionData"]["scriptMaxActionAttempts"] if "scriptMaxActionAttempts" in action["actionData"] else ""
@@ -325,7 +332,7 @@ class ScriptExecutor:
                         ref_script,
                         self.props["timeout"],
                         self.base_script_name,
-                        self.base_start_time,
+                        self.base_start_time_str,
                         self.script_id,
                         self.device_manager,
                         log_level=self.log_level,
@@ -339,7 +346,7 @@ class ScriptExecutor:
                         ref_script,
                         self.props["timeout"],
                         self.base_script_name,
-                        self.base_start_time,
+                        self.base_start_time_str,
                         self.script_id,
                         self.device_manager,
                         log_level=self.log_level,
@@ -463,19 +470,19 @@ class ScriptExecutor:
 
     def check_if_done(self):
         end_branch = False
-        print(self.props['script_name'] + ' CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches")
-        if datetime.datetime.now().astimezone(tz.tzlocal()) > self.timeout:
+        print('-----' + self.props['script_name'] + ' CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches" + '-----')
+        if datetime.datetime.now().astimezone(tz=tz.tzutc()) > self.timeout:
             print(self.props['script_name'] + ' CONTROL FLOW: script timeout - ', datetime.datetime.now())
             return end_branch,True
         running_scripts = get_running_scripts()
+
         if len(running_scripts) == 0:
             print('CONTROL FLOW: running scripts file empty')
             terminate_request = True
         else:
             current_running_script = running_scripts[0]
             script_id_mismatch = current_running_script["script_id"] != self.script_id
-            start_time_mismatch = current_running_script['start_time_str'] != self.base_start_time
-            print(current_running_script['start_time_str'], self.base_start_time)
+            start_time_mismatch = current_running_script['start_time_str'] != self.base_start_time_str
             script_name_mismatch = current_running_script['script_name'] != self.base_script_name
             terminate_request = (
                 script_id_mismatch or
@@ -491,7 +498,7 @@ class ScriptExecutor:
                     if running_script['parallel']:
                         terminate_request = (terminate_request and (
                             running_script['script_id'] != self.script_id) or
-                            running_script['start_time_str'] != self.base_start_time or
+                            running_script['start_time_str'] != self.base_start_time_str or
                             running_script['script_name'] != self.base_script_name
                         )
                         if not terminate_request:

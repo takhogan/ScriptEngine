@@ -3,6 +3,8 @@ import math
 import numpy as np
 import os
 import json
+from dateutil import tz
+
 RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
 
 
@@ -45,6 +47,10 @@ def get_digits(number):
 
 import subprocess
 import re
+
+
+def datetime_to_local_str(datetime, delim=':'):
+    return datetime.astimezone(tz.tzlocal()).strftime('%Y-%m-%d %H{}%M{}%S'.format(delim, delim))
 
 # Mapping dictionary with key-value pairs
 variable_mapping = {

@@ -1,8 +1,11 @@
 import subprocess
 import sys
 import datetime
+import json
 import os
-
+import asyncio
+import base64
+import shlex
 import pandas as pd
 
 sys.path.append("..")
@@ -62,6 +65,13 @@ class python_host:
         print('keys : ', keys)
         pyautogui.hotkey(*keys)
 
+    def click(self, x, y, button):
+        if (self.width != self.props['width'] or self.height != self.props['height']):
+            x = (self.width / self.props['width']) * x
+            y = (self.height / self.props['height']) * y
+            print('clickAction: adjusted coords for pyautogui', x, y)
+        pyautogui.click(x=x, y=y, button=button)
+
     def run_script(self, action, state):
         # print('run_script: ', action)
         if action["actionData"]["openInNewWindow"]:
@@ -111,7 +121,7 @@ class python_host:
 
             ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path, log_level=log_level)
             for click_count in range(0, action["actionData"]["clickCount"]):
-                pyautogui.click(x=point_choice[0], y=point_choice[1], button=action['actionData']['mouseButton'])
+                self.click(point_choice[0], point_choice[1], button=action['actionData']['mouseButton'])
                 time.sleep(delays[click_count])
 
 
@@ -189,3 +199,72 @@ class python_host:
         else:
             print('unimplemented method! ' + action["actionName"])
             exit(0)
+
+
+@staticmethod
+def parse_inputs(process_host, inputs):
+    device_action = inputs[1]
+    if device_action == 'screen_capture':
+        screenshot = process_host.screenshot()
+        _, buffer = cv2.imencode('.jpg', screenshot)
+        byte_array = buffer.tobytes()
+        base64_encoded_string = base64.b64encode(byte_array).decode('utf-8')
+        return {
+            "data": base64_encoded_string
+        }
+    elif device_action == "click":
+        process_host.click(inputs[2], inputs[3], 'left')
+        return {
+            "data" : "success"
+        }
+    elif device_action == "click_and_drag":
+        # process_host.click_and_drag(inputs[2], inputs[3], inputs[4], inputs[5])
+        print('click and drag not implemented on python host')
+        return {
+            "data" : "failure"
+        }
+    elif device_action == "send_keys":
+        for c in inputs[2]:
+            process_host.press(c)
+        return {
+            "data": "success"
+        }
+
+
+PROCESS_DELIMITER = '<--DEVICE-RESPONSE-->'
+
+async def read_input():
+    print("ADB CONTROLLER PROCESS: listening for input")
+    process_python_host = None
+    device_key = None
+    while True:
+        input_line = await asyncio.to_thread(sys.stdin.readline)
+        # Process the input
+        if not input_line:  # EOF, if the pipe is closed
+            break
+        inputs = shlex.split(input_line)
+        print('ADB CONTROLLER PROCESS: received inputs ', inputs)
+        if device_key is None:
+            device_key = inputs[0]
+        elif device_key != inputs[0]:
+            print('ADB CONTROLLER: device key mismatch ', device_key, inputs[0])
+            continue
+        if process_python_host is None:
+            print('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
+            with open('adb-host-controller-{}-process.txt'.format(device_key.replace(':', '-')), 'w') as process_file:
+                process_file.write(str(datetime.datetime.now()) + '\n')
+                # process_file.write(json.dumps(adb_args) + '\n')
+            process_python_host = python_host({
+                "dir_path": "./",
+                "width" : None,
+                "height" : None,
+                "scriptMode" : 'train'
+            })
+        if len(inputs) > 1:
+            print(PROCESS_DELIMITER + json.dumps(parse_inputs(process_python_host, inputs)) + PROCESS_DELIMITER)
+
+async def adb_controller_main():
+    await asyncio.gather(read_input())
+
+if __name__ == '__main__':
+    asyncio.run(adb_controller_main())
