@@ -16,14 +16,12 @@ def str_timeout_to_datetime_timeout(timeout, src=None):
         return timeout
 
     if src == 'deployment_server':
-        timeout = datetime.datetime.strptime(timeout, "%Y-%m-%d %H-%M-%S")
+        timeout = datetime.datetime.strptime(timeout, "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz.tzutc())
     else:
         dt, _, us = timeout.partition(".")
         utc_tz = tz.gettz('UTC')
         is_utc = timeout[-1] == 'Z'
-        timeout = datetime.datetime.strptime(timeout[:-1], "%Y-%m-%dT%H:%M:%S")
-        # if is_utc:
-        #     timeout = timeout.replace(tzinfo=utc_tz).astimezone(tz.tzlocal())
+        timeout = datetime.datetime.strptime(timeout[:-1], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=tz.tzutc())
     return timeout
 
 def persist_event_status(event_name, running_event):

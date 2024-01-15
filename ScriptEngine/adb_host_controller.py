@@ -120,6 +120,7 @@ KEY_TO_KEYCODE = {
 class adb_host:
     def __init__(self, props, host_os, adb_args):
         print('Configuring ADB with default parameters')
+        self.stop_command_gather = False
         self.device_profile = 'windows-bluestacks'
         self.host_os = host_os
         self.image_matcher = ImageMatcher()
@@ -152,25 +153,24 @@ class adb_host:
         self.auto_detect_adb_port = None
         self.adb_port = None
         self.full_ip = None
-
-        #default configuration
-        try:
-            status, _, _ = self.configure_adb({
-                'actionData' : {
-                    'adbPath' : "'adb'",
-                    'emulatorType' : '"' + adb_args['type'] + '"',
-                    'emulatorPath' : "'C:\\Program Files\\BlueStacks_nxt\\HD-Player.exe'",
-                    'deviceName' : '"' + adb_args['devicename'] + '"',
-                    'windowName' : '"' + adb_args['name'] + '"',
-                    'adbPort' : '"' + adb_args['port'] + '"'
-                }
-            }, {}, {})
-        except Exception as e:
-            print('ADB HOST CONTROLLER: exception', e)
-            status = ScriptExecutionState.FAILURE
-        if status == ScriptExecutionState.FAILURE:
-            print('ADB HOST CONTROLLER: adb configuration failed')
-            exit(1)
+        if len(adb_args) > 0:
+            try:
+                status, _, _ = self.configure_adb({
+                    'actionData' : {
+                        'adbPath' : "'adb'",
+                        'emulatorType' : '"' + adb_args['type'] + '"',
+                        'emulatorPath' : "'C:\\Program Files\\BlueStacks_nxt\\HD-Player.exe'",
+                        'deviceName' : '"' + adb_args['devicename'] + '"',
+                        'windowName' : '"' + adb_args['name'] + '"',
+                        'adbPort' : '"' + adb_args['port'] + '"'
+                    }
+                }, {}, {})
+            except Exception as e:
+                print('ADB HOST CONTROLLER: exception', e)
+                status = ScriptExecutionState.FAILURE
+            if status == ScriptExecutionState.FAILURE:
+                print('ADB HOST CONTROLLER: adb configuration failed')
+                exit(1)
 
 
     def configure_adb(self, configurationAction, state, context):
@@ -461,9 +461,10 @@ class adb_host:
         )
         return bytes.decode(device_list.stdout, 'utf-8')
 
-    @staticmethod
-    def enqueue_output(out, queue):
+    def enqueue_output(self, out, queue):
         for line in iter(out.readline, b''):
+            if self.stop_command_gather:
+                break
             queue.put(line)
         out.close()
 
@@ -471,7 +472,7 @@ class adb_host:
         # Run the adb getevent command
         process = subprocess.Popen(['adb', 'shell','getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                    bufsize=1)
-
+        self.stop_command_gather = False
         # Use a selector to wait for I/O readiness without blocking
         q = queue.Queue()
 
@@ -503,6 +504,8 @@ class adb_host:
                     device_line = False  # Reset for the next device
 
         # Ensure the subprocess is terminated
+        self.stop_command_gather = True
+        t.join()
         process.terminate()
         process.wait()
         if device_path:

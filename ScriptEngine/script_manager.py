@@ -13,23 +13,24 @@ from script_loader import parse_zip
 from script_executor import ScriptExecutor
 from script_engine_constants import *
 from device_manager import DeviceManager
+from script_engine_utils import datetime_to_local_str
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
 
 def str_timeout_to_datetime_timeout(timeout, src=None):
     if not isinstance(timeout, str):
         return timeout
-
     if src == 'deployment_server':
-        timeout = datetime.datetime.strptime(timeout, "%Y-%m-%d %H-%M-%S")
+        timeout = datetime.datetime.strptime(timeout, "%Y-%m-%d %H:%M:%S")
+        timeout = timeout.replace(tzinfo=tz.tzutc())
     else:
         dt, _, us = timeout.partition(".")
         utc_tz = tz.gettz('UTC')
-        is_utc = timeout[-1] == 'Z'
         timeout = datetime.datetime.strptime(timeout[:-1], "%Y-%m-%dT%H:%M:%S")
-        if is_utc:
-            timeout = timeout.replace(tzinfo=utc_tz).astimezone(tz.tzlocal())
+        timeout = timeout.replace(tzinfo=tz.tzutc())
+
     return timeout
+
 
 def update_running_scripts_file(scriptname, action):
     if action == 'push':
@@ -58,16 +59,19 @@ def update_running_scripts_file(scriptname, action):
                 with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
                     json.dump(running_scripts, running_script_file)
 
-def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, log_level='info', device_details=None, system_script=False):
+def load_and_run(script_name, script_id, timeout, constants=None, start_time_str=None, log_level='info', device_details=None, system_script=False):
     # if you want to open zip then you pass .zip in command line args
     # update_running_scripts_file(script_name, 'push')
-    print('SCRIPT_MANAGER: script start time: ', datetime.datetime.now(), ' script trigger time: ', start_time, ' scheduled end time: ', timeout)
+    print('SCRIPT_MANAGER: ', ' script trigger time: ',
+          datetime_to_local_str(str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')),
+          'actual script start time: ', datetime.datetime.now(), ' scheduled end time: ',
+          datetime_to_local_str(timeout))
     print('constants : ', constants)
     script_object = parse_zip(script_name, system_script)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
     adb_args = {}
-    if device_details is not None and device_details != '':
+    if device_details is not None and device_details != '' and device_details != 'null':
         with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
             devices_config = json.load(devices_config_file)
             if device_details in devices_config:
@@ -97,12 +101,12 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         script_object,
         timeout,
         script_name,
-        start_time,
+        start_time_str,
         script_id,
         device_manager,
         log_level=log_level,
         state=constants,
-        start_time=start_time
+        script_start_time=start_time
     )
     try:
         main_script.run(log_level=log_level)
@@ -124,10 +128,10 @@ if __name__=='__main__':
         start_time_str = sys.argv[2]
         start_time = str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')
     else:
-        start_time = datetime.datetime.now()
-        start_time_str = start_time.strftime('%Y-%m-%d %H-%M-%S')
+        start_time = datetime.datetime.now(datetime.timezone.utc)
+        start_time_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
     if n_args > 3:
-        end_time = str_timeout_to_datetime_timeout(sys.argv[3], src='deployment_server').replace(tzinfo=tz.tzlocal())
+        end_time = str_timeout_to_datetime_timeout(sys.argv[3], src='deployment_server')
 
     if n_args > 4:
         log_level = sys.argv[4]
@@ -139,7 +143,7 @@ if __name__=='__main__':
         script_id = uuid.uuid4()
 
     if n_args > 6:
-        device_details = None if sys.argv[6] == '' else sys.argv[6]
+        device_details = None if (sys.argv[6] == '' or sys.argv[6] == 'null') else sys.argv[6]
     else:
         device_details = None
 
@@ -156,8 +160,8 @@ if __name__=='__main__':
     load_and_run(
         script_name,
         script_id,
-        (start_time + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal()) if end_time is None else end_time,
-        start_time=start_time_str,
+        timeout=(start_time + datetime.timedelta(minutes=30)).astimezone(tz=tz.tzutc()) if end_time is None else end_time,
+        start_time_str=start_time_str,
         constants=constants,
         log_level=log_level,
         device_details=device_details,
