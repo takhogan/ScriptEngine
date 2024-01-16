@@ -121,7 +121,7 @@ class ScriptExecutor:
             self.create_log_folders(parent_folder)
 
     def refresh_start_time(self):
-        self.props["start_time"] = datetime.datetime.now().astimezone(tz=tz.tzutc())
+        self.props["script_start_time"] = datetime.datetime.now().astimezone(tz=tz.tzutc())
 
     def create_log_folders(self, parent_folder='', refresh_start_time=False):
         if refresh_start_time:
