@@ -8,6 +8,7 @@ commonmark
 configparser
 configobj
 cycler
+cx_Freeze
 Flask
 fonttools
 future
