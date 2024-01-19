@@ -1,7 +1,0 @@
-[
-{
-  "directory": "C:/Users/takho/ScriptEngine/build",
-  "command": "C:\\msys64\\mingw64\\bin\\g++.exe  @CMakeFiles/ImageStitchCalculator.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++11 -o CMakeFiles\\ImageStitchCalculator.dir\\lib\\image_stitch_calculator.cpp.obj -c C:\\Users\\takho\\ScriptEngine\\lib\\image_stitch_calculator.cpp",
-  "file": "C:/Users/takho/ScriptEngine/lib/image_stitch_calculator.cpp"
-}
-]

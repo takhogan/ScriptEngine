@@ -6,30 +6,22 @@ import os
 import asyncio
 import base64
 import shlex
-import pandas as pd
 
 sys.path.append("..")
 
 import numpy as np
 import pyautogui
-import random
 import cv2
-import glob
-from PIL import Image
-from skimage.metrics import structural_similarity as ssim
 from image_matcher import ImageMatcher
 from script_engine_utils import is_null, apply_state_to_cmd_str
 
-import matplotlib.pyplot as plt
 import time
 from device_action_interpeter import DeviceActionInterpreter
 from script_execution_state import ScriptExecutionState
 from scipy.stats import truncnorm
 from click_action_helper import ClickActionHelper
-from detect_scene_helper import DetectSceneHelper
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
-from script_engine_utils import generate_context_switch_action
 from forward_detect_peek_helper import ForwardDetectPeekHelper
 
 

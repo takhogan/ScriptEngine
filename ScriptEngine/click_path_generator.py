@@ -5,7 +5,7 @@ sys.path.append("..")
 import random
 import numpy as np
 import math
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from scipy.stats import norm
 from script_engine_utils import dist
 
@@ -115,8 +115,9 @@ class ClickPathGenerator:
             # print(transition_matrix)
             speed_sequence.append(np.random.choice(transition_choices, p=transition_matrix))
         if plot:
-            plt.plot(speed_sequence)
-            plt.show()
+            pass
+            # plt.plot(speed_sequence)
+            # plt.show()
         return speed_sequence
 
     @staticmethod
@@ -149,9 +150,10 @@ class ClickPathGenerator:
             # x_i = y_i + (c- sum (y_i)) / n
         delta_path = delta_path * signs
         if plot:
-            plt.plot(delta_path)
-            plt.plot(refit_path)
-            plt.show()
+            pass
+            # plt.plot(delta_path)
+            # plt.plot(refit_path)
+            # plt.show()
         return delta_path
 
     # TODO: not sure if program in general works with negative numbers
@@ -322,5 +324,5 @@ class ClickPathGenerator:
 if __name__=='__main__':
     path_generator = ClickPathGenerator(41, 71, 32726, 32726, 45, 0.4)
     x, y = path_generator.generate_click_path(0.1,0.1,0.9,0.9)
-    plt.plot(y)
-    plt.show()
+    # plt.plot(y)
+    # plt.show()
