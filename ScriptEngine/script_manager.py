@@ -14,6 +14,7 @@ from script_executor import ScriptExecutor
 from script_engine_constants import *
 from device_manager import DeviceManager
 from script_engine_utils import datetime_to_local_str
+from system_script_handler import SystemScriptHandler
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
 
@@ -90,11 +91,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
     logger.setLevel(multiprocessing.SUBDEBUG)
 
     if system_script:
-        if script_name == 'startDevice':
-            device_manager.adb_host.start_device()
-            return
-        elif script_name == 'stopDevice':
-            device_manager.adb_host.stop_device()
+        handle_result = SystemScriptHandler.handle_system_script(device_manager, script_name, {})
+        if handle_result == "return":
             return
 
     main_script = ScriptExecutor(

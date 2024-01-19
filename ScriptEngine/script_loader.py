@@ -113,7 +113,7 @@ def parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_
 def parse_zip(script_name, system_script=False):
     # is_backslash_system = script_file_path.count('/') > script_file_path.count('\\')
     script_file_path = (
-        './scripts/scriptFolders/' if not system_script else
+        './scripts/scriptLibrary/' if not system_script else
         './scripts/systemScripts/'
     ) + script_name
     dir_path = os.path.splitext(script_file_path)[0]

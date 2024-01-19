@@ -21,6 +21,8 @@ from script_execution_state import ScriptExecutionState
 from script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str
 from script_logger import ScriptLogger
 from script_loader import parse_zip
+from system_script_handler import SystemScriptHandler
+
 
 
 
@@ -306,7 +308,11 @@ class ScriptExecutor:
                 if script_name[0] == '[' and script_name[-1] == ']':
                     script_name = script_name[1:-1]
                     system_script = True
-                    ref_script = parse_zip(script_name, system_script)
+                    script_details = script_name.split(':')
+                    handle_status = SystemScriptHandler.handle_system_script(self.device_manager, script_details[0], script_details[1])
+                    if handle_status == 'return':
+                        return ScriptExecutionState.SUCCESS, state, context, context, run_queue, []
+                    ref_script = parse_zip(script_details[0], system_script)
                 elif script_name in self.include_scripts:
                     ref_script = self.include_scripts[script_name]
                 else:
@@ -374,7 +380,7 @@ class ScriptExecutor:
                 else:
                     print('returning without error')
                     status = ScriptExecutionState.RETURN
-                    return status, state, context
+                    return status, state, context, context, run_queue, []
 
             # print('runMode: ', action["actionData"]["runMode"])
             ref_script_executor.create_log_folders(

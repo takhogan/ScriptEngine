@@ -1,7 +1,5 @@
 import cv2
 import numpy as np
-import pandas as pd
-import time
 from script_engine_utils import dist
 from script_engine_utils import masked_mse
 

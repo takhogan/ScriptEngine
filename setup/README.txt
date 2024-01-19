@@ -6,6 +6,8 @@ https://pypi.org/project/tesserocr/
 #On Windows:
 Installing via wheel is relatively painless
 https://github.com/simonflueckiger/tesserocr-windows_build/releases
+You also need to install the tessdata
+https://github.com/UB-Mannheim/tesseract/wiki
 
 #On Mac:
 If you run into any errors, try specifying the path to the library and/or try to install an earlier version
