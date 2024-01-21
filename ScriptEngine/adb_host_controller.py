@@ -470,7 +470,7 @@ class adb_host:
 
     def set_commands(self, timeout=1):
         # Run the adb getevent command
-        process = subprocess.Popen(['adb', 'shell','getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        process = subprocess.Popen(['adb','-s', self.full_ip ,'shell' ,'getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                    bufsize=1)
         self.stop_command_gather = False
         # Use a selector to wait for I/O readiness without blocking
