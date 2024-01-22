@@ -311,7 +311,7 @@ class ScriptExecutor:
                     script_details = script_name.split(':')
                     handle_status = SystemScriptHandler.handle_system_script(self.device_manager, script_details[0], script_details[1])
                     if handle_status == 'return':
-                        return ScriptExecutionState.SUCCESS, state, context, context, run_queue, []
+                        return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
                     ref_script = parse_zip(script_details[0], system_script)
                 elif script_name in self.include_scripts:
                     ref_script = self.include_scripts[script_name]
@@ -380,7 +380,7 @@ class ScriptExecutor:
                 else:
                     print('returning without error')
                     status = ScriptExecutionState.RETURN
-                    return status, state, context, context, run_queue, []
+                    return action, status, state, context, run_queue, []
 
             # print('runMode: ', action["actionData"]["runMode"])
             ref_script_executor.create_log_folders(
