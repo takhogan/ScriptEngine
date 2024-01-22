@@ -267,13 +267,21 @@ class adb_host:
                 print('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
 
     def get_status(self):
-        devices_output = self.get_device_list_output()
+        try:
+            devices_output = self.get_device_list_output()
+        except subprocess.TimeoutExpired as t:
+            print('ADB CONTROLLER: get devices timed out ', t)
+            devices_output = ''
         if not self.full_ip in devices_output:
             self.run_connect_command()
             time.sleep(3)
-            devices_output = self.get_device_list_output()
+            try:
+                devices_output = self.get_device_list_output()
+            except subprocess.TimeoutExpired as t:
+                print('ADB CONTROLLER: get devices timed out ', t)
+                devices_output = ''
         emulator_active = (
-                (self.full_ip in devices_output) and 'offline' not in devices_output
+            (self.full_ip in devices_output) and 'offline' not in devices_output
         )
         if emulator_active:
             return 'online'
@@ -1335,8 +1343,14 @@ def parse_inputs(process_adb_host, inputs):
             return {
 
             }
-        process_adb_host.init_system()
-        screenshot = process_adb_host.screenshot()
+        try:
+            process_adb_host.init_system()
+            screenshot = process_adb_host.screenshot()
+        except subprocess.TimeoutExpired as t:
+            print('ADB CONTROLLER: timeout while capturing screenshot', t)
+            return {
+                
+            }
         _, buffer = cv2.imencode('.jpg', screenshot)
         byte_array = buffer.tobytes()
         base64_encoded_string = base64.b64encode(byte_array).decode('utf-8')
