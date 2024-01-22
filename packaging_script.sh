@@ -1,1 +1,0 @@
-venv/bin/cxfreeze -c ScriptEngine/script_manager.py --target-dir dist --target-name ScriptEngine
