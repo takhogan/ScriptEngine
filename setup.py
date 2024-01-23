@@ -5,7 +5,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'ScriptEngine'))
 
 
 
-executables = [Executable("ScriptEngine/script_manager.py")]
+executables = [Executable("ScriptEngine/script_manager.py"),Executable("ScriptEngine/adb_host_controller.py"), Executable("ScriptEngine/python_host_controller.py")]
 
 
 options = {
