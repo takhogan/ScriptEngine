@@ -243,8 +243,8 @@ async def read_input():
             continue
         if process_python_host is None:
             print('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
-            with open('adb-host-controller-{}-process.txt'.format(device_key.replace(':', '-')), 'w') as process_file:
-                process_file.write(str(datetime.datetime.now()) + '\n')
+            with open('./logs/adb-host-controller-{}-process.txt'.format(device_key.replace(':', '-')), 'a') as process_file:
+                process_file.write(str(datetime.datetime.now()) + ''.join(inputs) + '\n')
                 # process_file.write(json.dumps(adb_args) + '\n')
             process_python_host = python_host({
                 "dir_path": "./",
@@ -253,10 +253,11 @@ async def read_input():
                 "scriptMode" : 'train'
             })
         if len(inputs) > 1:
-            print(PROCESS_DELIMITER + json.dumps(parse_inputs(process_python_host, inputs)) + PROCESS_DELIMITER)
+            print(PROCESS_DELIMITER + json.dumps(parse_inputs(process_python_host, inputs)) + PROCESS_DELIMITER, flush=True)
 
 async def adb_controller_main():
     await asyncio.gather(read_input())
 
 if __name__ == '__main__':
+    os.makedirs('/logs', exist_ok=True)
     asyncio.run(adb_controller_main())
