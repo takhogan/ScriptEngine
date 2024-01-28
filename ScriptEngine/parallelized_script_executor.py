@@ -5,6 +5,8 @@ import time
 
 sys.path.append("..")
 from script_execution_state import ScriptExecutionState
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 
 
 
@@ -22,18 +24,18 @@ class ParallelizedScriptExecutor:
             future_results = [None] * (1 + stop_index - start_index)
             completed_indices = set()
             success_index = None
-            print('before .result()')
+            script_logger.log('before .result()')
             for future in concurrent.futures.as_completed(futures):
                 (completed_index,completed_actionGroup) = futures[future]
                 result = future.result()
                 future_results[completed_index - start_index] = result
                 (future_status, _) = result
-                print(completed_actionGroup, 'completed ', time.time() - start_time, 'result: ', future_status)
+                script_logger.log(completed_actionGroup, 'completed ', time.time() - start_time, 'result: ', future_status)
                 completed_indices.add(completed_index)
                 if future_status == ScriptExecutionState.SUCCESS and \
                         set(range(start_index, completed_index)).issubset(completed_indices):
                     success_index = completed_index
-                    print('returning with success action: ', completed_actionGroup)
+                    script_logger.log('returning with success action: ', completed_actionGroup)
                     for other_future in futures:
                         other_future.cancel()
                     break

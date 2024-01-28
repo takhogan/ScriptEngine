@@ -1,4 +1,6 @@
 from script_execution_state import ScriptExecutionState
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 
 class ForwardDetectPeekHelper:
     def __init__(self):
@@ -6,19 +8,19 @@ class ForwardDetectPeekHelper:
 
     @staticmethod
     def load_forward_peek_result(action, state, context):
-        print(action['actionData']["resuseScreenshotBetweenActions"] == True, action['actionData']["resuseScreenshotBetweenActions"] )
+        script_logger.log(action['actionData']["resuseScreenshotBetweenActions"] == True, action['actionData']["resuseScreenshotBetweenActions"] )
         if 'detect_run_type' in action['actionData'] and\
                 action['actionData']['detect_run_type'] == 'result_precalculation' and \
                 (action['actionData']["resuseScreenshotBetweenActions"] if
                 'resuseScreenshotBetweenActions' in action['actionData'] else False):
-            print('forward peek disabled for action ', action['actionGroup'])
+            script_logger.log('forward peek disabled for action ', action['actionGroup'])
             del action['actionData']['screencap_im_bgr']
             del action['actionData']['detect_run_type']
             del action['actionData']['results_precalculated']
             context['action'] = action
             return ScriptExecutionState.SUCCESS, state, context
         if 'results_precalculated' in action['actionData'] and action['actionData']['results_precalculated']:
-            print('returning precalculated results')
+            script_logger.log('returning precalculated results')
             if 'state' in action["actionData"]["update_dict"]:
                 for key, value in action["actionData"]["update_dict"]["state"].items():
                     state[key] = value
@@ -49,7 +51,7 @@ class ForwardDetectPeekHelper:
         if screencap_im_bgr is not None:
             return screencap_im_bgr
         if 'screencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
-            print('detectObject-' + str(action["actionGroup"]) + ' loading cached screenshot')
+            script_logger.log('detectObject-' + str(action["actionGroup"]) + ' loading cached screenshot')
             screencap_im_bgr = action['actionData']['screencap_im_bgr']
             del action['actionData']['screencap_im_bgr']
         else:

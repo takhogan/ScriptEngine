@@ -6,6 +6,8 @@ from script_engine_utils import generate_context_switch_action
 from script_execution_state import ScriptExecutionState
 from image_matcher import ImageMatcher
 from detect_scene_helper import DetectSceneHelper
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 
 class DetectObjectHelper:
     def __init__(self):
@@ -17,7 +19,7 @@ class DetectObjectHelper:
         match_point = None
         var_name = action["actionData"]["inputExpression"]
         if var_name is not None and len(var_name) > 0:
-            print('detectObject-' + str(action["actionGroup"]), ' fetching variable ', var_name, 'from state')
+            script_logger.log('detectObject-' + str(action["actionGroup"]), ' fetching variable ', var_name, 'from state')
             input_area = eval(var_name, state.copy())
             if len(input_area) > 0:
                 if action["actionData"]["targetContext"] == "detectResult":
@@ -31,14 +33,14 @@ class DetectObjectHelper:
                             input_area["point"][1]
                         )
         else:
-            print('detectObject-' + str(action["actionGroup"]), ' no input expression')
+            script_logger.log('detectObject-' + str(action["actionGroup"]), ' no input expression')
         return screencap_im_bgr, match_point
 
     @staticmethod
     def update_update_queue(action, state, context, matches, update_queue):
         state_copy = state.copy()
         context_copy = context.copy()
-        print('updating update queue')
+        script_logger.log('updating update queue')
         if len(matches) > 0:
 
             if str(action['actionData']['maxMatches']).isdigit():
@@ -47,7 +49,7 @@ class DetectObjectHelper:
                 max_matches = eval(action['actionData']['maxMatches'], state.copy())
             excess_matches = len(matches) - max_matches
             if excess_matches > 0:
-                print('truncated {} excess matches'.format(excess_matches))
+                script_logger.log('truncated {} excess matches'.format(excess_matches))
             for match in matches[1:max_matches]:
                 switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
                     "state": {
@@ -106,7 +108,7 @@ class DetectObjectHelper:
             dir_path='./logs',
             lazy_eval=False
     ):
-        print('inside detectObject')
+        script_logger.log('inside detectObject')
         screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
         if script_mode == "train" and log_level == 'info':
             cv2.imwrite(logs_path + '-search_img.png', screencap_search_bgr)
@@ -137,14 +139,14 @@ class DetectObjectHelper:
             if ssim_coeff < float(action["actionData"]["threshold"]):
                 matches = []
                 if action['actionData']['detectActionType'] == 'detectScene':
-                    print('detectObject-' + str(
+                    script_logger.log('detectObject-' + str(
                         action["actionGroup"]) + ' FAILED, detect mode detect scene, match % : ' + str(ssim_coeff))
                 else:
-                    print('detectObject-' + str(
+                    script_logger.log('detectObject-' + str(
                         action["actionGroup"]) + ' first match failed, detect mode detect object, match % : ',
                           str(ssim_coeff))
             else:
-                print('detectObject-' + str(
+                script_logger.log('detectObject-' + str(
                     action["actionGroup"]) + ' SUCCESS, detect mode detect scene, match % :' + str(ssim_coeff))
 
         # if is a detectObject and matchMode is bestMatch

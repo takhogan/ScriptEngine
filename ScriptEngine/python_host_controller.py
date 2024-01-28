@@ -23,11 +23,13 @@ from click_action_helper import ClickActionHelper
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
 from forward_detect_peek_helper import ForwardDetectPeekHelper
-
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
+formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
 class python_host:
     def __init__(self, props):
-        print('Initializing Python Host')
+        script_logger.log('Initializing Python Host')
         host_dimensions = pyautogui.size()
         self.width = host_dimensions.width
         self.height = host_dimensions.height
@@ -36,7 +38,7 @@ class python_host:
         height,width,_ = np.array(pyautogui.screenshot()).shape
         if (not is_null(self.props['width']) and (self.props['width'] != width)) or \
                 (not is_null(self.props['height']) and self.props['height'] != height):
-            print('Warning: python host dims mismatch, expected : ', self.props['height'], self.props['width'],
+            script_logger.log('Warning: python host dims mismatch, expected : ', self.props['height'], self.props['width'],
                   'observed :', height, width)
         self.props['width'] = width
         self.props['height'] = height
@@ -54,41 +56,41 @@ class python_host:
         pyautogui.press(key)
 
     def hotkey(self, keys):
-        print('keys : ', keys)
+        script_logger.log('keys : ', keys)
         pyautogui.hotkey(*keys)
 
     def click(self, x, y, button):
         if (self.width != self.props['width'] or self.height != self.props['height']):
             x = (self.width / self.props['width']) * x
             y = (self.height / self.props['height']) * y
-            print('clickAction: adjusted coords for pyautogui', x, y)
+            script_logger.log('clickAction: adjusted coords for pyautogui', x, y, flush=True)
         pyautogui.click(x=x, y=y, button=button)
 
     def run_script(self, action, state):
-        # print('run_script: ', action)
+        # script_logger.log('run_script: ', action)
         if action["actionData"]["openInNewWindow"]:
 
             run_command = "start cmd /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
-            print('shellScript-' + str(action["actionGroup"]), ' opening in new window run command : ', run_command)
+            script_logger.log('shellScript-' + str(action["actionGroup"]), ' opening in new window run command : ', run_command)
             os.system(run_command)
             return state
         elif action["actionData"]["awaitScript"]:
             await_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
-            print('shellScript-' + str(action["actionGroup"]), ' running command ', await_command, ' and awaiting output')
+            script_logger.log('shellScript-' + str(action["actionGroup"]), ' running command ', await_command, ' and awaiting output')
             outputs = subprocess.run(await_command, cwd="/", shell=True, capture_output=True)
             state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
             state[action["actionData"]["returnCodeOutputVarName"]] = outputs.returncode
-            print('shellScript-' + str(action["actionGroup"]), 'command output : ', outputs)
+            script_logger.log('shellScript-' + str(action["actionGroup"]), 'command output : ', outputs)
             return state
         else:
             process_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
-            print('shellScript-' + str(action["actionGroup"]), ' starting process ', process_command, ' without awaiting output')
+            script_logger.log('shellScript-' + str(action["actionGroup"]), ' starting process ', process_command, ' without awaiting output')
             proc = subprocess.Popen(process_command, cwd="/", shell=True)
             return state
 
 
     def handle_action(self, action, state, context, run_queue, log_level, log_folder, lazy_eval=False):
-        # print('inside host', self.width, self.height)
+        # script_logger.log('inside host', self.width, self.height)
         logs_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
         if action["actionName"] == "shellScript":
             return action, ScriptExecutionState.SUCCESS, self.run_script(action, state), context, run_queue, []
@@ -99,9 +101,9 @@ class python_host:
         elif action["actionName"] == "clickAction":
             var_name = action["actionData"]["inputExpression"]
             point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
-            # print('debug', point_choice, self.width, self.height, self.props['width'])
+            # script_logger.log('debug', point_choice, self.width, self.height, self.props['width'])
             # point_choice = (point_choice[0] * self.width / self.props['width'],point_choice[1] * self.height / self.props['height'])
-            print('clickAction-' + str(action["actionGroup"]), ' input: ', var_name, ' output : ', point_choice)
+            script_logger.log('clickAction-' + str(action["actionGroup"]), ' input: ', var_name, ' output : ', point_choice)
             delays = []
             if action["actionData"]["delayState"] == "active":
                 if action["actionData"]["distType"] == 'normal':
@@ -134,7 +136,7 @@ class python_host:
 
 
             if screencap_im_bgr is None:
-                print('detectObject-' + str(action["actionGroup"]) + ' taking screenshot')
+                script_logger.log('detectObject-' + str(action["actionGroup"]) + ' taking screenshot')
                 screencap_im_bgr = self.screenshot()
             if lazy_eval:
                 return DetectObjectHelper.handle_detect_object, (
@@ -172,13 +174,13 @@ class python_host:
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
-                # print(np.array(pyautogui.screenshot()).shape)
+                # script_logger.log(np.array(pyautogui.screenshot()).shape)
                 # exit(0)
                 log_image = self.screenshot()
                 cv2.imwrite(logs_path + '-logImage.png', log_image)
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
-                print('log type unimplemented ' + action["actionData"]["logType"])
+                script_logger.log('log type unimplemented ' + action["actionData"]["logType"])
                 exit(0)
         elif action["actionName"] == "timeAction":
             time_val = None
@@ -189,7 +191,7 @@ class python_host:
             state[action["actionData"]["outputVarName"]] = time_val
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         else:
-            print('unimplemented method! ' + action["actionName"])
+            script_logger.log('unimplemented method! ' + action["actionName"])
             exit(0)
 
 
@@ -205,13 +207,14 @@ def parse_inputs(process_host, inputs):
             "data": base64_encoded_string
         }
     elif device_action == "click":
-        process_host.click(inputs[2], inputs[3], 'left')
+        script_logger.log('clicked location', inputs[2], inputs[3], flush=True)
+        process_host.click(int(float(inputs[2])), int(float(inputs[3])), 'left')
         return {
             "data" : "success"
         }
     elif device_action == "click_and_drag":
         # process_host.click_and_drag(inputs[2], inputs[3], inputs[4], inputs[5])
-        print('click and drag not implemented on python host')
+        script_logger.log('click and drag not implemented on python host')
         return {
             "data" : "failure"
         }
@@ -226,7 +229,7 @@ def parse_inputs(process_host, inputs):
 PROCESS_DELIMITER = '<--DEVICE-RESPONSE-->'
 
 async def read_input():
-    print("ADB CONTROLLER PROCESS: listening for input")
+    script_logger.log("ADB CONTROLLER PROCESS: listening for input")
     process_python_host = None
     device_key = None
     while True:
@@ -235,17 +238,16 @@ async def read_input():
         if not input_line:  # EOF, if the pipe is closed
             break
         inputs = shlex.split(input_line)
-        print('ADB CONTROLLER PROCESS: received inputs ', inputs)
+        script_logger.log('ADB CONTROLLER PROCESS: received inputs ', inputs)
         if device_key is None:
             device_key = inputs[0]
         elif device_key != inputs[0]:
-            print('ADB CONTROLLER: device key mismatch ', device_key, inputs[0])
+            script_logger.log('ADB CONTROLLER: device key mismatch ', device_key, inputs[0])
             continue
         if process_python_host is None:
-            print('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
-            with open('./logs/adb-host-controller-{}-process.txt'.format(device_key.replace(':', '-')), 'a') as process_file:
-                process_file.write(str(datetime.datetime.now()) + ''.join(inputs) + '\n')
-                # process_file.write(json.dumps(adb_args) + '\n')
+            script_logger.set_log_path('./logs/{}-python-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
+            script_logger.log('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
+            script_logger.log('ADB CONTROLLER PROCESS: processing inputs ', inputs)
             process_python_host = python_host({
                 "dir_path": "./",
                 "width" : None,
@@ -253,11 +255,12 @@ async def read_input():
                 "scriptMode" : 'train'
             })
         if len(inputs) > 1:
-            print(PROCESS_DELIMITER + json.dumps(parse_inputs(process_python_host, inputs)) + PROCESS_DELIMITER, flush=True)
+            script_logger.log(PROCESS_DELIMITER + json.dumps(parse_inputs(process_python_host, inputs)) + PROCESS_DELIMITER, flush=True)
 
 async def adb_controller_main():
     await asyncio.gather(read_input())
 
 if __name__ == '__main__':
+    script_logger.set_log_path('./logs/{}-python-host-main.txt'.format(formatted_today))
     os.makedirs('/logs', exist_ok=True)
     asyncio.run(adb_controller_main())

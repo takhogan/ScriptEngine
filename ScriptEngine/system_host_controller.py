@@ -18,6 +18,8 @@ from script_execution_state import ScriptExecutionState
 from script_engine_constants import *
 from script_engine_utils import generate_context_switch_action
 from messaging_helper import MessagingHelper
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 
 
 
@@ -45,7 +47,7 @@ class SystemHostController:
                     try:
                         term_eval = eval(term, state)
                     except (TypeError,KeyError) as p_err:
-                        print(p_err)
+                        script_logger.log(p_err)
                         term_eval = None
                     term_str = str(term) + ': ' + str(term_eval) + ': ' + str(type(term_eval))
                 statement_strip[term_index] = term_str
@@ -53,61 +55,61 @@ class SystemHostController:
         if action["actionName"] == "conditionalStatement":
             state_copy = state.copy()
             statement_strip = sanitize_input(action["actionData"]["condition"], state_copy)
-            print('condition : ', action["actionData"]["condition"], statement_strip, len(action["actionData"]["condition"].replace("\n", " ")), len(action["actionData"]["condition"]))
+            script_logger.log('condition : ', action["actionData"]["condition"], statement_strip, len(action["actionData"]["condition"].replace("\n", " ")), len(action["actionData"]["condition"]))
             condition = action["actionData"]["condition"].replace("\n", " ")
             if eval('(' + condition + ')', state_copy):
-                print('conditionalStatement-' + str(action["actionGroup"]), 'condition success!')
+                script_logger.log('conditionalStatement-' + str(action["actionGroup"]), 'condition success!')
                 status = ScriptExecutionState.SUCCESS
             else:
-                print('conditionalStatement-' + str(action["actionGroup"]), 'condition failure!')
+                script_logger.log('conditionalStatement-' + str(action["actionGroup"]), 'condition failure!')
                 status = ScriptExecutionState.FAILURE
-            # print(' state (7) : ', state)
+            # script_logger.log(' state (7) : ', state)
         elif action["actionName"] == "variableAssignment":
-            # print('input Parser : ', action["actionData"]["inputParser"])
+            # script_logger.log('input Parser : ', action["actionData"]["inputParser"])
             if (action["actionData"]["setIfNull"] == "true" or action["actionData"]["setIfNull"]) and \
                     (action["actionData"]["outputVarName"] in state and \
                      state[action["actionData"]["outputVarName"]] is not None):
-                print('output variable ', action["actionData"]["outputVarName"], ' was not null')
+                script_logger.log('output variable ', action["actionData"]["outputVarName"], ' was not null')
                 status = ScriptExecutionState.SUCCESS
                 return action, status, state, context, run_queue, []
 
-            print('variableAssignment-' + str(action["actionGroup"]),' inputExpression : ', action["actionData"]["inputExpression"], end = '')
-            # print(' state (4) ', state)
+            script_logger.log('variableAssignment-' + str(action["actionGroup"]),' inputExpression : ', action["actionData"]["inputExpression"], end = '')
+            # script_logger.log(' state (4) ', state)
             expression = action["actionData"]["inputExpression"].replace("\n", " ")
             if action["actionData"]["inputParser"] == 'eval':
                 expression = eval(expression, state.copy())
             elif action["actionData"]["inputParser"] == "jsonload":
                 expression = json.loads(expression)
-            print('variableAssignment-' + str(action["actionGroup"]),' : result : ', expression)
-            # print(' state (5) ', state)
-            # print(' expression : ', expression, ', ', type(expression))
+            script_logger.log('variableAssignment-' + str(action["actionGroup"]),' : result : ', expression)
+            # script_logger.log(' state (5) ', state)
+            # script_logger.log(' expression : ', expression, ', ', type(expression))
 
 
-            print('variableAssignment-' + str(action["actionGroup"]), 'state :', list(state))
+            script_logger.log('variableAssignment-' + str(action["actionGroup"]), 'state :', list(state))
             outputVarName = action["actionData"]["outputVarName"].strip()
             if '[' in outputVarName and ']' in outputVarName:
                 keys = outputVarName.split('[')  # Split the key string by '][' to get individual keys
                 # Evaluate variable names within the state dictionary
-                print('variableAssignment' + str(action["actionGroup"]) + ' keys', keys)
+                script_logger.log('variableAssignment' + str(action["actionGroup"]) + ' keys', keys)
                 for i, k in enumerate(keys[1:]):
                     k = k.rstrip(']')
                     keys[i + 1] = eval(k, state.copy())
 
                 # Assign the value to the corresponding key within the state dictionary
                 current = state
-                print('variableAssignment-' + str(action["actionGroup"]) + ' keys', keys)
+                script_logger.log('variableAssignment-' + str(action["actionGroup"]) + ' keys', keys)
                 for i in range(len(keys) - 1):
                     if keys[i] in current:
                         current = current[keys[i]]
                 current[keys[-1]] = expression
-                print('variableAssignment-' + str(action["actionGroup"]), ' setting ', outputVarName, keys, ' to ', expression)
+                script_logger.log('variableAssignment-' + str(action["actionGroup"]), ' setting ', outputVarName, keys, ' to ', expression)
             else:
                 state[outputVarName] = expression
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "sleepStatement":
             if str(action["actionData"]["inputExpression"]).strip() != '':
                 sleep_length = float(eval(str(action["actionData"]["inputExpression"]), state.copy()))
-                print('sleepStatement evaluated expression', action["actionData"]["inputExpression"], ' and sleeping for ', sleep_length, 's')
+                script_logger.log('sleepStatement evaluated expression', action["actionData"]["inputExpression"], ' and sleeping for ', sleep_length, 's')
                 time.sleep(sleep_length)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "randomVariable":
@@ -124,13 +126,13 @@ class SystemHostController:
                     state[action["actionData"]["varName"]] = {}
                 status = ScriptExecutionState.SUCCESS
             elif action["actionData"]["mode"] == "write":
-                print('writing file: ', state[action["actionData"]["varName"]])
+                script_logger.log('writing file: ', state[action["actionData"]["varName"]])
                 with open(self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"],
                           'w') as write_file:
                     json.dump(state[action["actionData"]["varName"]], write_file)
                 status = ScriptExecutionState.SUCCESS
             else:
-                print('invalid mode: ', action)
+                script_logger.log('invalid mode: ', action)
                 status = ScriptExecutionState.ERROR
         elif action["actionName"] == "imageToTextAction":
             if action["actionData"]["conversionEngine"] == "tesseractOCR":
@@ -178,7 +180,7 @@ class SystemHostController:
                         # may want to consider bgr to rgb conversion
                         output_text = api.GetUTF8Text().strip()
                         outputs.append(output_text)
-                        print('running with options --psm ',
+                        script_logger.log('running with options --psm ',
                               psm_value,
                               '--characterWhiteList ',
                               character_white_list if len(character_white_list) > 0 else 'none', 'output : ', output_text)
@@ -188,7 +190,7 @@ class SystemHostController:
                     for output_index,output in enumerate(outputs[1:]):
                         with open(log_file_path + '-output-debug-psm-' + tesseract_params[output_index + 1][0] + '.txt', 'w') as log_file:
                             log_file.write(output)
-                print('main output_text : ', outputs[0])
+                script_logger.log('main output_text : ', outputs[0])
                 state[action["actionData"]["outputVarName"]] = outputs[0]
                 status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "contextSwitchAction":
@@ -216,21 +218,21 @@ class SystemHostController:
                 self.messaging_helper.send_viber_message(message)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "exceptionAction":
-            print('exceptionAction-' + str(action["actionGroup"]), ' message: ', action["actionData"]["exceptionMessage"])
+            script_logger.log('exceptionAction-' + str(action["actionGroup"]), ' message: ', action["actionData"]["exceptionMessage"])
             if action["actionData"]["takeScreenshot"]:
                 pass
             if action["actionData"]["exitProgram"]:
-                print('exiting program')
+                script_logger.log('exiting program')
                 exit(0)
             status = ScriptExecutionState.FINISHED_FAILURE
         elif action["actionName"] == "forLoopAction":
-            print('CONTROL FLOW: initiating forLoopAction-' + str(action["actionGroup"]))
+            script_logger.log('CONTROL FLOW: initiating forLoopAction-' + str(action["actionGroup"]))
 
             first_loop = True
             state_copy = state.copy()
             in_variable = eval(action["actionData"]["inVariables"], state_copy)
 
-            print('forLoopAction-' + str(action["actionGroup"]), 'input inVariable : ', action["actionData"]["inVariables"], ' value: ', in_variable)
+            script_logger.log('forLoopAction-' + str(action["actionGroup"]), 'input inVariable : ', action["actionData"]["inVariables"], ' value: ', in_variable)
             for_variable_list = action["actionData"]["forVariables"].split(',')
             for for_variables in in_variable:
                 state_update_dict = {
@@ -238,7 +240,7 @@ class SystemHostController:
                 } if len(for_variable_list) > 1 else {
                     for_variable_list[0]:for_variables
                 }
-                print('forLoopAction-' + str(action["actionGroup"]), 'defining forVariables : ', for_variable_list, ' values: ', for_variables)
+                script_logger.log('forLoopAction-' + str(action["actionGroup"]), 'defining forVariables : ', for_variable_list, ' values: ', for_variables)
                 if first_loop:
                     state.update(state_update_dict)
                     first_loop = False
@@ -257,7 +259,7 @@ class SystemHostController:
                 'shutil' : shutil
             })
             # statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
-            print('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"])
+            script_logger.log('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"])
             eval(action["actionData"]["codeBlock"], state_copy)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "databaseCRUD":
@@ -269,7 +271,7 @@ class SystemHostController:
                     mongo_credentials["password"]
                 )
                 client = MongoClient(connection_string)
-                print(client)
+                script_logger.log(client)
                 if len(action["actionData"]["collectionName"]) > 0:
                     collection_name = action["actionData"]["collectionName"]
                 else:
@@ -297,7 +299,7 @@ class SystemHostController:
                     result = collection.delete_one(query)
                 else:
                     result = 'action type not implemented'
-                print('db action result: ', result)
+                script_logger.log('db action result: ', result)
             elif action["actionData"]["databaseType"] == "oracle" or\
                 action["actionData"]["databaseType"] == "mysql":
                 pass
@@ -305,12 +307,12 @@ class SystemHostController:
                 # have the user input a SQL string to execute
                 # to insert variables user SQL variable substitution
             else:
-                print("DB provider unimplemented")
+                script_logger.log("DB provider unimplemented")
                 exit(1)
         else:
             status = ScriptExecutionState.ERROR
-            print("action unimplemented ")
-            print(action)
+            script_logger.log("action unimplemented ")
+            script_logger.log(action)
             exit(1)
         return action, status, state, context, run_queue, []
 

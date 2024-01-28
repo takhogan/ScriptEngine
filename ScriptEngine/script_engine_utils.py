@@ -1,9 +1,10 @@
-
 import math
 import numpy as np
 import os
 import json
 from dateutil import tz
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 
 RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
 
@@ -90,7 +91,7 @@ def get_glob_digit_regex_string(start_index, stop_index, pad_zeros=False):
         bottom_range_digit = 1 if start_index != 0 else 0
     else:
         bottom_range_digit = start_index_digits[0] + 1
-    # print('start: ', start_index, 'stop: ', stop_index)
+    # script_logger.log('start: ', start_index, 'stop: ', stop_index)
     if stop_index < 10:
         return [
             '[{}-{}]'.format(start_index, stop_index) if start_index < stop_index
@@ -117,10 +118,10 @@ def get_glob_digit_regex_string(start_index, stop_index, pad_zeros=False):
     )
     top_range = ['[{}]'.format(stop_index_digits[0]) + '[0]' * top_range_n_zeros + top_range_footer for
                  top_range_footer in top_range_footers]
-    # print('top_range: ', top_range_footers)
+    # script_logger.log('top_range: ', top_range_footers)
     if top_range_only:
         return top_range
-    # print('s: ', start_index, 'st: ', stop_index, 'top: ', top_range)
+    # script_logger.log('s: ', start_index, 'st: ', stop_index, 'top: ', top_range)
     if start_index == 0:
         bottom_range = []
     elif start_index < 10:
@@ -149,7 +150,7 @@ def get_glob_digit_regex_string(start_index, stop_index, pad_zeros=False):
     #     bottom_range_head + 1,
     #     top_range_foot - 1
     # )
-    # print(middle_range_footers)
+    # script_logger.log(middle_range_footers)
     # exit(0)
     middle_range = [
         ('[{}-{}]'.format(bottom_range_digit, top_range_digit) if bottom_range_digit != top_range_digit
@@ -157,8 +158,8 @@ def get_glob_digit_regex_string(start_index, stop_index, pad_zeros=False):
         ('[0-9]' * (len(stop_index_digits) - 1))
     ] if bottom_range_digit <= top_range_digit \
         else []
-    # print('m: ', middle_range)
-    # print('s: ', start_index, 'st: ', stop_index, 'bottom foot: ', bottom_range)
+    # script_logger.log('m: ', middle_range)
+    # script_logger.log('s: ', start_index, 'st: ', stop_index, 'bottom foot: ', bottom_range)
     return top_range + middle_range + bottom_range
 
 

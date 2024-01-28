@@ -117,9 +117,13 @@ KEY_TO_KEYCODE = {
     "up": "KEYCODE_DPAD_UP"
 }
 
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
+formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
+
 class adb_host:
     def __init__(self, props, host_os, adb_args):
-        print('Configuring ADB with default parameters')
+        script_logger.log('Configuring ADB with default parameters')
         self.stop_command_gather = False
         self.device_profile = 'windows-bluestacks'
         self.host_os = host_os
@@ -140,7 +144,7 @@ class adb_host:
 
         }
         # set device here
-        # print(self.adb_path)
+        # script_logger.log(self.adb_path)
         # exit(0)
         # shell_process = subprocess.Popen([self.adb_path, 'shell'],stdin=subprocess.PIPE)
         # device_name = shell_process.communicate(b"getevent -pl 2>&1 | sed -n '/^add/{h}/ABS_MT_TOUCH/{x;s/[^/]*//p}'")
@@ -166,10 +170,10 @@ class adb_host:
                     }
                 }, {}, {})
             except Exception as e:
-                print('ADB HOST CONTROLLER: exception', e)
+                script_logger.log('ADB HOST CONTROLLER: exception', e)
                 status = ScriptExecutionState.FAILURE
             if status == ScriptExecutionState.FAILURE:
-                print('ADB HOST CONTROLLER: adb configuration failed')
+                script_logger.log('ADB HOST CONTROLLER: adb configuration failed')
                 exit(1)
 
 
@@ -178,7 +182,7 @@ class adb_host:
         emulator_type = eval(configurationAction['actionData']['emulatorType'], state_copy)
 
         if emulator_type != 'bluestacks':
-            print('emulator type not supported!')
+            script_logger.log('emulator type not supported!')
             return ScriptExecutionState.FAILURE, state, context
 
         self.emulator_type = emulator_type
@@ -200,7 +204,7 @@ class adb_host:
         instance_window_name = init_bluestacks_config['bst.instance.{}.display_name'.format(
             self.device_name
         )]
-        print('ADB CONTROLLER: detected window name {} for device {}'.format(
+        script_logger.log('ADB CONTROLLER: detected window name {} for device {}'.format(
             instance_window_name,
             self.device_name
         ))
@@ -215,7 +219,7 @@ class adb_host:
             self.adb_port = bluestacks_config['bst.instance.{}.status.adb_port'.format(
                 self.device_name
             )]
-            print('ADB CONTROLLER: changed adb port from {} to auto detected port {}'.format(
+            script_logger.log('ADB CONTROLLER: changed adb port from {} to auto detected port {}'.format(
                 og_port,
                 self.adb_port
             ))
@@ -226,7 +230,7 @@ class adb_host:
         state['AUTO_DETECT_ADB_PORT'] = self.auto_detect_adb_port
 
         self.status = 'initialized'
-        print('Configured ADB: ',
+        script_logger.log('Configured ADB: ',
               'adb_path', adb_path,
               'emulator_path', emulator_path,
               'device_name', device_name,
@@ -242,9 +246,9 @@ class adb_host:
                 self.emulator_path,
                 self.device_name
             ), cwd="/", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            print('ADB CONTROLLER: started device', self.device_name, 'PID:', start_device_command.pid)
+            script_logger.log('ADB CONTROLLER: started device', self.device_name, 'PID:', start_device_command.pid)
         else:
-            print('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
+            script_logger.log('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
 
     def stop_device(self):
         if platform.system() == 'Windows':
@@ -253,7 +257,7 @@ class adb_host:
                 instance_window_name = init_bluestacks_config['bst.instance.{}.display_name'.format(
                     self.device_name
                 )]
-                print('ADB CONTROLLER: detected window name {} for device {}'.format(
+                script_logger.log('ADB CONTROLLER: detected window name {} for device {}'.format(
                     instance_window_name,
                     self.device_name
                 ))
@@ -261,16 +265,16 @@ class adb_host:
                 stop_device_command = subprocess.run('taskkill /fi "WINDOWTITLE eq {}" /IM "HD-Player.exe" /F'.format(
                     self.window_name
                 ), cwd="/", shell=True, capture_output=True, timeout=15)
-                print('ADB CONTROLLER: stopped device', self.device_name, 'with result',
+                script_logger.log('ADB CONTROLLER: stopped device', self.device_name, 'with result',
                       stop_device_command.returncode, stop_device_command)
             else:
-                print('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
+                script_logger.log('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
 
     def get_status(self):
         try:
             devices_output = self.get_device_list_output()
         except subprocess.TimeoutExpired as t:
-            print('ADB CONTROLLER: get devices timed out ', t)
+            script_logger.log('ADB CONTROLLER: get devices timed out ', t)
             devices_output = ''
         if not self.full_ip in devices_output:
             self.run_connect_command()
@@ -278,7 +282,7 @@ class adb_host:
             try:
                 devices_output = self.get_device_list_output()
             except subprocess.TimeoutExpired as t:
-                print('ADB CONTROLLER: get devices timed out ', t)
+                script_logger.log('ADB CONTROLLER: get devices timed out ', t)
                 devices_output = ''
         emulator_active = (
             (self.full_ip in devices_output) and 'offline' not in devices_output
@@ -302,7 +306,7 @@ class adb_host:
                     instance_window_name = init_bluestacks_config['bst.instance.{}.display_name'.format(
                         self.device_name
                     )]
-                    print('ADB CONTROLLER: detected window name {} for device {}'.format(
+                    script_logger.log('ADB CONTROLLER: detected window name {} for device {}'.format(
                         instance_window_name,
                         self.device_name
                     ))
@@ -316,29 +320,29 @@ class adb_host:
 
 
                     while not check_for_window(instance_window_name):
-                        print('ADB CONTROLLER: window {} not found, sleeping for 5 seconds'.format(instance_window_name))
+                        script_logger.log('ADB CONTROLLER: window {} not found, sleeping for 5 seconds'.format(instance_window_name))
                         time.sleep(5)
                         window_attempts += 1
                         if window_attempts > max_window_attempts:
-                            print('ADB CONTROLLER: window {} not found and exceeded max attempts'.format(instance_window_name))
+                            script_logger.log('ADB CONTROLLER: window {} not found and exceeded max attempts'.format(instance_window_name))
                             exit(478)
                     bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
                     og_port = self.adb_port
                     self.adb_port = bluestacks_config['bst.instance.{}.status.adb_port'.format(
                         self.device_name
                     )]
-                    print('ADB CONTROLLER: changed adb port from {} to auto detected port {}'.format(
+                    script_logger.log('ADB CONTROLLER: changed adb port from {} to auto detected port {}'.format(
                         og_port,
                         self.adb_port
                     ))
                     self.full_ip = self.adb_ip + ':' + self.adb_port
                     # state['ADB_PORT'] = self.adb_port
-            print('ADB CONTROLLER: initializing/reinitializing adb')
-            print('ADB PATH : ', self.adb_path)
+            script_logger.log('ADB CONTROLLER: initializing/reinitializing adb')
+            script_logger.log('ADB PATH : ', self.adb_path)
 
 
             devices_output = self.get_device_list_output()
-            print('ADB CONTROLLER: listing devices')
+            script_logger.log('ADB CONTROLLER: listing devices')
             if not self.full_ip in devices_output:
                 self.run_connect_command()
                 time.sleep(3)
@@ -348,11 +352,11 @@ class adb_host:
             run_start_command = lambda: subprocess.run(self.adb_path + ' start-server', cwd="/", shell=True, timeout=30)
 
             def restart_adb():
-                print('ADB CONTROLLER restarting adb server')
+                script_logger.log('ADB CONTROLLER restarting adb server')
                 run_kill_command()
                 run_start_command()
                 time.sleep(3)
-                print('ADB CONTROLLER: connecting to adb device')
+                script_logger.log('ADB CONTROLLER: connecting to adb device')
                 self.run_connect_command()
                 time.sleep(3)
 
@@ -362,7 +366,7 @@ class adb_host:
             )
 
             if not emulator_active:
-                print('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
+                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
                 restart_adb()
                 devices_output = self.get_device_list_output()
                 emulator_active = (
@@ -371,11 +375,11 @@ class adb_host:
 
             while not emulator_active:
                 if adb_attempts > max_adb_attempts:
-                    print('ADB CONTROLLER: adb connection timed out ')
+                    script_logger.log('ADB CONTROLLER: adb connection timed out ')
                     exit(478)
                 else:
                     adb_attempts += 1
-                print('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
+                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
                 restart_adb()
                 devices_output = self.get_device_list_output()
                 emulator_active = (
@@ -398,7 +402,7 @@ class adb_host:
                 emulator_active = True
                 screencap_succesful = True
             except UnidentifiedImageError:
-                print('ADB CONTROLLER: Scrrencap Failed, trying again in 30 seconds, get_im_command: ', get_im_command)
+                script_logger.log('ADB CONTROLLER: Scrrencap Failed, trying again in 30 seconds, get_im_command: ', get_im_command)
                 restart_adb()
                 devices_output = self.get_device_list_output()
                 emulator_active = (
@@ -406,7 +410,7 @@ class adb_host:
                 )
 
             if not emulator_active:
-                print('ADB CONTROLLER: problem found in devices output : ', devices_output)
+                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output)
                 restart_adb()
                 devices_output = self.get_device_list_output()
                 emulator_active = (
@@ -415,11 +419,11 @@ class adb_host:
 
             while not emulator_active:
                 if adb_attempts > max_adb_attempts:
-                    print('ADB CONTROLLER: adb connection timed out ')
+                    script_logger.log('ADB CONTROLLER: adb connection timed out ')
                     exit(478)
                 else:
                     adb_attempts += 1
-                print('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
+                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
                 restart_adb()
                 devices_output = self.get_device_list_output()
                 emulator_active = (
@@ -439,14 +443,14 @@ class adb_host:
                 try:
                     source_im = np.array(Image.open(bytes_im))
                 except UnidentifiedImageError:
-                    print('ADB CONTROLLER: Screencap failed, get_im_command: ', get_im_command)
+                    script_logger.log('ADB CONTROLLER: Screencap failed, get_im_command: ', get_im_command)
                     exit(478)
             self.width = source_im.shape[1]
             self.height = source_im.shape[0]
 
             self.set_commands()
 
-            print('ADB CONTROLLER: adb configuration successful ', self.full_ip, devices_output)
+            script_logger.log('ADB CONTROLLER: adb configuration successful ', self.full_ip, devices_output)
         if is_null(self.props['width']):
             self.props['width'] = self.width
         if is_null(self.props['height']):
@@ -517,7 +521,7 @@ class adb_host:
         process.terminate()
         process.wait()
         if device_path:
-            print('ADB CONTROLLER:', 'configured input device ', device_path)
+            script_logger.log('ADB CONTROLLER:', 'configured input device ', device_path)
             self.sendevent_command = 'sendevent ' + device_path +' {} {} {};'
             self.commands = {
                 "tracking_id_mousedown": self.sendevent_command.format(3, int('39', 16), 0),
@@ -547,7 +551,7 @@ class adb_host:
             return None
 
     def screenshot(self):
-        print('ADB CONTROLLER', 'taking screenshot')
+        script_logger.log('ADB CONTROLLER', 'taking screenshot')
         get_im_command = subprocess.run(
             self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip),
             cwd="/",
@@ -559,18 +563,18 @@ class adb_host:
         try:
             source_im = Image.open(bytes_im)
         except UnidentifiedImageError:
-            print('get_im_command: ', get_im_command)
+            script_logger.log('get_im_command: ', get_im_command)
             source_im = self.init_system(reinitialize=True)
             if source_im is None:
                 exit(478)
         return cv2.cvtColor(np.array(source_im), cv2.COLOR_RGB2BGR)
 
     def keyUp(self, key):
-        print('adb keypress and hold unimplemented!')
+        script_logger.log('adb keypress and hold unimplemented!')
         pyautogui.keyUp(key)
 
     def keyDown(self, key):
-        print('adb keypress and hold unimplemented!')
+        script_logger.log('adb keypress and hold unimplemented!')
         pyautogui.keyDown(key)
 
     def press(self, key):
@@ -586,7 +590,7 @@ class adb_host:
         shell_process.communicate(key_input_string.encode('utf-8'))
 
     def hotkey(self, keys):
-        print('adb hotkey unimplemented!')
+        script_logger.log('adb hotkey unimplemented!')
         pyautogui.hotkey(keys)
 
     def save_screenshot(self, save_name):
@@ -616,7 +620,7 @@ class adb_host:
                 self.commands["action_terminate_command"]
             ]
             # init_click_commands = [commandlet for command in init_click_commands for commandlet in command.split(' ')]
-            # print(init_click_commands)
+            # script_logger.log(init_click_commands)
             # exit(0)
             # subprocess.run(init_click_commands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             click_command = ['('] + init_click_commands + [') && ']
@@ -684,7 +688,7 @@ class adb_host:
                 click_tail_x,click_tail_y = self.click_path_generator.generate_path_from_sequence(tail_sequence_x, tail_sequence_y, sign_x, sign_y)
                 x_pos = mapped_x_val
                 y_pos = mapped_y_val
-                # print(click_tail_x,click_tail_y)
+                # script_logger.log(click_tail_x,click_tail_y)
                 for click_tail_index in range(0, n_events - 1):
                     x_delta = click_tail_x[click_tail_index]
                     y_delta = click_tail_y[click_tail_index]
@@ -724,7 +728,7 @@ class adb_host:
                 self.commands["action_terminate_command"]
             ]
             # init_click_commands = [commandlet for command in init_click_commands for commandlet in command.split(' ')]
-            # print(init_click_commands)
+            # script_logger.log(init_click_commands)
             # exit(0)
             # subprocess.run(init_click_commands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             click_command = ['('] + init_click_commands + [') && ']
@@ -794,7 +798,7 @@ class adb_host:
                                                                                                    sign_x, sign_y)
                 x_pos = mapped_x_val
                 y_pos = mapped_y_val
-                # print(click_tail_x,click_tail_y)
+                # script_logger.log(click_tail_x,click_tail_y)
                 for click_tail_index in range(0, n_events - 1):
                     x_delta = click_tail_x[click_tail_index]
                     y_delta = click_tail_y[click_tail_index]
@@ -822,8 +826,8 @@ class adb_host:
             self.full_ip,
             'shell'
         ], stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        print('ADB CONTROLLER : sending click command ',''.join(click_command), shell_process.communicate((''.join(click_command)).encode('utf-8')))
-        # print((''.join(click_command)).encode('utf-8'))
+        script_logger.log('ADB CONTROLLER : sending click command ',''.join(click_command), shell_process.communicate((''.join(click_command)).encode('utf-8')))
+        # script_logger.log((''.join(click_command)).encode('utf-8'))
         self.event_counter += 1
 
     def click_and_drag(self, source_x, source_y, target_x, target_y):
@@ -853,7 +857,7 @@ class adb_host:
             command_string = init_click_commands
             x_pos = mapped_source_x
             y_pos = mapped_source_y
-            # print(click_tail_x,click_tail_y)
+            # script_logger.log(click_tail_x,click_tail_y)
             for delta_index in range(0, n_events):
                 x_delta = delta_x[delta_index]
                 y_delta = delta_y[delta_index]
@@ -885,17 +889,17 @@ class adb_host:
                 frac_target_x = (target_x / self.width)
                 frac_source_y = (source_y / self.height)
                 frac_target_y = (target_y / self.height)
-            # print('({},{}),({},{})'.format(frac_source_x, frac_source_y, frac_target_x, frac_target_y))
+            # script_logger.log('({},{}),({},{})'.format(frac_source_x, frac_source_y, frac_target_x, frac_target_y))
             delta_x, delta_y = self.click_path_generator.generate_click_path(frac_source_x, frac_source_y,
                                                                              frac_target_x, frac_target_y)
             n_events = len(delta_x)
             mapped_source_x = int(frac_source_x * self.xmax)
             mapped_source_y = int(frac_source_y * self.ymax)
 
-            # print(mapped_source_x)
-            # print(mapped_source_y)
-            # print(sum(delta_x), delta_x)
-            # print(sum(delta_y), delta_y)
+            # script_logger.log(mapped_source_x)
+            # script_logger.log(mapped_source_y)
+            # script_logger.log(sum(delta_x), delta_x)
+            # script_logger.log(sum(delta_y), delta_y)
             # exit(0)
 
             init_click_commands = [
@@ -905,7 +909,7 @@ class adb_host:
             command_string = init_click_commands
             x_pos = mapped_source_x
             y_pos = mapped_source_y
-            # print(click_tail_x,click_tail_y)
+            # script_logger.log(click_tail_x,click_tail_y)
             for delta_index in range(0, n_events):
                 x_delta = delta_x[delta_index]
                 y_delta = delta_y[delta_index]
@@ -931,7 +935,7 @@ class adb_host:
             'shell'
         ], stdin=subprocess.PIPE)
         shell_process.communicate((''.join(command_string)).encode('utf-8'))
-        # print((''.join(command_string)).encode('utf-8'))
+        # script_logger.log((''.join(command_string)).encode('utf-8'))
         self.event_counter += 1
 
     def handle_action(self, action, state, context, run_queue, log_level, log_folder, lazy_eval=False):
@@ -955,7 +959,7 @@ class adb_host:
             screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, screencap_im_bgr)
 
             if screencap_im_bgr is None:
-                print('detectObject-' + str(action["actionGroup"]) + ' taking screenshot')
+                script_logger.log('detectObject-' + str(action["actionGroup"]) + ' taking screenshot')
                 screencap_im_bgr = self.screenshot()
 
             if lazy_eval:
@@ -990,18 +994,18 @@ class adb_host:
                 return action, status, state, context, run_queue, update_queue
         elif action["actionName"] == "clickAction":
             # if '__builtins__' in state:
-            #     print('deleting builtins')
+            #     script_logger.log('deleting builtins')
             #     del state['__builtins__']
-            # print('pre clickaction state ', state)
+            # script_logger.log('pre clickaction state ', state)
             var_name = action["actionData"]["inputExpression"]
             point_choice,state,context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
             # if '__builtins__' in state:
-            #     print('deleting builtins')
+            #     script_logger.log('deleting builtins')
             #     del state['__builtins__']
-            # print('post clickaction state ', state)
+            # script_logger.log('post clickaction state ', state)
             # point_choice = (
             # point_choice[0] * self.width / self.props['width'], point_choice[1] * self.height / self.props['height'])
-            print('clickAction-' + str(action["actionGroup"]), ' input: ', var_name, ' output : ', point_choice)
+            script_logger.log('clickAction-' + str(action["actionGroup"]), ' input: ', var_name, ' output : ', point_choice)
             delays = []
             if action["actionData"]["delayState"] == "active":
                 if action["actionData"]["distType"] == 'normal':
@@ -1027,10 +1031,10 @@ class adb_host:
 
         elif action["actionName"] == "conditionalStatement":
             if eval(action["actionData"]["condition"], state):
-                print('condition success!')
+                script_logger.log('condition success!')
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
-                print('condition failure!')
+                script_logger.log('condition failure!')
                 return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
         elif action["actionName"] == "sleepStatement":
             if str(action["actionData"]["inputExpression"]).strip() == '':
@@ -1038,11 +1042,11 @@ class adb_host:
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationSource":
             source_point = random.choice(action["actionData"]["pointList"])
-            print('dragLocationSource : input expression : ', action["actionData"]["inputExpression"])
+            script_logger.log('dragLocationSource : input expression : ', action["actionData"]["inputExpression"])
             drag_input = action["actionData"]["inputExpression"]
             if drag_input is not None and len(drag_input) > 0:
                 source_point = eval(action["actionData"]["inputExpression"], state)
-                print('dragLocationSource : reading input expression ', action["actionData"]["inputExpression"])
+                script_logger.log('dragLocationSource : reading input expression ', action["actionData"]["inputExpression"])
             context["dragLocationSource"] = source_point
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationTarget":
@@ -1050,17 +1054,17 @@ class adb_host:
             target_point = random.choice(action["actionData"]["pointList"])
             drag_input = action["actionData"]["inputExpression"]
             if drag_input is not None and len(drag_input) > 0:
-                print('dragLocationTarget : input expression : ', action["actionData"]["inputExpression"])
+                script_logger.log('dragLocationTarget : input expression : ', action["actionData"]["inputExpression"])
                 target_point = eval(action["actionData"]["inputExpression"], state)
-            print('dragLocationTarget: dragging from ', source_point, ' to ', target_point)
+            script_logger.log('dragLocationTarget: dragging from ', source_point, ' to ', target_point)
             self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
             del context["dragLocationSource"]
-            # print(source_point)
-            # print(target_point)
+            # script_logger.log(source_point)
+            # script_logger.log(target_point)
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "searchPatternStartAction":
             context = self.search_pattern_helper.generate_pattern(action, context, log_folder, self.props['dir_path'])
-            # print(state)
+            # script_logger.log(state)
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "searchPatternContinueAction":
             # search_pattern_id = action["actionData"]["searchPatternID"]
@@ -1149,7 +1153,7 @@ class adb_host:
             #     pre_img_name = str(step_index) + \
             #         '-' + str(raw_source_pt[0]) + '-' + str(raw_source_pt[1]) + '-search-step-init.png'
             #     pre_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + pre_img_name
-            #     print('pre_path', pre_img_name, ':', raw_source_pt, ':', step_index)
+            #     script_logger.log('pre_path', pre_img_name, ':', raw_source_pt, ':', step_index)
             #     pre_img = create_and_save_screencap(
             #         self, pre_img_path
             #     )
@@ -1164,13 +1168,13 @@ class adb_host:
             #     src_y = fitted_source_pt[1] * search_unit_scale
             #     tgt_x = fitted_target_pt[0] * search_unit_scale
             #     tgt_y = fitted_target_pt[1] * search_unit_scale
-            #     print('desired move: (', tgt_x - src_x,',', tgt_y - src_y, ')')
+            #     script_logger.log('desired move: (', tgt_x - src_x,',', tgt_y - src_y, ')')
             #     self.click_and_drag(src_x, src_y, tgt_x, tgt_y)
             #     time.sleep(0.25)
             # post_img_name = str(step_index) + '-' +\
             #     str(raw_target_pt[0]) + '-' + str(raw_target_pt[1]) + '-search-step-complete.png'
             # post_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + post_img_name
-            # print('post_img_path', post_img_path, ':', raw_target_pt, ':', step_index)
+            # script_logger.log('post_img_path', post_img_path, ':', raw_target_pt, ':', step_index)
             # post_img = create_and_save_screencap(
             #     self, post_img_path
             # )
@@ -1180,7 +1184,7 @@ class adb_host:
             # retaken_post_img_name = None
             # retaken_post_img_path = None
             # while not stitching_complete:
-            #     print('len : stitch imgs', len(stitch_imgs), pre_img.shape, post_img.shape)
+            #     script_logger.log('len : stitch imgs', len(stitch_imgs), pre_img.shape, post_img.shape)
             #     err_code, result_im = search_pattern_obj["stitcher"].stitch(stitch_imgs, [search_pattern_obj["draggable_area"]] * len(stitch_imgs))
             #     draggable_area_path = search_pattern_obj["draggable_area_path"]
             #
@@ -1188,7 +1192,7 @@ class adb_host:
             #         search_pattern_obj["stitcher_status"] = "STITCHER_OK"
             #         search_pattern_obj["stitch"] = result_im
             #         cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/' + str(step_index) + '-pano.png', result_im)
-            #         # print(subprocess.run([self.image_stitch_calculator_path,
+            #         # script_logger.log(subprocess.run([self.image_stitch_calculator_path,
             #         #                       pre_img_path, post_img_path, '-m',
             #         #                       draggable_area_path, draggable_area_path],
             #         #                       capture_output=True,shell=False).stdout)
@@ -1200,7 +1204,7 @@ class adb_host:
             #             raw_target_pt[1]) + '-retaken-search-step-complete.png'
             #         retaken_post_img_path = log_folder + 'search_patterns/' + search_pattern_id + '/' + retaken_post_img_name
             #         if stitch_attempts > 1:
-            #             print('need more imgs: ', len(stitch_imgs))
+            #             script_logger.log('need more imgs: ', len(stitch_imgs))
             #             search_pattern_obj["step_index"] -= 1
             #             shutil.move(pre_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + pre_img_name)
             #             shutil.move(post_img_path, log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + post_img_name)
@@ -1213,7 +1217,7 @@ class adb_host:
             #         stop_index = max(0, step_index - 1)
             #         start_index = max(0, step_index - 4)
             #         glob_patterns = get_glob_digit_regex_string(start_index, stop_index)
-            #         print('glob_patterns', glob_patterns)
+            #         script_logger.log('glob_patterns', glob_patterns)
             #         stitch_imgs = remove_forward_slashes(
             #             itertools.chain.from_iterable(
             #                 (glob.glob(
@@ -1226,16 +1230,16 @@ class adb_host:
             #                 )) for glob_pattern in glob_patterns
             #             )
             #         )
-            #         print('stitch_ims ', stitch_imgs)
+            #         script_logger.log('stitch_ims ', stitch_imgs)
             #         if step_index > 0:
             #             prev_post_img_path = get_longest_path(log_folder + 'search_patterns/' + search_pattern_id + '/{}-'.format(stop_index) + '*-complete.png')
-            #             print('prev_post_img_path', prev_post_img_path)
+            #             script_logger.log('prev_post_img_path', prev_post_img_path)
             #             stitch_imgs.remove(prev_post_img_path)
             #             new_step_imgs = [pre_img, read_and_apply_mask(prev_post_img_path), retaken_post_img]
             #         else:
             #             new_step_imgs = [pre_img, retaken_post_img]
             #         stitch_imgs = new_step_imgs + (list(map(read_and_apply_mask, stitch_imgs)) if stop_index > 0 else [])
-            #         # print('post stitch_ims: ', stitch_imgs)
+            #         # script_logger.log('post stitch_ims: ', stitch_imgs)
             #         stitch_attempts += 1
             #     else:
             #         search_pattern_obj["stitcher_status"] = "STITCHER_ERR"
@@ -1247,7 +1251,7 @@ class adb_host:
             #         if retaken_post_img_path is not None and retaken_post_img_name is not None:
             #             shutil.move(retaken_post_img_path,
             #                         log_folder + 'search_patterns/' + search_pattern_id + '/errors/' + retaken_post_img_name)
-            #         print('special error! ' + err_code)
+            #         script_logger.log('special error! ' + err_code)
             #         break
             #
             # context["search_patterns"][search_pattern_id] = search_pattern_obj
@@ -1285,28 +1289,28 @@ class adb_host:
             #     greater_pano_imgs = list(map(read_and_apply_mask, greater_pano_paths))
             #     err_code, result_im = search_pattern_obj["stitcher"].stitch(greater_pano_imgs, [search_pattern_obj["draggable_area"]] * len(stitch_imgs))
             #     if err_code == cv2.STITCHER_OK:
-            #         print('generating full panorama...')
+            #         script_logger.log('generating full panorama...')
             #         cv2.imwrite(log_folder + 'search_patterns/' + search_pattern_id + '/full-pano.png', result_im)
-            #         # print(subprocess.run([self.image_stitch_calculator_path] + \
+            #         # script_logger.log(subprocess.run([self.image_stitch_calculator_path] + \
             #         #                      greater_pano_paths + ['-m'] + \
             #         #                      [draggable_area_path] * len(greater_pano_paths),
             #         #                      capture_output=True, shell=False).stdout)
             #         pass
             #     else:
-            #         print('failed to greater pano: ', err_code)
+            #         script_logger.log('failed to greater pano: ', err_code)
             # generate_greater_pano(0, step_index)
             #
             # del context["search_patterns"][action["actionData"]["searchPatternID"]]
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
-                # print(np.array(pyautogui.screenshot()).shape)
+                # script_logger.log(np.array(pyautogui.screenshot()).shape)
                 # exit(0)
                 log_image = self.screenshot()
                 cv2.imwrite(logs_path + '-logImage.png', log_image)
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
-                print('log type unimplemented ' + action["actionData"]["logType"])
+                script_logger.log('log type unimplemented ' + action["actionData"]["logType"])
                 exit(0)
         elif action["actionName"] == "timeAction":
             state[action["actionData"]["outputVarName"]] = datetime.datetime.now()
@@ -1316,7 +1320,7 @@ class adb_host:
             status, state, context = DeviceActionInterpreter.parse_keyboard_action(self, action, state, context)
             return action, status, state, context, run_queue, []
         else:
-            print("action uninplemented on adb " + action["actionName"])
+            script_logger.log("action uninplemented on adb " + action["actionName"])
             exit(0)
 
 @staticmethod
@@ -1327,8 +1331,8 @@ def set_adb_args(device_key):
         if device_key in devices_config:
             adb_args = devices_config[device_key]
         else:
-            print('ADB HOST CONTROLLER: device config for ', device_key, ' not found! ')
-    print('ADB HOST CONTROLLER: loading args', adb_args)
+            script_logger.log('ADB HOST CONTROLLER: device config for ', device_key, ' not found! ')
+    script_logger.log('ADB HOST CONTROLLER: loading args', adb_args)
     return adb_args
 
 @staticmethod
@@ -1347,7 +1351,7 @@ def parse_inputs(process_adb_host, inputs):
             process_adb_host.init_system()
             screenshot = process_adb_host.screenshot()
         except subprocess.TimeoutExpired as t:
-            print('ADB CONTROLLER: timeout while capturing screenshot', t)
+            script_logger.log('ADB CONTROLLER: timeout while capturing screenshot', t)
             return {
                 
             }
@@ -1363,7 +1367,7 @@ def parse_inputs(process_adb_host, inputs):
 
             }
         process_adb_host.init_system()
-        process_adb_host.click(inputs[2], inputs[3])
+        process_adb_host.click(int(float(inputs[2])), int(float(inputs[3])))
         return {
             "data" : "success"
         }
@@ -1373,7 +1377,7 @@ def parse_inputs(process_adb_host, inputs):
 
             }
         process_adb_host.init_system()
-        process_adb_host.click_and_drag(inputs[2], inputs[3], inputs[4], inputs[5])
+        process_adb_host.click_and_drag(int(float(inputs[2])), int(float(inputs[3])), int(float(inputs[4])), int(float(inputs[5])))
         return {
             "data" : "success"
         }
@@ -1393,7 +1397,7 @@ def parse_inputs(process_adb_host, inputs):
 PROCESS_DELIMITER = '<--DEVICE-RESPONSE-->'
 
 async def read_input():
-    print("ADB CONTROLLER PROCESS: listening for input")
+    script_logger.log("ADB CONTROLLER PROCESS: listening for input")
     process_adb_host = None
     device_key = None
     while True:
@@ -1402,16 +1406,16 @@ async def read_input():
         if not input_line:  # EOF, if the pipe is closed
             break
         inputs = shlex.split(input_line)
-        print('ADB CONTROLLER PROCESS: received inputs ', inputs)
+        script_logger.log('ADB CONTROLLER PROCESS: received inputs ', inputs)
         if device_key is None:
             device_key = inputs[0]
         elif device_key != inputs[0]:
-            print('ADB CONTROLLER: device key mismatch ', device_key, inputs[0])
+            script_logger.log('ADB CONTROLLER: device key mismatch ', device_key, inputs[0])
             continue
         if process_adb_host is None:
-            print('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
-            with open('./logs/adb-host-controller-{}-process.txt'.format(device_key.replace(':', '-')), 'a') as process_file:
-                process_file.write(str(datetime.datetime.now()) + ''.join(inputs) + '\n')
+            script_logger.set_log_path('./logs/{}-adb-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
+            script_logger.log('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
+            script_logger.log('ADB CONTROLLER PROCESS: processing inputs ', inputs)
                 # process_file.write(json.dumps(adb_args) + '\n')
             adb_args = set_adb_args(inputs[0])
             process_adb_host = adb_host({
@@ -1420,11 +1424,13 @@ async def read_input():
                 "height" : None
             }, None, adb_args)
         if len(inputs) > 1:
-            print(PROCESS_DELIMITER + json.dumps(parse_inputs(process_adb_host, inputs)) + PROCESS_DELIMITER, flush=True)
+            script_logger.log(PROCESS_DELIMITER + json.dumps(parse_inputs(process_adb_host, inputs)) + PROCESS_DELIMITER, flush=True)
 
 async def adb_controller_main():
     await asyncio.gather(read_input())
 
 if __name__ == '__main__':
     os.makedirs('/logs', exist_ok=True)
+    script_logger.set_log_path('/logs/' + formatted_today + '-adb-host-controller-main.txt')
+
     asyncio.run(adb_controller_main())

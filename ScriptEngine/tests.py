@@ -27,7 +27,7 @@ def do_template_match(action, og_time):
     use_color = True
     use_mask = True
     screencap_mask_gray = action["actionData"]["positiveExamples"][0]["mask_single_channel"]
-    # print('matching ', action['actionGroup'], time.time() - og_time)
+    # script_logger.log('matching ', action['actionGroup'], time.time() - og_time)
     logs_path = './logs'
     image_matcher = ImageMatcher()
     match_result = image_matcher.template_match(
@@ -59,7 +59,7 @@ def test_parallel(script_executor, script_object, parallel=True):
         for action in actionRow['actions']:
             action['actionData']['screencap_im_bgr'] = screenshot
     time_1 = time.time()
-    print('time: ', time_1)
+    script_logger.log('time: ', time_1)
 
     actionRow = script_object['actionRows'][0]
     if parallel:
@@ -84,7 +84,7 @@ def test_parallel(script_executor, script_object, parallel=True):
                 script_executor.log_level,
                 script_executor.log_folder
             )
-    print('final ', time.time() - time_1)
+    script_logger.log('final ', time.time() - time_1)
 
 if __name__ == '__main__':
     script_name = 'Mac_DetectObjectSingle'
@@ -96,7 +96,7 @@ if __name__ == '__main__':
     script_id = 1
     start_time = datetime.datetime.now()
     start_time_str = start_time.strftime('%Y-%m-%d %H-%M-%S')
-    print(start_time, start_time_str)
+    script_logger.log(start_time, start_time_str)
     timeout = (start_time + datetime.timedelta(minutes=30)).replace(tzinfo=tz.tzlocal())
     log_level = 'info-text'
     constants = {}
