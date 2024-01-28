@@ -1,6 +1,7 @@
 from scipy.stats import truncnorm
 import random
-
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 class RandomVariableHelper:
 
     def __init__(self):
@@ -14,7 +15,7 @@ class RandomVariableHelper:
             mins = (action["actionData"]["min"] - mean) / stddev
             maxes = (action["actionData"]["max"] - mean) / stddev
             delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)
-            print(delays)
+            script_logger.log(delays)
             return delays
         elif action["actionData"]["distType"] == "uniform":
             min_val = action["actionData"]["min"]
@@ -23,5 +24,5 @@ class RandomVariableHelper:
             return random.random() * dist_range + min_val
             pass
         else:
-            print('random variable unimplemented: ' + action["actionData"]["distType"])
+            script_logger.log('random variable unimplemented: ' + action["actionData"]["distType"])
             exit(0)

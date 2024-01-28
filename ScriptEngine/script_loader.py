@@ -7,6 +7,8 @@ import cv2
 import numpy as np
 
 from zipfile import ZipFile
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 
 
 def set_output_mask(positive_example, img_type_prefix, include_contained_area, exclude_matched_area):
@@ -60,14 +62,14 @@ def script_to_string(script_name, action_rows):
     else:
         return "script-" + script_name
 def parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_file_obj, dir_path, script_zip=None):
-    print('SCRIPT LOAD: loading script ', script_name)
+    script_logger.log('SCRIPT LOAD: loading script ', script_name)
     def read_and_set_image(example, action, img_type):
         # if script_zip is not None:
         #     example[img_type] = cv2.imdecode(np.frombuffer(script_zip.open(script_name + '/').read()), cv2.IMREAD_COLOR)
         example[img_type] = cv2.imread(dir_path + '/' + action["actionData"]["positiveExamples"][0][img_type])
     with action_rows_file_obj as action_rows_file:
         action_rows = json.load(action_rows_file)
-    print(script_to_string(script_name, action_rows))
+    script_logger.log(script_to_string(script_name, action_rows))
     for action_row in action_rows:
         for action in action_row["actions"]:
             detect_type_action = action["actionName"] in {
@@ -82,10 +84,10 @@ def parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_
                 include_contained_area = 'includeContainedAreaInOutput' in action["actionData"]["detectorAttributes"]
                 exclude_matched_area = 'excludeMatchedAreaFromOutput' in action["actionData"]["detectorAttributes"]
                 for example_index,positive_example in enumerate(action["actionData"]["positiveExamples"]):
-                    print('positive', action["actionData"]["positiveExamples"])
+                    script_logger.log('positive', action["actionData"]["positiveExamples"])
                     read_and_set_image(positive_example, action, "mask")
                     positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
-                    print("SCRIPT LOAD : ", action["actionName"] + "-" + str(action["actionGroup"]), positive_example["mask_single_channel"].shape)
+                    script_logger.log("SCRIPT LOAD : ", action["actionName"] + "-" + str(action["actionGroup"]), positive_example["mask_single_channel"].shape)
                     read_and_set_image(positive_example, action, "containedAreaMask")
                     read_and_set_image(positive_example, action, "img")
                     positive_example = set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)
@@ -101,7 +103,7 @@ def parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_
         props = json.load(props_file)
 
     with inputs_file_obj as inputs_file:
-        # print('inputs 2 ', inputs_file.read())
+        # script_logger.log('inputs 2 ', inputs_file.read())
         inputs = json.load(inputs_file)
     return {
         'actionRows': action_rows,
@@ -128,7 +130,7 @@ def parse_zip(script_name, system_script=False):
             script_obj = parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_file_obj, dir_path, script_zip)
             use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
             if use_library_scripts:
-                print('mode use_library_scripts not supported for zip file, extract zip file to a directory')
+                script_logger.log('mode use_library_scripts not supported for zip file, extract zip file to a directory')
                 exit(1)
             script_obj['props']["script_path"] = script_file_path
             script_obj['props']["script_name"] = script_name

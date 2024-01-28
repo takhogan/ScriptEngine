@@ -2,6 +2,8 @@ import pyautogui
 import time
 from rv_helper import RandomVariableHelper
 from script_execution_state import ScriptExecutionState
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
 
@@ -12,7 +14,7 @@ class DeviceActionInterpreter:
 
     @staticmethod
     def parse_keyboard_action(device, keyboard_action, state, context):
-        print('keyboard-expression-' + str(keyboard_action["actionGroup"]), ' type: ',
+        script_logger.log('keyboard-expression-' + str(keyboard_action["actionGroup"]), ' type: ',
               keyboard_action["actionData"]["keyboardActionType"], ' expression: ',
               keyboard_action["actionData"]["keyboardExpression"], ' isHotKey: ',
               keyboard_action["actionData"]["isHotKey"] == 'isHotKey',

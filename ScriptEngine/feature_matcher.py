@@ -3,6 +3,8 @@ import argparse
 import cv2
 import numpy as np
 
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 
 class FeatureMatcher:
     def __init__(self):
@@ -17,7 +19,7 @@ class FeatureMatcher:
         kp1, des1 = orb.detectAndCompute(img1, None)
         kp2, des2 = orb.detectAndCompute(img2, None)
 
-        print('kp1 : ', kp1, ' des1 : ', des1, ' kp2 : ', kp2, ' des2 : ', des2)
+        script_logger.log('kp1 : ', kp1, ' des1 : ', des1, ' kp2 : ', kp2, ' des2 : ', des2)
 
         index_params = dict(algorithm=6,
                             table_number=6,
@@ -25,20 +27,20 @@ class FeatureMatcher:
                             multi_probe_level=2)
         search_params = {}
         bf = cv2.BFMatcher()
-        # print(des2.dtype)
+        # script_logger.log(des2.dtype)
         # exit(0)
         matches = bf.match(des1, des2)
         matches = sorted(matches, key=lambda x: x.distance)
-        # print(matches)
+        # script_logger.log(matches)
         # exit(0)
-        # print(' matches : ', list(map(len, matches)))
+        # script_logger.log(' matches : ', list(map(len, matches)))
         # As per Lowe's ratio test to filter good matches
         good_matches = []
         for match_pair in matches:
             # if len(match_pair) == 2:
             #     if match_pair[0].distance < 1 * match_pair[1].distance:
                     good_matches.append(match_pair)
-        # print(len(good_matches))
+        # script_logger.log(len(good_matches))
         start_red = 255
         for good_match in good_matches[:10]:
             screencap_img_idx = kp1[good_match.queryIdx].pt
@@ -107,18 +109,18 @@ class FeatureMatcher:
             # y_coords.append(y - h)
             sizes.append(w)
 
-        print(source_pts)
-        print(dest_pts)
+        script_logger.log(source_pts)
+        script_logger.log(dest_pts)
 
         source_pts = np.array(source_pts)
         dest_pts = np.array(dest_pts)
 
         h, status = cv2.findHomography(source_pts, dest_pts)
-        print(np.dot(h, np.array([0,0,1])))
-        print(x_coords)
-        print(y_coords)
-        print(widths)
-        print(heights)
+        script_logger.log(np.dot(h, np.array([0,0,1])))
+        script_logger.log(x_coords)
+        script_logger.log(y_coords)
+        script_logger.log(widths)
+        script_logger.log(heights)
         # plt.plot(y_coords, widths)
         # plt.show()
         # cv2.waitKey(0)

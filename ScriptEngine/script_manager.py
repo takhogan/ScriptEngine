@@ -15,6 +15,8 @@ from script_engine_constants import *
 from device_manager import DeviceManager
 from script_engine_utils import datetime_to_local_str
 from system_script_handler import SystemScriptHandler
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
 
@@ -53,7 +55,7 @@ def update_running_scripts_file(scriptname, action):
             with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
                 running_scripts = json.load(running_script_file)
                 running_scripts.pop(0)
-            print('running_scripts ', running_scripts)
+            script_logger.log('running_scripts ', running_scripts)
             if len(running_scripts) == 0:
                 os.remove(RUNNING_SCRIPTS_PATH)
             else:
@@ -63,11 +65,11 @@ def update_running_scripts_file(scriptname, action):
 def load_and_run(script_name, script_id, timeout, constants=None, start_time_str=None, log_level='info', device_details=None, system_script=False):
     # if you want to open zip then you pass .zip in command line args
     # update_running_scripts_file(script_name, 'push')
-    print('SCRIPT_MANAGER: ', ' script trigger time: ',
+    script_logger.log('SCRIPT_MANAGER: ', ' script trigger time: ',
           datetime_to_local_str(str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')),
           'actual script start time: ', datetime.datetime.now(), ' scheduled end time: ',
           datetime_to_local_str(timeout))
-    print('constants : ', constants)
+    script_logger.log('constants : ', constants)
     script_object = parse_zip(script_name, system_script)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
@@ -78,14 +80,14 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
             if device_details in devices_config:
                 adb_args = devices_config[device_details]
             else:
-                print('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
+                script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     elif 'DEVICE_NAME' in constants and 'AUTO_DETECT_ADB_PORT' in constants and constants['AUTO_DETECT_ADB_PORT'] == 'True':
         adb_args = {
             'DEVICE_NAME' : constants['DEVICE_NAME'],
             'AUTO_DETECT_ADB_PORT' : True
         }
-        print('SCRIPT MANAGER: setting params through inputs is deprecated ', adb_args)
-    print('SCRIPT MANAGER: loading adb_args', adb_args)
+        script_logger.log('SCRIPT MANAGER: setting params through inputs is deprecated ', adb_args)
+    script_logger.log('SCRIPT MANAGER: loading adb_args', adb_args)
     device_manager = DeviceManager(script_name, script_object['props'], adb_args)
     logger = multiprocessing.log_to_stderr()
     logger.setLevel(multiprocessing.SUBDEBUG)
@@ -110,7 +112,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         main_script.run(log_level=log_level)
     except:
         traceback.print_exc()
-    # print('completed script ', script_name, datetime.datetime.now())
+    # script_logger.log('completed script ', script_name, datetime.datetime.now())
     # update_running_scripts_file(script_name, 'pop')
 
 
@@ -154,7 +156,12 @@ if __name__=='__main__':
         for arg_index in range(8, n_args):
             arg_split = sys.argv[arg_index].strip().split(':')
             constants[arg_split[0]] = arg_split[1]
-    print('SCRIPT MANAGER: loading script and running with log level ', log_level)
+
+    log_folder = './logs/' + str(0).zfill(5) + '-' +\
+                 script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/stdout.txt'
+    script_logger.set_log_path(log_folder)
+    script_logger.log('SCRIPT MANAGER: completed parsing args ', sys.argv)
+    script_logger.log('SCRIPT MANAGER: loading script and running with log level ', log_level)
     load_and_run(
         script_name,
         script_id,

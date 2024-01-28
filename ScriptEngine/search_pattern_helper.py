@@ -5,6 +5,8 @@ from scipy.stats import truncnorm
 import random
 import os
 import cv2
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 
 class SearchPatternHelper:
     def __init__(self):
@@ -19,7 +21,7 @@ class SearchPatternHelper:
         # elif input_object["input_type"] == "point_list":
         #     origin_point = random.choice(input_object["pointList"])
         # else:
-        #     print("input not recognized " + input_object)
+        #     script_logger.log("input not recognized " + input_object)
         #     exit(0)
         origin_point = (0,0)
         search_pattern = np.random.choice(pattern_action["actionData"]["searchPatterns"],
@@ -37,7 +39,7 @@ class SearchPatternHelper:
                 delta_displacement = truncnorm.rvs(0.05, max_displacement, loc=max_displacement/2, scale=max_displacement/3)
                 new_theta = (math.sqrt(2) * math.sqrt(
                     2 * math.pi * (displacement + delta_displacement) - 1)) / math.sqrt(a)
-                print('new_theta ', new_theta)
+                script_logger.log('new_theta ', new_theta)
                 new_r = direction * a * new_theta / (2 * math.pi)
                 return new_r * math.cos(new_theta), new_r * math.sin(new_theta), displacement + delta_displacement
 
@@ -64,10 +66,10 @@ class SearchPatternHelper:
             # pick an angle from 0 to 90, do a grid search, randomize movement length
             # need to figure out when you've hit the edge, set a threshold for change in image, don't do it with pure pixel values, use keypoint displacement or something, use stitching!
             #once you hit an edge need to go in another direction
-            print('search pattern not implemented ' + search_pattern)
+            script_logger.log('search pattern not implemented ' + search_pattern)
             exit(0)
         else:
-            print('search pattern not implemented ' + search_pattern)
+            script_logger.log('search pattern not implemented ' + search_pattern)
             exit(0)
 
 
@@ -90,7 +92,7 @@ class SearchPatternHelper:
         elif pattern_obj["pattern_type"] == 'grid':
             pass
         else:
-            print('search pattern not implemented ' + pattern_obj["pattern_type"])
+            script_logger.log('search pattern not implemented ' + pattern_obj["pattern_type"])
             exit(0)
         # delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev) if action["actionData"]["clickCount"] > 1 else [
             # truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]
@@ -108,14 +110,14 @@ class SearchPatternHelper:
             xy_ratio = width / height
             x_edge = 1 - x_diff / xy_ratio
             y_edge = 1 - y_diff
-            # print('1', width, height, xy_ratio)
+            # script_logger.log('1', width, height, xy_ratio)
         else:
             xy_ratio = height / width
             x_edge = 1 - x_diff
             y_edge = 1 - y_diff / xy_ratio
-            # print('1', width, height, xy_ratio)
+            # script_logger.log('1', width, height, xy_ratio)
 
-        # print('2', x_edge, y_edge, x_diff, y_diff)
+        # script_logger.log('2', x_edge, y_edge, x_diff, y_diff)
         return source_pt_fit,target_pt_fit,x_edge,y_edge
 
     def fit_to_frame(self, source_pt_fit, target_pt_fit, x_edge, y_edge):
@@ -123,7 +125,7 @@ class SearchPatternHelper:
         y_edge_val = truncnorm.rvs(0, y_edge, loc=y_edge / 2, scale=y_edge / 4)
         new_source_pt, new_target_pt = (source_pt_fit[0] + x_edge_val, source_pt_fit[1] + y_edge_val), (
         target_pt_fit[0] + x_edge_val, target_pt_fit[1] + y_edge_val)
-        # print('3', source_pt_fit, target_pt_fit, x_edge_val, y_edge_val)
+        # script_logger.log('3', source_pt_fit, target_pt_fit, x_edge_val, y_edge_val)
         return new_source_pt, new_target_pt
 
 

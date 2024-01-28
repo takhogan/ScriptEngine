@@ -4,7 +4,8 @@ from script_engine_utils import dist
 from script_engine_utils import masked_mse
 
 MINIMUM_MATCH_PIXEL_SPACING = 15
-
+from script_logger import ScriptLogger
+script_logger = ScriptLogger()
 class ImageMatcher:
     def __init__(self):
         pass
@@ -37,10 +38,10 @@ class ImageMatcher:
         elif detector_name == "scaledPixelDifference":
             pass
         elif detector_name == "logisticClassifier":
-            print("logistic detector unimplemented ")
+            script_logger.log("logistic detector unimplemented ")
             exit(0)
         else:
-            print("detector unimplemented! ")
+            script_logger.log("detector unimplemented! ")
             exit(0)
 
         h, w = screencap_outputmask_gray.shape[0:2]
@@ -111,18 +112,18 @@ class ImageMatcher:
                     (source_screen_width, source_screen_height),
                     interpolation=cv2.INTER_AREA
                 )
-                print('resize : ', screencap_im_bgr_resized.shape, screencap_im_bgr.shape, source_screen_width, source_screen_height)
+                script_logger.log('resize : ', screencap_im_bgr_resized.shape, screencap_im_bgr.shape, source_screen_width, source_screen_height)
                 match_result_resized = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr_resized.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr_resized,
                     cv2.cvtColor(screencap_search_bgr.copy(),
                                  cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
                     cv2.TM_CCOEFF_NORMED, result=None,
                     mask=screencap_mask_gray if use_mask else None)
-                # print('match_result_resize ', threshold_match_results(match_result_resized))
+                # script_logger.log('match_result_resize ', threshold_match_results(match_result_resized))
                 # exit(0)
             except cv2.error as e:
                 if is_match_error:
-                    print('error in resized match template : ', e)
+                    script_logger.log('error in resized match template : ', e)
                     exit(1)
                 else:
                     parse_resized_img = False
@@ -132,7 +133,7 @@ class ImageMatcher:
                 thresholded_match_results = threshold_match_results(match_result)
                 height_translation = capture_height/source_screen_height
                 width_translation = capture_width/source_screen_width
-                print('translation : ', height_translation, capture_height,source_screen_height, width_translation, capture_width, source_screen_width)
+                script_logger.log('translation : ', height_translation, capture_height,source_screen_height, width_translation, capture_width, source_screen_width)
 
         # if there is an erorr resize image to original dims, pass translation factor to filter_matches
 
@@ -181,7 +182,7 @@ class ImageMatcher:
                 continue
             adjusted_pt_x = pt[0] * width_translation
             adjusted_pt_y = pt[1] * height_translation
-            # print('filtered matches : ', len(matches), pt)
+            # script_logger.log('filtered matches : ', len(matches), pt)
             for match_index in range(0, len(matches)):
                 match = matches[match_index]
                 match_coord = match[0]
@@ -191,8 +192,8 @@ class ImageMatcher:
                     adjusted_pt_x,
                     adjusted_pt_y
                 )
-                # print('dist_comparison : ', match_coord, pt, match_dist, dist_threshold)
-                # print('dist ', match_dist)
+                # script_logger.log('dist_comparison : ', match_coord, pt, match_dist, dist_threshold)
+                # script_logger.log('dist ', match_dist)
                 if match_dist < dist_threshold:
                     if match_score > match[1]:
                         matches[match_index] = (
@@ -205,7 +206,7 @@ class ImageMatcher:
             if redundant:
                 continue
             else:
-                # print('{:f}'.format(match_result[pt[1], pt[0]]))
+                # script_logger.log('{:f}'.format(match_result[pt[1], pt[0]]))
                 matches.append(
                     (
                         (adjusted_pt_x, adjusted_pt_y),
@@ -225,9 +226,9 @@ class ImageMatcher:
             best_match_pt = np.unravel_index(np.argmax(match_result[np.where(np.inf > match_result)]), match_result.shape)
             best_match = str(np.max(match_result[np.where(np.inf > match_result)]))
         else:
-            print('a not valid')
+            script_logger.log('a not valid')
         best_match_str = str(best_match)
-        print('n matches : ', len(matches), ' best match : ', best_match_pt, best_match_str)
+        script_logger.log('n matches : ', len(matches), ' best match : ', best_match_pt, best_match_str)
 
         with open(logs_path + '-best-' + best_match_str + '.txt', 'w') as log_file:
             log_file.write('n matches : ' + str(len(matches)))
@@ -255,7 +256,7 @@ class ImageMatcher:
     #
     #     logistic_model = LogisticRegression()
     #     grayscale_screencap = cv2.cvtColor(screencap_im.copy(), cv2.COLOR_RGB2GRAY)
-    #     # print(grayscale_screencap.shape)
+    #     # script_logger.log(grayscale_screencap.shape)
     #     h,w = screencap_search.shape[:-1]
     #     imgs = []
     #     labels = []
@@ -268,16 +269,16 @@ class ImageMatcher:
     #         imgs.append(np.asarray(cv2.cvtColor(np.asarray(Image.open(negative_example)), cv2.COLOR_RGB2GRAY)).flatten())
     #         labels.append(0)
     #     logistic_model.fit(imgs, labels)
-    #     print(screencap_im.shape)
-    #     print(h)
-    #     print(w)
-    #     # print(screencap_im[0:h, 0:w].shape)
+    #     script_logger.log(screencap_im.shape)
+    #     script_logger.log(h)
+    #     script_logger.log(w)
+    #     # script_logger.log(screencap_im[0:h, 0:w].shape)
     #     img_tiles = np.array([grayscale_screencap[y:y + h, x:x + w].flatten() for y in range(0, (grayscale_screencap.shape[0] - h)) for x in range(0, (grayscale_screencap.shape[1] - w))])
-    #     print(img_tiles.shape)
+    #     script_logger.log(img_tiles.shape)
     #     # logistic_model.predict(img_tiles).reshape(screencap_im.shape[0] - h, screencap_im.shape[1] - w)
     #
-    #     print(screencap_search.shape)
-    #     # print(screen_tiles)
+    #     script_logger.log(screencap_search.shape)
+    #     # script_logger.log(screen_tiles)
     #     # for tile in enumerate(tiles):
     #     exit(0)
     #     return None,None,None
