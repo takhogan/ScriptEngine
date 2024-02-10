@@ -34,6 +34,8 @@ from search_pattern_helper import SearchPatternHelper
 from click_action_helper import ClickActionHelper
 from detect_object_helper import DetectObjectHelper
 from forward_detect_peek_helper import ForwardDetectPeekHelper
+from rv_helper import RandomVariableHelper
+from color_compare_helper import ColorCompareHelper
 
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
 KEY_TO_KEYCODE = {
@@ -578,6 +580,9 @@ class adb_host:
         pyautogui.keyDown(key)
 
     def press(self, key):
+        if key not in KEY_TO_KEYCODE:
+            script_logger.log('key not found!', key)
+            return
         keycode = KEY_TO_KEYCODE[key]
         key_input_string = "input keyevent \"{}\"".format(keycode)
         shell_process = subprocess.Popen([
@@ -1062,6 +1067,18 @@ class adb_host:
             # script_logger.log(source_point)
             # script_logger.log(target_point)
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+        elif action["actionName"] == "colorCompareAction":
+            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state,
+                                                                               output_type='matched_pixels')
+            if screencap_im_bgr is None:
+                script_logger.log('colorCompareAction-' + str(action["actionGroup"]) + ' taking screenshot')
+                screencap_im_bgr = self.screenshot()
+            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state)
+            if color_score > float(action['actionData']['threshold']):
+                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            else:
+                return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
+
         elif action["actionName"] == "searchPatternStartAction":
             context = self.search_pattern_helper.generate_pattern(action, context, log_folder, self.props['dir_path'])
             # script_logger.log(state)

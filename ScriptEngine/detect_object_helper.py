@@ -1,5 +1,6 @@
 import cv2
 import sys
+import numpy as np
 
 sys.path.append("..")
 from script_engine_utils import generate_context_switch_action
@@ -14,26 +15,33 @@ class DetectObjectHelper:
         pass
 
     @staticmethod
-    def get_detect_area(action, state):
+    def get_detect_area(action, state, output_type='matched_area'):
         screencap_im_bgr = None
         match_point = None
         var_name = action["actionData"]["inputExpression"]
         if var_name is not None and len(var_name) > 0:
-            script_logger.log('detectObject-' + str(action["actionGroup"]), ' fetching variable ', var_name, 'from state')
+            if var_name not in state:
+                script_logger.log('action-' + str(action["actionGroup"]), 'variable', var_name, 'not found in state')
             input_area = eval(var_name, state.copy())
             if len(input_area) > 0:
-                if action["actionData"]["targetContext"] == "detectResult":
-                    if input_area["input_type"] == "rectangle":
-                        pass
-                        # point_choice = (input_area["point"][0] + width_coord, input_area["point"][1] + height_coord)
-                    elif input_area["input_type"] == "shape":
+                if input_area["input_type"] == "rectangle":
+                    pass
+                    # point_choice = (input_area["point"][0] + width_coord, input_area["point"][1] + height_coord)
+                elif input_area["input_type"] == "shape":
+                    if output_type == 'matched_area':
                         screencap_im_bgr = input_area["matched_area"]
                         match_point = (
                             input_area["point"][0],
                             input_area["point"][1]
                         )
+                    elif output_type == 'matched_pixels':
+                        screencap_im_bgr = input_area["matched_area"][np.where(input_area['shape'] > 1)]
+                        match_point = (
+                            input_area["point"][0],
+                            input_area["point"][1]
+                        )
         else:
-            script_logger.log('detectObject-' + str(action["actionGroup"]), ' no input expression')
+            script_logger.log('action-' + str(action["actionGroup"]), ' no input expression')
         return screencap_im_bgr, match_point
 
     @staticmethod

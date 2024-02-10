@@ -63,6 +63,8 @@ class SystemHostController:
             else:
                 script_logger.log('conditionalStatement-' + str(action["actionGroup"]), 'condition failure!')
                 status = ScriptExecutionState.FAILURE
+            with open(log_file_path + ('-SUCCESS.txt' if status == ScriptExecutionState.SUCCESS else '-FAILURE.txt'), 'w') as log_file:
+                log_file.write(str(action["actionData"]["condition"]) + '\n' + str(statement_strip))
             # script_logger.log(' state (7) : ', state)
         elif action["actionName"] == "variableAssignment":
             # script_logger.log('input Parser : ', action["actionData"]["inputParser"])
@@ -71,6 +73,8 @@ class SystemHostController:
                      state[action["actionData"]["outputVarName"]] is not None):
                 script_logger.log('output variable ', action["actionData"]["outputVarName"], ' was not null')
                 status = ScriptExecutionState.SUCCESS
+                with open(log_file_path + '-val.txt', 'w') as log_file:
+                    log_file.write('[setIfNull was not null] ' + str(action["actionData"]["inputExpression"]) + ':' + str(state[action["actionData"]["outputVarName"]]))
                 return action, status, state, context, run_queue, []
 
             script_logger.log('variableAssignment-' + str(action["actionGroup"]),' inputExpression : ', action["actionData"]["inputExpression"], end = '')
@@ -106,16 +110,22 @@ class SystemHostController:
             else:
                 state[outputVarName] = expression
             status = ScriptExecutionState.SUCCESS
+            with open(log_file_path + '-val.txt', 'w') as log_file:
+                log_file.write(str(outputVarName) + ':' + str(expression))
         elif action["actionName"] == "sleepStatement":
             if str(action["actionData"]["inputExpression"]).strip() != '':
                 sleep_length = float(eval(str(action["actionData"]["inputExpression"]), state.copy()))
                 script_logger.log('sleepStatement evaluated expression', action["actionData"]["inputExpression"], ' and sleeping for ', sleep_length, 's')
                 time.sleep(sleep_length)
             status = ScriptExecutionState.SUCCESS
+            with open(log_file_path + '-sleep-{}.txt'.format(sleep_length), 'w') as log_file:
+                log_file.write(str(sleep_length))
         elif action["actionName"] == "randomVariable":
             delays = RandomVariableHelper.get_rv_val(action)
             state[action["actionData"]["outputVarName"]] = delays
             status = ScriptExecutionState.SUCCESS
+            with open(log_file_path + '-output.txt', 'w') as log_file:
+                log_file.write(str(delays))
         elif action["actionName"] == "jsonFileAction":
             if action["actionData"]["mode"] == "read":
                 json_filepath = self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"]
@@ -212,6 +222,8 @@ class SystemHostController:
             context["script_counter"] = script_counter
             context["script_timer"] = script_timer
             status = ScriptExecutionState.SUCCESS
+            with open(log_file_path + '-vars.txt', 'w') as log_file:
+                log_file.write(str(context["script_counter"]) + '-' + str(context["script_timer"]))
         elif action["actionName"] == "sendMessageAction":
             if action["actionData"]["messagingProvider"] == "viber":
                 message = eval(action["actionData"]["inputExpression"], state.copy())
@@ -225,6 +237,8 @@ class SystemHostController:
                 script_logger.log('exiting program')
                 exit(0)
             status = ScriptExecutionState.FINISHED_FAILURE
+            with open(log_file_path + '-return-failure.txt', 'w') as log_file:
+                log_file.write('returning failure state')
         elif action["actionName"] == "forLoopAction":
             script_logger.log('CONTROL FLOW: initiating forLoopAction-' + str(action["actionGroup"]))
 

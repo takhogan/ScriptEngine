@@ -22,6 +22,7 @@ from script_engine_utils import generate_context_switch_action,get_running_scrip
 from script_loader import parse_zip
 from system_script_handler import SystemScriptHandler
 from script_logger import ScriptLogger
+from rv_helper import RandomVariableHelper
 script_logger = ScriptLogger()
 
 
@@ -250,6 +251,9 @@ class ScriptExecutor:
             status = ScriptExecutionState.ERROR
             script_logger.log("script formatting error, targetSystem not present!")
             exit(0)
+        if 'postActionDelay' in action['actionData'] and len(action['actionData']['postActionDelay']) > 0:
+            RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], state)
+
         return handle_action_result
 
     def handle_script_reference(self, action, state, context, run_queue):
@@ -284,7 +288,11 @@ class ScriptExecutor:
                                 context["parent_action"]["actionName"] == "searchPatternContinueAction"
 
             parsed_input_vars = list(
-                filter(lambda input_vars: input_vars != '', action["actionData"]["inputVars"].split(","))
+                map(
+                    lambda input_var: input_var.strip(),
+                filter(
+                    lambda input_vars: input_vars != '', action["actionData"]["inputVars"].split(",")
+                ))
             )
             input_vars = {
                 input_var_key: state[input_var_key]
@@ -397,7 +405,11 @@ class ScriptExecutor:
                 #probably set status to something special
 
             parsed_output_vars = list(
-                filter(lambda output_vars: output_vars != '', action["actionData"]["outputVars"].split(","))
+                map(
+                    lambda output_var : output_var.strip(),
+                filter(
+                    lambda output_vars: output_vars != '', action["actionData"]["outputVars"].split(",")
+                ))
             )
             script_logger.set_log_path(self.log_folder + 'stdout.txt')
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing child script', action['actionData']['scriptName'],' output vars ', parsed_output_vars)
