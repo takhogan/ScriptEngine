@@ -16,6 +16,7 @@ from image_matcher import ImageMatcher
 from script_engine_utils import is_null, apply_state_to_cmd_str
 
 import time
+from color_compare_helper import ColorCompareHelper
 from device_action_interpeter import DeviceActionInterpreter
 from script_execution_state import ScriptExecutionState
 from scipy.stats import truncnorm
@@ -118,8 +119,6 @@ class python_host:
                 self.click(point_choice[0], point_choice[1], button=action['actionData']['mouseButton'])
                 time.sleep(delays[click_count])
 
-
-
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "mouseScrollAction":
             var_name = action["actionData"]["inputExpression"]
@@ -168,6 +167,18 @@ class python_host:
                     dir_path=self.props['dir_path']
                 )
                 return action, status, state, context, run_queue, update_queue
+        elif action["actionName"] == "colorCompareAction":
+            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state,
+                                                                               output_type='matched_pixels')
+            if screencap_im_bgr is None:
+                script_logger.log('colorCompareAction-' + str(action["actionGroup"]) + ' taking screenshot')
+                screencap_im_bgr = self.screenshot()
+            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state)
+            if color_score > float(action['actionData']['threshold']):
+                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            else:
+                return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
+
         elif action["actionName"] == "randomVariable":
             delays = RandomVariableHelper.get_rv_val(action)
             state[action["actionData"]["outputVarName"]] = delays

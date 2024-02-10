@@ -1,11 +1,22 @@
 from scipy.stats import truncnorm
 import random
+import time
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
 class RandomVariableHelper:
 
     def __init__(self):
         pass
+
+    @staticmethod
+    def parse_post_action_delay(delayArg, state):
+        post_delay = 0
+        if delayArg.isdigit():
+            post_delay = int(delayArg)
+        else:
+            post_delay = int(eval(delayArg, state.copy()))
+        script_logger.log('post action sleep for ', post_delay, 'seconds')
+        time.sleep(post_delay)
 
     @staticmethod
     def get_rv_val(action):
