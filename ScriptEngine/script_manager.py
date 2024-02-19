@@ -161,7 +161,7 @@ if __name__=='__main__':
                  script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/stdout.txt'
     script_logger.set_log_path(log_folder)
     script_logger.log('SCRIPT MANAGER: completed parsing args ', sys.argv)
-    script_logger.log('SCRIPT MANAGER: loading script and running with log level ', log_level)
+    script_logger.log('SCRIPT MANAGER: loading script {} and running with log level {}'.format(script_name, log_level))
     load_and_run(
         script_name,
         script_id,

@@ -8,6 +8,8 @@ import os
 import json
 import platform
 import shlex
+import re
+
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
 
@@ -125,7 +127,7 @@ formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-
 
 class adb_host:
     def __init__(self, props, host_os, adb_args):
-        script_logger.log('Configuring ADB with default parameters')
+        script_logger.log('Configuring ADB with adb_args', adb_args)
         self.stop_command_gather = False
         self.device_profile = 'windows-bluestacks'
         self.host_os = host_os
@@ -141,6 +143,7 @@ class adb_host:
         self.click_path_generator = ClickPathGenerator(41.0, 71.0, self.xmax, self.ymax, 45, 0.4)
         self.image_stitch_calculator_path = './build/ImageStitchCalculator.exe'
         self.event_counter = 1
+
         #TODO CORRECT ABOVE
         self.distances_dist = {
 
@@ -159,6 +162,7 @@ class adb_host:
         self.auto_detect_adb_port = None
         self.adb_port = None
         self.full_ip = None
+        self.screen_orientation = None
         if len(adb_args) > 0:
             try:
                 status, _, _ = self.configure_adb({
@@ -293,6 +297,27 @@ class adb_host:
             return 'online'
         else:
             return 'offline'
+
+    def get_screen_orientation(self):
+        shell_process = subprocess.Popen([
+            self.adb_path,
+            '-s',
+            self.full_ip,
+            'shell'
+        ], stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        output,err = shell_process.communicate("dumpsys input | grep 'SurfaceOrientation'".encode('utf-8'))
+        surface_orientation_text = bytes.decode(output, 'utf-8')
+        surface_orientation_match = re.search(r'\d+', surface_orientation_text)
+
+        if surface_orientation_match:
+            surface_orientation = int(surface_orientation_match.group(0))
+            script_logger.log('screen_orientation', surface_orientation)
+        else:
+            surface_orientation = 0
+            script_logger.log('Error: surface orientation not found, setting to 0')
+
+        self.screen_orientation = surface_orientation
+        return self.screen_orientation
 
     def init_system(self, reinitialize=False):
         max_adb_attempts = 6
@@ -451,6 +476,7 @@ class adb_host:
             self.height = source_im.shape[0]
 
             self.set_commands()
+            self.get_screen_orientation()
 
             script_logger.log('ADB CONTROLLER: adb configuration successful ', self.full_ip, devices_output)
         if is_null(self.props['width']):
@@ -724,8 +750,25 @@ class adb_host:
                 mapped_x_val = int(((self.height - y) / self.height) * self.ymax)
                 mapped_y_val = int((x / self.width) * self.xmax)
             else:
-                mapped_x_val = int((x / self.width) * self.xmax)
-                mapped_y_val = int((y / self.height) * self.ymax)
+                if self.screen_orientation == 0:
+                    # Default orientation, apply direct mapping.
+                    mapped_x_val = int((x / self.width) * self.xmax)
+                    mapped_y_val = int((y / self.height) * self.ymax)
+                elif self.screen_orientation == 1:
+                    # Rotated 90 degrees counterclockwise, swap x and y, then map.
+                    mapped_x_val = int(((self.height - y) / self.height) * self.ymax)
+                    mapped_y_val = int((x / self.width) * self.xmax)
+                    # mapped_x_val = int((y / self.height) * self.xmax)
+                    # mapped_y_val = int(((self.width - x) / self.width) * self.ymax)
+                elif self.screen_orientation == 2:
+                    # Rotated 180 degrees counterclockwise, invert x and y, then map.
+                    mapped_x_val = int(((self.width - x) / self.width) * self.xmax)
+                    mapped_y_val = int(((self.height - y) / self.height) * self.ymax)
+                elif self.screen_orientation == 3:
+                    # Rotated 270 degrees counterclockwise (or 90 degrees clockwise), swap and invert, then map.
+                    mapped_x_val = int((x / self.width) * self.ymax)
+                    mapped_y_val = int(((self.height - y) / self.height) * self.xmax)
+                print(mapped_x_val, mapped_y_val, x, y, self.width, self.height, self.xmax, self.ymax)
             init_click_commands = [
                 self.commands["x_command_func"](mapped_x_val),
                 self.commands["y_command_func"](mapped_y_val),
@@ -1354,7 +1397,7 @@ def set_adb_args(device_key):
 
 @staticmethod
 def parse_inputs(process_adb_host, inputs):
-    device_action = inputs[1]
+    device_action = inputs[2]
     if device_action == 'check_status':
         return {
             "data": process_adb_host.get_status()
@@ -1384,7 +1427,8 @@ def parse_inputs(process_adb_host, inputs):
 
             }
         process_adb_host.init_system()
-        process_adb_host.click(int(float(inputs[2])), int(float(inputs[3])))
+        process_adb_host.get_screen_orientation()
+        process_adb_host.click(int(float(inputs[3])), int(float(inputs[4])))
         return {
             "data" : "success"
         }
@@ -1394,7 +1438,8 @@ def parse_inputs(process_adb_host, inputs):
 
             }
         process_adb_host.init_system()
-        process_adb_host.click_and_drag(int(float(inputs[2])), int(float(inputs[3])), int(float(inputs[4])), int(float(inputs[5])))
+        process_adb_host.get_screen_orientation()
+        process_adb_host.click_and_drag(int(float(inputs[3])), int(float(inputs[4])), int(float(inputs[5])), int(float(inputs[6])))
         return {
             "data" : "success"
         }
@@ -1404,14 +1449,13 @@ def parse_inputs(process_adb_host, inputs):
 
             }
         process_adb_host.init_system()
-        for c in inputs[2]:
+        for c in inputs[3]:
             process_adb_host.press(c)
         return {
             "data": "success"
         }
 
 
-PROCESS_DELIMITER = '<--DEVICE-RESPONSE-->'
 
 async def read_input():
     script_logger.log("ADB CONTROLLER PROCESS: listening for input")
@@ -1425,23 +1469,23 @@ async def read_input():
         inputs = shlex.split(input_line)
         script_logger.log('ADB CONTROLLER PROCESS: received inputs ', inputs)
         if device_key is None:
-            device_key = inputs[0]
-        elif device_key != inputs[0]:
-            script_logger.log('ADB CONTROLLER: device key mismatch ', device_key, inputs[0])
+            device_key = inputs[1]
+        elif device_key != inputs[1]:
+            script_logger.log('ADB CONTROLLER: device key mismatch ', device_key, inputs[1])
             continue
         if process_adb_host is None:
             script_logger.set_log_path('./logs/{}-adb-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
             script_logger.log('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
             script_logger.log('ADB CONTROLLER PROCESS: processing inputs ', inputs)
                 # process_file.write(json.dumps(adb_args) + '\n')
-            adb_args = set_adb_args(inputs[0])
+            adb_args = set_adb_args(inputs[1])
             process_adb_host = adb_host({
                 "dir_path": "./",
                 "width" : None,
                 "height" : None
             }, None, adb_args)
-        if len(inputs) > 1:
-            script_logger.log(PROCESS_DELIMITER + json.dumps(parse_inputs(process_adb_host, inputs)) + PROCESS_DELIMITER, flush=True)
+        if len(inputs) > 2:
+            script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_adb_host, inputs)) + '<--{}-->'.format(inputs[0]), flush=True)
 
 async def adb_controller_main():
     await asyncio.gather(read_input())

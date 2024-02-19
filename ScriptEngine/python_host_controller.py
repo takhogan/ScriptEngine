@@ -208,7 +208,7 @@ class python_host:
 
 @staticmethod
 def parse_inputs(process_host, inputs):
-    device_action = inputs[1]
+    device_action = inputs[2]
     if device_action == 'screen_capture':
         screenshot = process_host.screenshot()
         _, buffer = cv2.imencode('.jpg', screenshot)
@@ -218,26 +218,25 @@ def parse_inputs(process_host, inputs):
             "data": base64_encoded_string
         }
     elif device_action == "click":
-        script_logger.log('clicked location', inputs[2], inputs[3], flush=True)
-        process_host.click(int(float(inputs[2])), int(float(inputs[3])), 'left')
+        script_logger.log('clicked location', inputs[3], inputs[4], flush=True)
+        process_host.click(int(float(inputs[3])), int(float(inputs[4])), 'left')
         return {
             "data" : "success"
         }
     elif device_action == "click_and_drag":
-        # process_host.click_and_drag(inputs[2], inputs[3], inputs[4], inputs[5])
+        # process_host.click_and_drag(inputs[3], inputs[4], inputs[5], inputs[6])
         script_logger.log('click and drag not implemented on python host')
         return {
             "data" : "failure"
         }
     elif device_action == "send_keys":
-        for c in inputs[2]:
+        for c in inputs[3]:
             process_host.press(c)
         return {
             "data": "success"
         }
 
 
-PROCESS_DELIMITER = '<--DEVICE-RESPONSE-->'
 
 async def read_input():
     script_logger.log("ADB CONTROLLER PROCESS: listening for input")
@@ -251,9 +250,9 @@ async def read_input():
         inputs = shlex.split(input_line)
         script_logger.log('ADB CONTROLLER PROCESS: received inputs ', inputs)
         if device_key is None:
-            device_key = inputs[0]
-        elif device_key != inputs[0]:
-            script_logger.log('ADB CONTROLLER: device key mismatch ', device_key, inputs[0])
+            device_key = inputs[1]
+        elif device_key != inputs[1]:
+            script_logger.log('ADB CONTROLLER: device key mismatch ', device_key, inputs[1])
             continue
         if process_python_host is None:
             script_logger.set_log_path('./logs/{}-python-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
@@ -266,7 +265,7 @@ async def read_input():
                 "scriptMode" : 'train'
             })
         if len(inputs) > 1:
-            script_logger.log(PROCESS_DELIMITER + json.dumps(parse_inputs(process_python_host, inputs)) + PROCESS_DELIMITER, flush=True)
+            script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_python_host, inputs)) + '<--{}-->'.format(inputs[0]) , flush=True)
 
 async def adb_controller_main():
     await asyncio.gather(read_input())

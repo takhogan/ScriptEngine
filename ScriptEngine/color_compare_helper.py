@@ -1,7 +1,6 @@
 import numpy as np
 
 from skimage.color import rgb2lab
-from skimage import io
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
 

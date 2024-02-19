@@ -11,3 +11,4 @@ class ScriptExecutionState(Enum):
     OUT_OF_ATTEMPTS = auto()
     FINISHED_FAILURE = auto()
     FINISHED_BRANCH = auto()
+    FINISHED_FAILURE_BRANCH = auto()

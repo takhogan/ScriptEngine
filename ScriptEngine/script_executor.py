@@ -252,7 +252,7 @@ class ScriptExecutor:
             script_logger.log("script formatting error, targetSystem not present!")
             exit(0)
         if 'postActionDelay' in action['actionData'] and len(action['actionData']['postActionDelay']) > 0:
-            RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], state)
+            RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], self.state)
 
         return handle_action_result
 
@@ -709,6 +709,11 @@ class ScriptExecutor:
                 self.context["child_actions"] = None
                 is_return = True
                 continue
+            elif self.status == ScriptExecutionState.FINISHED_BRANCH or self.status == ScriptExecutionState.FINISHED_FAILURE_BRANCH:
+                self.context['parent_action'] = action
+                self.context["child_actions"] = None
+                self.actions = []
+                return
             else:
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: encountered error in script and returning ', self.status)
                 self.context['child_actions'] = None
@@ -857,7 +862,7 @@ class ScriptExecutor:
             self.state = self.context["success_states"][-1]
 
     def start_new_branch(self):
-        if self.status == ScriptExecutionState.FINISHED_BRANCH:
+        if self.status == ScriptExecutionState.FINISHED_BRANCH or self.status == ScriptExecutionState.FINISHED_FAILURE_BRANCH:
             if self.context["success_states"] is None:
                 self.context["success_states"] = [self.state.copy()]
             else:
