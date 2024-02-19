@@ -229,6 +229,26 @@ class SystemHostController:
                 message = eval(action["actionData"]["inputExpression"], state.copy())
                 self.messaging_helper.send_viber_message(message)
             status = ScriptExecutionState.SUCCESS
+        elif action["actionName"] == "returnStatement":
+            script_logger.log('returnStatement with params ' + action["actionData"]["returnStatementType"] + ' ' + action["actionData"]["returnStatus"])
+            with open(log_file_path + '-return-statement-{}-{}.txt'.format(action["actionData"]["returnStatementType"], action["actionData"]["returnStatus"]), 'w') as log_file:
+                log_file.write('returningStatement ran with params: ' + action["actionData"]["returnStatementType"] + ' ' + action["actionData"]["returnStatus"])
+            if action["actionData"]["returnStatementType"] == 'exitBranch':
+                if action["actionData"]["returnStatus"] == 'failure':
+                    status = ScriptExecutionState.FINISHED_FAILURE_BRANCH
+                elif action["actionData"]["returnStatus"] == 'success':
+                    status = ScriptExecutionState.FINISHED_BRANCH
+            elif action["actionData"]["returnStatementType"] == 'exitScript':
+                if action["actionData"]["returnStatus"] == 'failure':
+                    status = ScriptExecutionState.FINISHED_FAILURE
+                elif action["actionData"]["returnStatus"] == 'success':
+                    status = ScriptExecutionState.FINISHED
+            elif action["actionData"]["returnStatementType"] == 'exitProgram':
+                script_logger.log('encountered exit program return statement')
+                exit(0)
+            else:
+                script_logger.log('return statement type not implemented', action["actionData"]["returnStatementType"])
+                exit(1)
         elif action["actionName"] == "exceptionAction":
             script_logger.log('exceptionAction-' + str(action["actionGroup"]), ' message: ', action["actionData"]["exceptionMessage"])
             if action["actionData"]["takeScreenshot"]:
