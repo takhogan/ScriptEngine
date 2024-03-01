@@ -54,7 +54,7 @@ class DetectObjectHelper:
             if str(action['actionData']['maxMatches']).isdigit():
                 max_matches = int(action['actionData']['maxMatches'])
             else:
-                max_matches = eval(action['actionData']['maxMatches'], state.copy())
+                max_matches = eval(action['actionData']['maxMatches'], state_copy)
             excess_matches = len(matches) - max_matches
             if excess_matches > 0:
                 script_logger.log('truncated {} excess matches'.format(excess_matches))
@@ -183,6 +183,7 @@ class DetectObjectHelper:
                 use_color=action["actionData"]["useColor"] == "true" or action["actionData"]["useColor"]
             )
         update_queue = []
+        # matches are added to the update queue and then added to the state after handle_action returns
         update_queue, status = DetectObjectHelper.update_update_queue(
             action, state, context, matches, update_queue
         )
