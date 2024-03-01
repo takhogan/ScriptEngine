@@ -535,15 +535,14 @@ class ScriptExecutor:
             script_logger.log(self.props['script_name'] + " CONTROL FLOW: Action attempts", self.context["action_attempts"], "exceeded scriptMaxActionAttempts of", self.context["scriptMaxActionAttempts"])
             return end_branch,True
         if len(self.actions) == 0 and len(self.run_queue) == 0:
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Reached end of script')
-            if self.status == ScriptExecutionState.FINISHED_FAILURE:
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Reached end of script with status', self.status)
+            if self.status == ScriptExecutionState.FINISHED_FAILURE or self.status == ScriptExecutionState.FINISHED_FAILURE_BRANCH:
                 pass
             else:
                 self.status = ScriptExecutionState.FINISHED
             return end_branch,True
         if len(self.actions) == 0 and len(self.run_queue) > 0:
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Finished branch, moving to next')
-            if self.status == ScriptExecutionState.FINISHED_FAILURE:
+            if self.status == ScriptExecutionState.FINISHED_FAILURE or self.status == ScriptExecutionState.FINISHED_FAILURE_BRANCH:
                 pass
             else:
                 self.status = ScriptExecutionState.FINISHED_BRANCH
@@ -587,6 +586,7 @@ class ScriptExecutor:
 
     #if it is handle all branches then you take the first branch and for the rest you create a context switch action
     def execute_actions(self, forward_peek=True):
+        script_logger.log('CONTROL FLOW: ', self.props['script_name'], 'starting next batch of actions')
         self.handle_out_of_attempts_check()
         if forward_peek:
             self.forward_detect_peek()
@@ -742,6 +742,8 @@ class ScriptExecutor:
             self.execute_actions()
             end_branch,end_script = self.check_if_done()
             if end_script:
+                if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_BRANCH:
+                    overall_status = ScriptExecutionState.SUCCESS
                 break
             if self.status == ScriptExecutionState.FAILURE:
                 self.actions = []
@@ -753,13 +755,17 @@ class ScriptExecutor:
                 else:
                     # otherwise return with failure state
                     break
-            elif self.status == ScriptExecutionState.FINISHED_BRANCH:
+            elif self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_BRANCH:
                 overall_status = ScriptExecutionState.SUCCESS
-            if end_branch:
-                self.status = ScriptExecutionState.FINISHED_BRANCH
+                # if it was the end of the script the status would be FINISHED
+                self.status = ScriptExecutionState.STARTING
+            # if end_branch:
+            #     self.status = ScriptExecutionState.FINISHED_BRANCH
         # if at least one branch reached the end the script is a success
         if overall_status == ScriptExecutionState.SUCCESS:
             self.status = ScriptExecutionState.FINISHED
+        elif overall_status == ScriptExecutionState.FAILURE:
+            self.status = ScriptExecutionState.FINISHED_FAILURE
         self.on_script_completion()
 
 
@@ -807,29 +813,48 @@ class ScriptExecutor:
                 self.execute_actions()
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Running script with runOne, performing first pass')
             self.execute_actions()
-            if self.status == ScriptExecutionState.STARTING:
+            if self.status == ScriptExecutionState.STARTING and len(self.actions) > 0:
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Running script with runOne, first pass successful, switching to run mode run')
                 self.run(log_level, parse_inputs=False)
+                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: returned from run in runOne with status', self.status)
+
+                if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_BRANCH:
+                    # remember the final state is FINISHED/FINISHED_FAILURE
+                    overall_status = ScriptExecutionState.SUCCESS
                 if not is_attempt_all_branches:
                     break
-                elif self.status == ScriptExecutionState.FINISHED:
-                    overall_status = ScriptExecutionState.SUCCESS
+            elif self.status == ScriptExecutionState.STARTING:
+                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Running script with runOne, first pass successful, reached end of script')
+                overall_status = ScriptExecutionState.SUCCESS
+                self.status = ScriptExecutionState.FINISHED
+                if not is_attempt_all_branches:
+                    break
             else:
                 self.actions = []
                 if len(self.run_queue) > 1:
+                    script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Running script with runOne, branch of first pass unsuccessful, trying next branch')
                     end_branch, end_script = self.check_if_done()
                     if end_script:
+                        if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_BRANCH:
+                            overall_status = ScriptExecutionState.SUCCESS
                         break
                     # because the first action will be a context switch action
                     self.execute_actions()
                     self.run_one(parse_inputs=False)
+                    if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_BRANCH:
+                        # remember the final state is FINISHED/FINISHED_FAILURE
+                        overall_status = ScriptExecutionState.SUCCESS
                     if not is_attempt_all_branches:
                         break
-                    elif self.status == ScriptExecutionState.FINISHED:
-                        overall_status = ScriptExecutionState.SUCCESS
+                else:
+                    script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Running script with runOne, branch of first pass unsuccessful')
+
         # if you reached the end on one of the branches
         if overall_status == ScriptExecutionState.SUCCESS:
             self.status = ScriptExecutionState.FINISHED
+        elif overall_status == ScriptExecutionState.FAILURE:
+            self.status = ScriptExecutionState.FINISHED_FAILURE
+        script_logger.log(self.props['script_name'] + ' CONTROL FLOW: runOne overall status was ', overall_status)
         self.on_script_completion()
         #TODO In theory you should load in the state and context of the successful branch
 
@@ -848,13 +873,22 @@ class ScriptExecutor:
             end_branch,end_script = self.check_if_done()
 
             if end_script:
+                if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_BRANCH:
+                    overall_status = ScriptExecutionState.SUCCESS
                 break
+
             if self.status == ScriptExecutionState.FINISHED_BRANCH:
                 overall_status = ScriptExecutionState.SUCCESS
-            if end_branch:
-                self.status = ScriptExecutionState.FINISHED_BRANCH
+                # if it was the end of the script the status would be FINISHED
+                self.status = ScriptExecutionState.STARTING
+            elif self.status == ScriptExecutionState.FINISHED:
+                overall_status = ScriptExecutionState.SUCCESS
+            # if end_branch:
+            #     self.status = ScriptExecutionState.FINISHED_BRANCH
         if overall_status == ScriptExecutionState.SUCCESS:
             self.status = ScriptExecutionState.FINISHED
+        elif overall_status == ScriptExecutionState.FAILURE:
+            self.status = ScriptExecutionState.FINISHED_FAILURE
         self.on_script_completion()
 
     def on_script_completion(self):
@@ -862,7 +896,9 @@ class ScriptExecutor:
             self.state = self.context["success_states"][-1]
 
     def start_new_branch(self):
-        if self.status == ScriptExecutionState.FINISHED_BRANCH or self.status == ScriptExecutionState.FINISHED_FAILURE_BRANCH:
+        script_logger.log(self.props['script_name'] + " CONTROL FLOW: finished branch with status ", self.status, " and starting new branch")
+        if self.status == ScriptExecutionState.FINISHED_BRANCH:
+            script_logger.log(self.props['script_name'] + " CONTROL FLOW: adding script state to success states")
             if self.context["success_states"] is None:
                 self.context["success_states"] = [self.state.copy()]
             else:

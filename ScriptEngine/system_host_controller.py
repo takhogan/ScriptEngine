@@ -5,6 +5,7 @@ import requests
 import cv2
 import json
 import time
+import numpy as np
 import glob
 import datetime
 import os
@@ -144,12 +145,83 @@ class SystemHostController:
             else:
                 script_logger.log('invalid mode: ', action)
                 status = ScriptExecutionState.ERROR
+        elif action["actionName"] == "imageTransformationAction":
+            # transformationType : 'blur' | 'binarize' | 'antialias' | 'resize' | 'erode' | 'dilate'
+            if len(action['actionData']['inputExpression']) == 0:
+                script_logger.log('Error: input expression was blank')
+                exit(1)
+
+            transform_im = state[action['actionData']['inputExpression']]['matched_area']
+            if action["actionData"]["transformationType"] == "blur":
+                if action["actionData"]["blurType"] == 'bilateralFilter':
+                    transform_im = cv2.bilateralFilter(transform_im, int(action["actionData"]["blurKernelSize"]), 75, 75)
+                elif action["actionData"]["blurType"] == 'medianBlur':
+                    transform_im = cv2.medianBlur(transform_im, int(action["actionData"]["blurKernelSize"]))
+                elif action["actionData"]["blurType"] == 'gaussianBlur':
+                    transform_im = cv2.GaussianBlur(transform_im, (int(action["actionData"]["blurKernelSize"]), int(action["actionData"]["blurKernelSize"])), 0)
+            elif action["actionData"]["transformationType"] == "binarize":
+                if action["actionData"]["binarize"] == 'regular':
+                    transform_im = cv2.threshold(
+                        transform_im,
+                        0,
+                        255,
+                        cv2.THRESH_BINARY + cv2.THRESH_OTSU
+                    )[1]
+                elif action["actionData"]["binarize"] == 'adaptive':
+                    transform_im = cv2.adaptiveThreshold(
+                        transform_im,
+                        255,
+                        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                        cv2.THRESH_BINARY,
+                        31,
+                        2
+                    )
+            elif action["actionData"]["transformationType"] == "antialias":
+                transform_im = cv2.resize(
+                    transform_im, None,
+                    fx=1/action["actionData"]["antialiasScaleFactor"],
+                    fy=1/action["actionData"]["antialiasScaleFactor"],
+                    interpolation=cv2.INTER_CUBIC
+                )
+                transform_im = cv2.resize(
+                    transform_im, None,
+                    fx=action["actionData"]["antialiasScaleFactor"],
+                    fy=action["actionData"]["antialiasScaleFactor"],
+                    interpolation=cv2.INTER_CUBIC
+                )
+
+            elif action["actionData"]["transformationType"] == "resize":
+                transform_im = cv2.resize(
+                    transform_im, None,
+                    fx=action["actionData"]["resizeScaleFactor"],
+                    fy=action["actionData"]["resizeScaleFactor"],
+                    interpolation=cv2.INTER_CUBIC
+                )
+            elif action["actionData"]["transformationType"] == "erode":
+                kernel = np.ones((
+                    action["actionData"]["erodeKernelSize"],
+                    action["actionData"]["erodeKernelSize"]
+                ), np.uint8)
+                transform_im = cv2.erode(transform_im, kernel, iterations=action["actionData"]["erodeIterations"])
+            elif action["actionData"]["transformationType"] == "dilate":
+                kernel = np.ones((
+                    action["actionData"]["erodeKernelSize"],
+                    action["actionData"]["erodeKernelSize"]
+                ), np.uint8)
+                transform_im = cv2.dilate(transform_im, kernel, iterations=action["actionData"]["erodeIterations"])
+
+            state[action['actionData']['inputExpression']]['matched_area'] = transform_im
+            state[action['actionData']['inputExpression']]['height'] = transform_im.shape[0]
+            state[action['actionData']['inputExpression']]['height'] = transform_im.shape[1]
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "imageToTextAction":
             if action["actionData"]["conversionEngine"] == "tesseractOCR":
                 TARGET_TYPE_TO_PSM = {
                     'word': '8',
                     'sentence': '7',
-                    'page': '3'
+                    'page': '3',
+                    'character' : '10',
+                    'rawLine' : '13'
                 }
 
                 search_im, match_pt = DetectObjectHelper.get_detect_area(action, state)
@@ -160,8 +232,33 @@ class SystemHostController:
                     image_to_text_input = cv2.bitwise_not(image_to_text_input)
 
                 im_height = image_to_text_input.shape[0]
-                if im_height < 40:
-                    image_to_text_input = cv2.resize(image_to_text_input, None, fx=int(70 / im_height), fy=int(70 / im_height), interpolation=cv2.INTER_CUBIC)
+                if im_height < 50:
+                    image_to_text_input = cv2.resize(image_to_text_input, None, fx=int(100 / im_height), fy=int(100 / im_height), interpolation=cv2.INTER_CUBIC)
+                if 'blur' in action['actionData']:
+                    if action["actionData"]["blur"] == 'bilateralFilter':
+                        image_to_text_input = cv2.bilateralFilter(image_to_text_input, 5, 75, 75)
+                    elif action["actionData"]["blur"] == 'medianBlur':
+                        image_to_text_input = cv2.medianBlur(image_to_text_input, 3)
+                    elif action["actionData"]["blur"] == 'gaussianBlur':
+                        image_to_text_input = cv2.GaussianBlur(image_to_text_input, (5, 5), 0)
+                if 'binarize' in action['actionData']:
+                    if action["actionData"]["binarize"] == 'regular':
+                        image_to_text_input = cv2.threshold(
+                            image_to_text_input,
+                            0,
+                            255,
+                            cv2.THRESH_BINARY + cv2.THRESH_OTSU
+                        )[1]
+                    elif action["actionData"]["binarize"] == 'adaptive':
+                        image_to_text_input = cv2.adaptiveThreshold(
+                            image_to_text_input,
+                            255,
+                            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                            cv2.THRESH_BINARY,
+                            31,
+                            2
+                        )
+
                 cv2.imwrite(log_file_path + '-image_to_text.png', image_to_text_input)
                 tesseract_params = [
                     [
