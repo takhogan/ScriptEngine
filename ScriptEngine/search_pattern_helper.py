@@ -13,7 +13,7 @@ class SearchPatternHelper:
         pass
 
     def generate_pattern(self, pattern_action, context, log_folder, dir_path):
-        # input_object = eval(patternAction["actionData"]["inputExpression"], state)[0]
+        # input_object = eval(patternAction["actionData"]["inputExpression"], {}, state)[0]
         # if input_object["input_type"] == "rectangle":
         #     width_coord = random.random() * input_object["width"]
         #     height_coord = random.random() * input_object['height']

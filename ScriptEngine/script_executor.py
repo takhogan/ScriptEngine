@@ -18,7 +18,7 @@ sys.path.append("..")
 from parallelized_script_executor import ParallelizedScriptExecutor
 from script_engine_constants import *
 from script_execution_state import ScriptExecutionState
-from script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str
+from script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str, state_eval
 from script_loader import parse_zip
 from system_script_handler import SystemScriptHandler
 from script_logger import ScriptLogger
@@ -159,12 +159,11 @@ class ScriptExecutor:
                       " Default Parameter? ", default_value,
                       " Overwriting Default? True" if default_value else "")
                 continue
-            state_copy = self.state.copy()
-            state_copy.update({
+            globs = {
                 'glob' : glob,
                 'datetime' : datetime
-            })
-            eval_result = eval(input_expression, state_copy)
+            }
+            eval_result = state_eval(input_expression, globs, self.state)
             self.state[var_name] = eval_result
             script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Input: ', var_name,
                   " Value: ", eval_result,
@@ -310,7 +309,7 @@ class ScriptExecutor:
             if is_new_script:
                 script_name = action["actionData"]["scriptName"].strip()
                 if script_name[0] == '{' and script_name[-1] == '}':
-                    script_name = eval(script_name[1:-1], self.state.copy())
+                    script_name = state_eval(script_name[1:-1], {}, self.state)
                 if script_name[0] == '[' and script_name[-1] == ']':
                     script_name = script_name[1:-1]
                     system_script = True

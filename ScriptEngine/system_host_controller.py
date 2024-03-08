@@ -17,7 +17,7 @@ from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
 from script_execution_state import ScriptExecutionState
 from script_engine_constants import *
-from script_engine_utils import generate_context_switch_action
+from script_engine_utils import generate_context_switch_action, state_eval
 from messaging_helper import MessagingHelper
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
@@ -46,7 +46,7 @@ class SystemHostController:
                     term_str = str(term) + ': N/A'
                 else:
                     try:
-                        term_eval = eval(term, state)
+                        term_eval = state_eval(term, {}, state)
                     except (TypeError,KeyError) as p_err:
                         script_logger.log(p_err)
                         term_eval = None
@@ -54,25 +54,25 @@ class SystemHostController:
                 statement_strip[term_index] = term_str
             return statement_strip
         if action["actionName"] == "conditionalStatement":
-            state_copy = state.copy()
-            statement_strip = sanitize_input(action["actionData"]["condition"], state_copy)
-            script_logger.log('condition : ', action["actionData"]["condition"], statement_strip, len(action["actionData"]["condition"].replace("\n", " ")), len(action["actionData"]["condition"]))
-            condition = action["actionData"]["condition"].replace("\n", " ")
-            if eval('(' + condition + ')', state_copy):
+            condition = action["actionData"]["condition"].replace("\n", " ").strip()
+            statement_strip = sanitize_input(condition, state)
+            script_logger.log('condition : ', condition, list(map(ord, condition)), statement_strip)
+            if state_eval('(' + condition + ')',{}, state):
                 script_logger.log('conditionalStatement-' + str(action["actionGroup"]), 'condition success!')
                 status = ScriptExecutionState.SUCCESS
             else:
                 script_logger.log('conditionalStatement-' + str(action["actionGroup"]), 'condition failure!')
                 status = ScriptExecutionState.FAILURE
             with open(log_file_path + ('-SUCCESS.txt' if status == ScriptExecutionState.SUCCESS else '-FAILURE.txt'), 'w') as log_file:
-                log_file.write(str(action["actionData"]["condition"]) + '\n' + str(statement_strip))
+                log_file.write(str(condition) + '\n' + str(statement_strip))
             # script_logger.log(' state (7) : ', state)
         elif action["actionName"] == "variableAssignment":
             # script_logger.log('input Parser : ', action["actionData"]["inputParser"])
-            if (action["actionData"]["setIfNull"] == "true" or action["actionData"]["setIfNull"]) and \
-                    (action["actionData"]["outputVarName"] in state and \
-                     state[action["actionData"]["outputVarName"]] is not None):
-                script_logger.log('output variable ', action["actionData"]["outputVarName"], ' was not null')
+            outputVarName = action["actionData"]["outputVarName"].strip()
+            outputVarNameInState =  outputVarName in state
+            if (action["actionData"]["setIfNull"] == "true" or action["actionData"]["setIfNull"])\
+                    and outputVarNameInState and state[outputVarName] is not None:
+                script_logger.log('output variable ', outputVarName, ' was not null')
                 status = ScriptExecutionState.SUCCESS
                 with open(log_file_path + '-val.txt', 'w') as log_file:
                     log_file.write('[setIfNull was not null] ' + str(action["actionData"]["inputExpression"]) + ':' + str(state[action["actionData"]["outputVarName"]]))
@@ -82,7 +82,7 @@ class SystemHostController:
             # script_logger.log(' state (4) ', state)
             expression = action["actionData"]["inputExpression"].replace("\n", " ")
             if action["actionData"]["inputParser"] == 'eval':
-                expression = eval(expression, state.copy())
+                expression = state_eval(expression, {}, state)
             elif action["actionData"]["inputParser"] == "jsonload":
                 expression = json.loads(expression)
             script_logger.log('variableAssignment-' + str(action["actionGroup"]),' : result : ', expression)
@@ -91,14 +91,14 @@ class SystemHostController:
 
 
             script_logger.log('variableAssignment-' + str(action["actionGroup"]), 'state :', list(state))
-            outputVarName = action["actionData"]["outputVarName"].strip()
+
             if '[' in outputVarName and ']' in outputVarName:
                 keys = outputVarName.split('[')  # Split the key string by '][' to get individual keys
                 # Evaluate variable names within the state dictionary
                 script_logger.log('variableAssignment' + str(action["actionGroup"]) + ' keys', keys)
                 for i, k in enumerate(keys[1:]):
                     k = k.rstrip(']')
-                    keys[i + 1] = eval(k, state.copy())
+                    keys[i + 1] = state_eval(k, {}, state)
 
                 # Assign the value to the corresponding key within the state dictionary
                 current = state
@@ -115,12 +115,20 @@ class SystemHostController:
                 log_file.write(str(outputVarName) + ':' + str(expression))
         elif action["actionName"] == "sleepStatement":
             if str(action["actionData"]["inputExpression"]).strip() != '':
-                sleep_length = float(eval(str(action["actionData"]["inputExpression"]), state.copy()))
+                sleep_length = float(state_eval(str(action["actionData"]["inputExpression"]), {}, state))
                 script_logger.log('sleepStatement evaluated expression', action["actionData"]["inputExpression"], ' and sleeping for ', sleep_length, 's')
                 time.sleep(sleep_length)
             status = ScriptExecutionState.SUCCESS
             with open(log_file_path + '-sleep-{}.txt'.format(sleep_length), 'w') as log_file:
                 log_file.write(str(sleep_length))
+        elif action["actionName"] == "timeAction":
+            time_val = None
+            if action["actionData"]["timezone"] == "local":
+                time_val = datetime.datetime.now()
+            elif action["actionData"]["timezone"] == "utc":
+                time_val = datetime.datetime.utcnow()
+            state[action["actionData"]["outputVarName"]] = time_val
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "randomVariable":
             delays = RandomVariableHelper.get_rv_val(action)
             state[action["actionData"]["outputVarName"]] = delays
@@ -160,14 +168,19 @@ class SystemHostController:
                 elif action["actionData"]["blurType"] == 'gaussianBlur':
                     transform_im = cv2.GaussianBlur(transform_im, (int(action["actionData"]["blurKernelSize"]), int(action["actionData"]["blurKernelSize"])), 0)
             elif action["actionData"]["transformationType"] == "binarize":
-                if action["actionData"]["binarize"] == 'regular':
+                is_color = len(transform_im.shape) != 2
+                if is_color:
+                    script_logger.log('converting to grayscale for binarize operation')
+                    transform_im = cv2.cvtColor(transform_im, cv2.COLOR_BGR2GRAY)
+                if action["actionData"]["binarizeType"] == 'regular':
+                    script_logger.log('shape', transform_im.shape)
                     transform_im = cv2.threshold(
                         transform_im,
                         0,
                         255,
                         cv2.THRESH_BINARY + cv2.THRESH_OTSU
                     )[1]
-                elif action["actionData"]["binarize"] == 'adaptive':
+                elif action["actionData"]["binarizeType"] == 'adaptive':
                     transform_im = cv2.adaptiveThreshold(
                         transform_im,
                         255,
@@ -176,43 +189,58 @@ class SystemHostController:
                         31,
                         2
                     )
+                if is_color:
+                    script_logger.log('converting grayscale back to color')
+                    transform_im = cv2.cvtColor(transform_im, cv2.COLOR_GRAY2BGR)
             elif action["actionData"]["transformationType"] == "antialias":
                 transform_im = cv2.resize(
                     transform_im, None,
-                    fx=1/action["actionData"]["antialiasScaleFactor"],
-                    fy=1/action["actionData"]["antialiasScaleFactor"],
+                    fx=1/float(action["actionData"]["antialiasScaleFactor"]),
+                    fy=1/float(action["actionData"]["antialiasScaleFactor"]),
                     interpolation=cv2.INTER_CUBIC
                 )
                 transform_im = cv2.resize(
                     transform_im, None,
-                    fx=action["actionData"]["antialiasScaleFactor"],
-                    fy=action["actionData"]["antialiasScaleFactor"],
+                    fx=float(action["actionData"]["antialiasScaleFactor"]),
+                    fy=float(action["actionData"]["antialiasScaleFactor"]),
                     interpolation=cv2.INTER_CUBIC
                 )
 
             elif action["actionData"]["transformationType"] == "resize":
                 transform_im = cv2.resize(
                     transform_im, None,
-                    fx=action["actionData"]["resizeScaleFactor"],
-                    fy=action["actionData"]["resizeScaleFactor"],
+                    fx=float(action["actionData"]["resizeScaleFactor"]),
+                    fy=float(action["actionData"]["resizeScaleFactor"]),
                     interpolation=cv2.INTER_CUBIC
                 )
             elif action["actionData"]["transformationType"] == "erode":
                 kernel = np.ones((
-                    action["actionData"]["erodeKernelSize"],
-                    action["actionData"]["erodeKernelSize"]
+                    int(action["actionData"]["erodeKernelSize"]),
+                    int(action["actionData"]["erodeKernelSize"])
                 ), np.uint8)
-                transform_im = cv2.erode(transform_im, kernel, iterations=action["actionData"]["erodeIterations"])
+                transform_im = cv2.erode(transform_im, kernel, iterations=int(action["actionData"]["erodeIterations"]))
             elif action["actionData"]["transformationType"] == "dilate":
                 kernel = np.ones((
-                    action["actionData"]["erodeKernelSize"],
-                    action["actionData"]["erodeKernelSize"]
+                    int(action["actionData"]["erodeKernelSize"]),
+                    int(action["actionData"]["erodeKernelSize"])
                 ), np.uint8)
-                transform_im = cv2.dilate(transform_im, kernel, iterations=action["actionData"]["erodeIterations"])
+                transform_im = cv2.dilate(transform_im, kernel, iterations=int(action["actionData"]["erodeIterations"]))
+            elif action["actionData"]["transformationType"] == "convertColor":
+                if action["actionData"]["convertColorType"] == "BGRtoGrayScale":
+                    transform_im = cv2.cvtColor(transform_im, cv2.COLOR_BGR2GRAY)
+                    transform_im = cv2.cvtColor(transform_im, cv2.COLOR_GRAY2BGR)
+                elif action["actionData"]["convertColorType"] == "invert":
+                    transform_im = cv2.cvtColor(transform_im, cv2.COLOR_BGR2GRAY)
+                    transform_im = cv2.bitwise_not(transform_im)
+                    transform_im = cv2.cvtColor(transform_im, cv2.COLOR_GRAY2BGR)
 
-            state[action['actionData']['inputExpression']]['matched_area'] = transform_im
-            state[action['actionData']['inputExpression']]['height'] = transform_im.shape[0]
-            state[action['actionData']['inputExpression']]['height'] = transform_im.shape[1]
+
+            cv2.imwrite(log_file_path + '-transformed_image.png', transform_im)
+            if len(action['actionData']['outputVarName']) > 0:
+                state[action['actionData']['outputVarName']] = state[action['actionData']['inputExpression']].copy()
+                state[action['actionData']['outputVarName']]['matched_area'] = transform_im
+                state[action['actionData']['outputVarName']]['height'] = transform_im.shape[0]
+                state[action['actionData']['outputVarName']]['height'] = transform_im.shape[1]
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "imageToTextAction":
             if action["actionData"]["conversionEngine"] == "tesseractOCR":
@@ -323,7 +351,7 @@ class SystemHostController:
                 log_file.write(str(context["script_counter"]) + '-' + str(context["script_timer"]))
         elif action["actionName"] == "sendMessageAction":
             if action["actionData"]["messagingProvider"] == "viber":
-                message = eval(action["actionData"]["inputExpression"], state.copy())
+                message = state_eval(action["actionData"]["inputExpression"], {}, state)
                 self.messaging_helper.send_viber_message(message)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "returnStatement":
@@ -360,8 +388,7 @@ class SystemHostController:
             script_logger.log('CONTROL FLOW: initiating forLoopAction-' + str(action["actionGroup"]))
 
             first_loop = True
-            state_copy = state.copy()
-            in_variable = eval(action["actionData"]["inVariables"], state_copy)
+            in_variable = state_eval(action["actionData"]["inVariables"], {}, state)
 
             script_logger.log('forLoopAction-' + str(action["actionGroup"]), 'input inVariable : ', action["actionData"]["inVariables"], ' value: ', in_variable)
             for_variable_list = action["actionData"]["forVariables"].split(',')
@@ -382,16 +409,17 @@ class SystemHostController:
                 run_queue.append(switch_action)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "codeBlock":
-            state_copy = state.copy()
-            state_copy.update({
+            globals = {
                 'glob': glob,
                 'datetime': datetime,
                 'os' : os,
-                'shutil' : shutil
-            })
+                'shutil' : shutil,
+                'numpy' : np
+            }
             # statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
             script_logger.log('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"])
-            eval(action["actionData"]["codeBlock"], state_copy)
+            exec(action["actionData"]["codeBlock"],globals,state)
+
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "databaseCRUD":
             if action["actionData"]["databaseType"] == "mongoDB":
@@ -412,14 +440,15 @@ class SystemHostController:
                 if action["actionData"]["actionType"] == "insert":
                     if len(action["actionData"]["key"]) > 0:
                         new_item = {"key": action["actionData"]["key"],
-                                    "value": eval(action["actionData"]["value"], state.copy())}
+                                    "value": state_eval(action["actionData"]["value"], {}, state)
+                                    }
                     else:
-                        new_item = eval(action["actionData"]["value"], state.copy())
+                        new_item = state_eval(action["actionData"]["value"], state.copy())
                     result = collection.insert_one(new_item)
                 elif action["actionData"]["actionType"] == "update" or\
                         action["actionData"]["actionType"] == "upsert":
                     query = {"key": action["actionData"]["key"]}
-                    update_item = {"$set": {"value": eval(action["actionData"]["value"], state.copy())}}
+                    update_item = {"$set": {"value": state_eval(action["actionData"]["value"], {}, state)}}
                     result = collection.update_one(
                         query,
                         update_item,

@@ -13,7 +13,7 @@ class ScriptLogger:
     def set_log_path(self, log_path):
         self.log_path = log_path
 
-    def log(self, *args, sep=' ', end='\n', file=None, flush=False):
+    def log(self, *args, sep=' ', end='\n', file=None, flush=True):
         text = str(datetime.datetime.now()) + ': ' + sep.join(map(str, args)) + end
         if file is None:
             with open(self.log_path, 'a') as log_file:

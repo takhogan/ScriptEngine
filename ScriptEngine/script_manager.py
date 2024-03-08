@@ -112,6 +112,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         main_script.run(log_level=log_level)
     except:
         traceback.print_exc()
+        exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())
     # update_running_scripts_file(script_name, 'pop')
 

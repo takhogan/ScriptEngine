@@ -170,3 +170,7 @@ def get_running_scripts():
             running_scripts = json.load(running_scripts_file)
 
     return running_scripts
+
+def state_eval(statement, globals, locals):
+    globals.update(locals)
+    return eval(statement, globals, locals)
