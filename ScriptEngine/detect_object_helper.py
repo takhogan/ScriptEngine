@@ -3,7 +3,7 @@ import sys
 import numpy as np
 
 sys.path.append("..")
-from script_engine_utils import generate_context_switch_action
+from script_engine_utils import generate_context_switch_action, state_eval
 from script_execution_state import ScriptExecutionState
 from image_matcher import ImageMatcher
 from detect_scene_helper import DetectSceneHelper
@@ -22,7 +22,7 @@ class DetectObjectHelper:
         if var_name is not None and len(var_name) > 0:
             if var_name not in state:
                 script_logger.log('action-' + str(action["actionGroup"]), 'variable', var_name, 'not found in state')
-            input_area = eval(var_name, state.copy())
+            input_area = state_eval(var_name, {}, state)
             if len(input_area) > 0:
                 if input_area["input_type"] == "rectangle":
                     pass
@@ -54,7 +54,7 @@ class DetectObjectHelper:
             if str(action['actionData']['maxMatches']).isdigit():
                 max_matches = int(action['actionData']['maxMatches'])
             else:
-                max_matches = eval(action['actionData']['maxMatches'], state_copy)
+                max_matches = state_eval(action['actionData']['maxMatches'], {}, state)
             excess_matches = len(matches) - max_matches
             if excess_matches > 0:
                 script_logger.log('truncated {} excess matches'.format(excess_matches))

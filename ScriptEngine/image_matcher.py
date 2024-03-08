@@ -5,6 +5,7 @@ from script_engine_utils import masked_mse
 
 MINIMUM_MATCH_PIXEL_SPACING = 15
 from script_logger import ScriptLogger
+from script_engine_utils import state_eval
 script_logger = ScriptLogger()
 class ImageMatcher:
     def __init__(self):
@@ -166,7 +167,7 @@ class ImageMatcher:
             width_translation=1,
             script_mode='test', output_cropping=None):
         h, w = screencap_search_bgr.shape[0:2]
-        dist_threshold = max((w + h) * 0.1, MINIMUM_MATCH_PIXEL_SPACING)
+        dist_threshold = max(min(w, h) * 0.2, MINIMUM_MATCH_PIXEL_SPACING)
         matches = []
         match_img_index = 1
 
@@ -287,9 +288,9 @@ class ImageMatcher:
     def preprocess_scaled_match_object(state, detectObject):
         def createScaleFunction(scaleAction):
             return lambda x,y : scaleAction["actionData"]["xCoefficient"] * x + scaleAction["actionData"]["yCoefficient"] * y + scaleAction["actionData"]["constantTerm"]
-        heightScaleAction = eval(detectObject["actionData"]["heightScale"], state.copy())
+        heightScaleAction = state_eval(detectObject["actionData"]["heightScale"], {}, state)
         heightScale = createScaleFunction(heightScaleAction)
-        widthScaleAction = eval(detectObject["actionData"]["widthScale"], state.copy())
+        widthScaleAction = state_eval(detectObject["actionData"]["widthScale"], {}, state)
         widthScale = createScaleFunction(widthScaleAction)
         source_width = heightScaleAction["actionData"]["sourceWidth"]
         source_height = heightScaleAction["actionData"]["sourceHeight"]

@@ -2,6 +2,7 @@ import random
 import numpy as np
 import cv2
 from script_logger import ScriptLogger
+from script_engine_utils import state_eval
 script_logger = ScriptLogger()
 
 class ClickActionHelper:
@@ -28,7 +29,7 @@ class ClickActionHelper:
                 )
         if var_name is not None and len(var_name) > 0:
             script_logger.log('clickaction-' + str(action["actionGroup"]), ' reading from ', var_name)
-            input_point = eval(var_name, state.copy())
+            input_point = state_eval(var_name, {}, state)
 
             if input_point["input_type"] == "rectangle":
                 width_coord = random.random() * input_point["width"]

@@ -24,7 +24,7 @@ import random
 import time
 import sys
 from scipy.stats import truncnorm
-from script_engine_utils import get_glob_digit_regex_string, is_null, masked_mse
+from script_engine_utils import get_glob_digit_regex_string, is_null, masked_mse, state_eval
 import pyautogui
 
 sys.path.append("..")
@@ -184,8 +184,7 @@ class adb_host:
 
 
     def configure_adb(self, configurationAction, state, context):
-        state_copy = state.copy()
-        emulator_type = eval(configurationAction['actionData']['emulatorType'], state_copy)
+        emulator_type = state_eval(configurationAction['actionData']['emulatorType'], {}, state)
 
         if emulator_type != 'bluestacks':
             script_logger.log('emulator type not supported!')
@@ -194,15 +193,15 @@ class adb_host:
         self.emulator_type = emulator_type
         state['EMULATOR_TYPE'] = emulator_type
 
-        adb_path = eval(configurationAction['actionData']["adbPath"], state_copy)
+        adb_path = state_eval(configurationAction['actionData']["adbPath"], {}, state)
         self.adb_path = adb_path
         state['ADB_PATH'] = adb_path
 
-        emulator_path = eval(configurationAction['actionData']["emulatorPath"], state_copy)
+        emulator_path = state_eval(configurationAction['actionData']["emulatorPath"], {}, state)
         self.emulator_path = emulator_path
         state['EMULATOR_PATH'] = emulator_path
 
-        device_name = eval(configurationAction['actionData']["deviceName"], state_copy)
+        device_name = state_eval(configurationAction['actionData']["deviceName"], {}, state)
         self.device_name = device_name
         state['DEVICE_NAME'] = device_name
 
@@ -217,7 +216,7 @@ class adb_host:
         self.window_name = instance_window_name
         state['WINDOW_NAME'] = instance_window_name
 
-        adb_port = str(eval(configurationAction['actionData']['adbPort'], state_copy))
+        adb_port = str(state_eval(configurationAction['actionData']['adbPort'], {}, state))
         self.auto_detect_adb_port = (adb_port == 'auto')
         if self.auto_detect_adb_port:
             og_port = adb_port
@@ -1076,24 +1075,12 @@ class adb_host:
             if self.host_os is not None:
                 state = self.host_os.run_script(action, state)
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
-
-        elif action["actionName"] == "conditionalStatement":
-            if eval(action["actionData"]["condition"], state):
-                script_logger.log('condition success!')
-                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
-            else:
-                script_logger.log('condition failure!')
-                return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
-        elif action["actionName"] == "sleepStatement":
-            if str(action["actionData"]["inputExpression"]).strip() == '':
-                time.sleep(float(eval(str(action["actionData"]["inputExpression"]), state)))
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationSource":
             source_point = random.choice(action["actionData"]["pointList"])
             script_logger.log('dragLocationSource : input expression : ', action["actionData"]["inputExpression"])
             drag_input = action["actionData"]["inputExpression"]
             if drag_input is not None and len(drag_input) > 0:
-                source_point = eval(action["actionData"]["inputExpression"], state)
+                source_point = state_eval(action["actionData"]["inputExpression"], {}, state)
                 script_logger.log('dragLocationSource : reading input expression ', action["actionData"]["inputExpression"])
             context["dragLocationSource"] = source_point
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
@@ -1103,7 +1090,7 @@ class adb_host:
             drag_input = action["actionData"]["inputExpression"]
             if drag_input is not None and len(drag_input) > 0:
                 script_logger.log('dragLocationTarget : input expression : ', action["actionData"]["inputExpression"])
-                target_point = eval(action["actionData"]["inputExpression"], state)
+                target_point = state_eval(action["actionData"]["inputExpression"], {}, state)
             script_logger.log('dragLocationTarget: dragging from ', source_point, ' to ', target_point)
             self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
             del context["dragLocationSource"]

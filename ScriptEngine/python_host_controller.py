@@ -95,10 +95,6 @@ class python_host:
         logs_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
         if action["actionName"] == "shellScript":
             return action, ScriptExecutionState.SUCCESS, self.run_script(action, state), context, run_queue, []
-        elif action["actionName"] == "sleepStatement":
-            if str(action["actionData"]["inputExpression"]).strip() != '':
-                time.sleep(float(eval(str(action["actionData"]["inputExpression"]), state.copy())))
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "clickAction":
             var_name = action["actionData"]["inputExpression"]
             point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
@@ -239,7 +235,7 @@ def parse_inputs(process_host, inputs):
 
 
 async def read_input():
-    script_logger.log("ADB CONTROLLER PROCESS: listening for input")
+    script_logger.log("PYTHON CONTROLLER PROCESS: listening for input")
     process_python_host = None
     device_key = None
     while True:
@@ -248,16 +244,16 @@ async def read_input():
         if not input_line:  # EOF, if the pipe is closed
             break
         inputs = shlex.split(input_line)
-        script_logger.log('ADB CONTROLLER PROCESS: received inputs ', inputs)
+        script_logger.log('PYTHON CONTROLLER PROCESS: received inputs ', inputs)
         if device_key is None:
             device_key = inputs[1]
         elif device_key != inputs[1]:
-            script_logger.log('ADB CONTROLLER: device key mismatch ', device_key, inputs[1])
+            script_logger.log('PYTHON CONTROLLER: device key mismatch ', device_key, inputs[1])
             continue
         if process_python_host is None:
             script_logger.set_log_path('./logs/{}-python-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
-            script_logger.log('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
-            script_logger.log('ADB CONTROLLER PROCESS: processing inputs ', inputs)
+            script_logger.log('PYTHON CONTROLLER PROCESS: starting process for device {}'.format(device_key))
+            script_logger.log('PYTHON CONTROLLER PROCESS: processing inputs ', inputs)
             process_python_host = python_host({
                 "dir_path": "./",
                 "width" : None,
@@ -265,7 +261,10 @@ async def read_input():
                 "scriptMode" : 'train'
             })
         if len(inputs) > 1:
-            script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_python_host, inputs)) + '<--{}-->'.format(inputs[0]) , flush=True)
+            try:
+                script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_python_host, inputs)) + '<--{}-->'.format(inputs[0]) , flush=True)
+            except pyautogui.FailSafeException as e:
+                script_logger.log('PYTHON CONTROLLER PROCESS: fail safe exception triggered', e)
 
 async def adb_controller_main():
     await asyncio.gather(read_input())

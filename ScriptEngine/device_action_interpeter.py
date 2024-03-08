@@ -3,6 +3,7 @@ import time
 from rv_helper import RandomVariableHelper
 from script_execution_state import ScriptExecutionState
 from script_logger import ScriptLogger
+from script_engine_utils import state_eval
 script_logger = ScriptLogger()
 
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
@@ -45,7 +46,7 @@ class DeviceActionInterpreter:
                         if escaped_char in KEYBOARD_KEYS:
                             keyPressKeys.append(escaped_char)
                         else:
-                            eval_expression = str(eval(escaped_char, state.copy()))
+                            eval_expression = str(state_eval(escaped_char, {}, state))
                             for eval_expression_char in eval_expression:
                                 keyPressKeys.append(eval_expression_char)
                         escaped_char = ''

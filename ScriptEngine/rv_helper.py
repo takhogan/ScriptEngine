@@ -2,6 +2,7 @@ from scipy.stats import truncnorm
 import random
 import time
 from script_logger import ScriptLogger
+from script_engine_utils import state_eval
 script_logger = ScriptLogger()
 class RandomVariableHelper:
 
@@ -14,7 +15,7 @@ class RandomVariableHelper:
         if delayArg.isdigit():
             post_delay = int(delayArg)
         else:
-            post_delay = int(eval(delayArg, state.copy()))
+            post_delay = int(state_eval(delayArg, {}, state))
         script_logger.log('post action sleep for ', post_delay, 'seconds')
         time.sleep(post_delay)
 
