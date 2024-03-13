@@ -15,15 +15,18 @@ class DeviceActionInterpreter:
 
     @staticmethod
     def parse_keyboard_action(device, keyboard_action, state, context):
+        is_hot_key = ("isHotKey" in keyboard_action["actionData"] and
+                      (keyboard_action["actionData"]["isHotKey"] == 'true' or
+                       keyboard_action["actionData"]["isHotKey"] == True))
         script_logger.log('keyboard-expression-' + str(keyboard_action["actionGroup"]), ' type: ',
               keyboard_action["actionData"]["keyboardActionType"], ' expression: ',
               keyboard_action["actionData"]["keyboardExpression"], ' isHotKey: ',
-              keyboard_action["actionData"]["isHotKey"] == 'isHotKey',
+              is_hot_key,
               (
                   keyboard_action["actionData"]["keyboardExpression"].strip()
               ).split(",") if
-              keyboard_action["actionData"]["isHotKey"] == 'isHotKey' else '')
-        if keyboard_action["actionData"]["isHotKey"] == 'isHotKey':
+              is_hot_key else '')
+        if is_hot_key:
             if keyboard_action["actionData"]["keyboardActionType"] == "keyPress":
                 device.hotkey((
                     keyboard_action["actionData"]["keyboardExpression"].strip()
