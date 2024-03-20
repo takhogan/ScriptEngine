@@ -61,7 +61,14 @@ def script_to_string(script_name, action_rows):
         }, 0, set(), unpack_childLink=False)
     else:
         return "script-" + script_name
-def parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_file_obj, dir_path, script_zip=None):
+def parse_script_file(
+        script_name,
+        action_rows_file_obj,
+        props_file_obj,
+        inputs_file_obj,
+        outputs_file_obj,
+        dir_path,
+        script_zip=None):
     script_logger.log('SCRIPT LOAD: loading script ', script_name)
     def read_and_set_image(example, action, img_type):
         # if script_zip is not None:
@@ -105,10 +112,15 @@ def parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_
     with inputs_file_obj as inputs_file:
         # script_logger.log('inputs 2 ', inputs_file.read())
         inputs = json.load(inputs_file)
+
+    with outputs_file_obj as outputs_file:
+        outputs = json.load(outputs_file)
+
     return {
         'actionRows': action_rows,
         'props': props,
-        'inputs' : inputs
+        'inputs' : inputs,
+        'outputs' : outputs
     }
 # self.use_library = use_library if use_library is not None \
 #             else (True if self.props['deploymentToLibrary'] == 'true' else False)
@@ -126,8 +138,17 @@ def parse_zip(script_name, system_script=False):
             action_rows_file_obj = script_zip.open(script_path + '/actions/actionRows.json', 'r')
             props_file_obj = script_zip.open(script_path + '/props.json', 'r')
             inputs_file_obj = script_zip.open(script_path + '/inputs.json', 'r')
+            outputs_file_obj = script_zip.open(script_path + '/outputs.json', 'r')
             script_name = script_path
-            script_obj = parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_file_obj, dir_path, script_zip)
+            script_obj = parse_script_file(
+                script_name,
+                action_rows_file_obj,
+                props_file_obj,
+                inputs_file_obj,
+                outputs_file_obj,
+                dir_path,
+                script_zip
+            )
             use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
             if use_library_scripts:
                 script_logger.log('mode use_library_scripts not supported for zip file, extract zip file to a directory')
@@ -146,8 +167,16 @@ def parse_zip(script_name, system_script=False):
                 action_rows_file_obj = script_zip.open(include_file_path + '/actions/actionRows.json', 'r')
                 props_file_obj = script_zip.open(include_file_path + '/props.json', 'r')
                 inputs_file_obj = script_zip.open(include_file_path + '/inputs.json', 'r')
+                outputs_file_obj = script_zip.open(include_file_path + '/outputs.json', 'r')
                 include_dir_path = '/'.join(dir_path.split('/')[:-1] + include_file_path.split('/'))
-                include_script_obj = parse_script_file(include_script_name, action_rows_file_obj, props_file_obj, inputs_file_obj, include_dir_path)
+                include_script_obj = parse_script_file(
+                    include_script_name,
+                    action_rows_file_obj,
+                    props_file_obj,
+                    inputs_file_obj,
+                    outputs_file_obj,
+                    include_dir_path
+                )
                 include_script_obj['props']['script_name'] = include_script_name
                 include_script_obj['props']["dir_path"] = include_dir_path
                 script_obj['include'][include_script_name] = include_script_obj
@@ -156,8 +185,16 @@ def parse_zip(script_name, system_script=False):
         action_rows_file_obj = open(script_path + '/actions/actionRows.json', 'r')
         props_file_obj = open(script_path + '/props.json', 'r')
         inputs_file_obj = open(script_path + '/inputs.json', 'r')
+        outputs_file_obj = open(script_path + '/outputs.json', 'r')
         script_name = script_path.split('/')[-1]
-        script_obj = parse_script_file(script_name, action_rows_file_obj, props_file_obj, inputs_file_obj, dir_path)
+        script_obj = parse_script_file(
+            script_name,
+            action_rows_file_obj,
+            props_file_obj,
+            inputs_file_obj,
+            outputs_file_obj,
+            dir_path
+        )
         use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
         action_rows_file_obj.close()
         props_file_obj.close()
@@ -174,12 +211,14 @@ def parse_zip(script_name, system_script=False):
             action_rows_file_obj = open(include_parse_file_path + '/actions/actionRows.json', 'r')
             props_file_obj = open(include_parse_file_path + '/props.json', 'r')
             inputs_file_obj = open(include_parse_file_path + '/inputs.json', 'r')
+            outputs_file_obj = open(include_parse_file_path + '/outputs.json', 'r')
             include_dir_path = include_file_path
             include_script_obj = parse_script_file(
                 include_script_name,
                 action_rows_file_obj,
                 props_file_obj,
                 inputs_file_obj,
+                outputs_file_obj,
                 include_parse_file_path
             )
             action_rows_file_obj.close()

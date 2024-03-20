@@ -82,6 +82,7 @@ class ScriptExecutor:
         self.actions = script_obj["actionRows"][0]["actions"]
         self.action_rows = script_obj["actionRows"]
         self.inputs = script_obj["inputs"]
+        self.outputs = script_obj["outputs"]
 
         # TODO IP shouldn't be hard coded
         self.include_scripts = script_obj['include']
@@ -149,26 +150,63 @@ class ScriptExecutor:
             self.state.update(input_vars)
         # script_logger.log('state (2) : ', self.state)
 
-    def parse_inputs(self):
+    def parse_inputs(self, input_state):
         script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing_inputs ', self.inputs)
         for [var_name, input_expression, default_value] in self.inputs:
             if (len(input_expression) == 0) or \
-               ((default_value or default_value == "true") and (var_name in self.state and self.state[var_name] is not None)):
+               ((default_value or default_value == "true") and (var_name in input_state and input_state[var_name] is not None)):
                 script_logger.log(self.props['script_name'],' CONTROL FLOW: Parsing Input: ', var_name,
-                      " Value: ", self.state[var_name] if var_name in self.state else 'None',
                       " Default Parameter? ", default_value,
                       " Overwriting Default? True" if default_value else "")
+                self.state[var_name] = input_state[var_name]
+                script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Input: ', var_name,
+                                  " Value: ", input_state[var_name] if var_name in input_state else 'None',
+)
                 continue
             globs = {
                 'glob' : glob,
-                'datetime' : datetime
+                'datetime' : datetime,
+                're' : re
             }
-            eval_result = state_eval(input_expression, globs, self.state)
-            self.state[var_name] = eval_result
             script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Input: ', var_name,
-                  " Value: ", eval_result,
-                  " Default Parameter? ", default_value,
-                  " Overwriting Default? False" if default_value else "")
+                              " Default Parameter? ", default_value,
+                              " Overwriting Default? False" if default_value else "")
+            state_copy = input_state.copy()
+            state_copy.update(self.state)
+            eval_result = state_eval(input_expression, globs, state_copy)
+            self.state[var_name] = eval_result
+            script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Input: ', var_name,
+                                " Value: ", eval_result)
+
+
+    def parse_outputs(self, outputState):
+        script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing outputs ', self.outputs)
+        for [var_name, input_expression, default_value] in self.outputs:
+            if (len(input_expression) == 0) or \
+                    ((default_value or default_value == "true") and (
+                            var_name in self.state and self.state[var_name] is not None)):
+                script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Output: ', var_name,
+                                  " Default Parameter? ", default_value,
+                                  " Overwriting Default? True" if default_value else "")
+                outputState[var_name] = self.state[var_name]
+                script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Output: ', var_name,
+                                  " Value: ", self.state[var_name] if var_name in self.state else 'None',
+                                  )
+                continue
+            globs = {
+                'glob': glob,
+                'datetime': datetime,
+                're': re
+            }
+            script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Output: ', var_name,
+                              " Default Parameter? ", default_value,
+                              " Overwriting Default? False" if default_value else "")
+            state_copy = self.state.copy()
+            state_copy.update(state_copy)
+            eval_result = state_eval(input_expression, globs, state_copy)
+            state_copy[var_name] = eval_result
+            script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Output: ', var_name,
+                              " Value: ", eval_result)
 
     def log_action_details(self, action):
         now = datetime.datetime.now()
@@ -286,25 +324,8 @@ class ScriptExecutor:
                                 context["parent_action"] is not None and \
                                 context["parent_action"]["actionName"] == "searchPatternContinueAction"
 
-            parsed_input_vars = list(
-                map(
-                    lambda input_var: input_var.strip(),
-                filter(
-                    lambda input_vars: input_vars != '', action["actionData"]["inputVars"].split(",")
-                ))
-            )
-            input_vars = {
-                input_var_key: state[input_var_key]
-                if input_var_key in state else None
-                for input_var_key in parsed_input_vars
-            }
-            script_logger.log(self.props["script_name"],
-                  'CONTROL FLOW passing inputs',
-                  parsed_input_vars,
-                  'from parent state to ',
-                  action["actionData"]["scriptName"], input_vars)
-            # script_logger.log(' state (3) : ', state)
-            input_vars = None if len(input_vars) == 0 else input_vars
+            child_state = {}
+
             # creates script engine object
             if is_new_script:
                 script_name = action["actionData"]["scriptName"].strip()
@@ -322,6 +343,8 @@ class ScriptExecutor:
                     ref_script = self.include_scripts[script_name]
                 else:
                     ref_script = parse_zip(script_name, False)
+                # script_logger.log(' state (3) : ', state)
+
                 ref_script['include'] = self.include_scripts
                 child_context["actionOrder"] = action["actionData"]["actionOrder"] if "actionOrder" in action["actionData"] else "sequential"
                 child_context["scriptMaxActionAttempts"] = action["actionData"]["scriptMaxActionAttempts"] if "scriptMaxActionAttempts" in action["actionData"] else ""
@@ -335,10 +358,10 @@ class ScriptExecutor:
                             context["parent_action"]["actionData"]["searchPatternID"]
                         ]
                     }
-                    if input_vars is not None:
-                        input_vars.update(search_area_handler_state)
+                    if child_state is not None:
+                        child_state.update(search_area_handler_state)
                     else:
-                        input_vars = search_area_handler_state
+                        child_state = search_area_handler_state
                     ref_script_executor = ScriptExecutor(
                         ref_script,
                         self.props["timeout"],
@@ -349,7 +372,7 @@ class ScriptExecutor:
                         log_level=self.log_level,
                         parent_folder=self.log_folder,
                         context=child_context,
-                        state=input_vars,
+                        state=child_state,
                         create_log_folders=False
                     )
                 else:
@@ -363,15 +386,18 @@ class ScriptExecutor:
                         log_level=self.log_level,
                         parent_folder=self.log_folder,
                         context=child_context,
-                        state=input_vars,
+                        state=child_state,
                         create_log_folders=False
                     )
             else:
-                action["actionData"]["initializedScript"].rewind(input_vars)
+                action["actionData"]["initializedScript"].rewind(child_state)
                 ref_script_executor = action["actionData"]["initializedScript"]
 
                 ref_script_executor.context["script_counter"] = self.context["script_counter"]
                 ref_script_executor.context["script_timer"] = self.context["script_timer"]
+
+            script_logger.log('CONTROL FLOW parsing inputs for ', self.props["script_name"])
+            ref_script_executor.parse_inputs(self.state)
 
             if 'searchAreaObjectHandler' in child_context["script_attributes"]:
                 ref_script_executor.context["object_handler_encountered"] = False
@@ -392,31 +418,24 @@ class ScriptExecutor:
                 parent_folder=self.log_folder,
                 refresh_start_time=True
             )
+
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing child script', action['actionData']['scriptName'])
+
             if action["actionData"]["runMode"] == "run":
-                ref_script_executor.run()
+                ref_script_executor.run(parse_inputs=False)
             elif action["actionData"]["runMode"] == "runOne":
-                ref_script_executor.run_one()
+                ref_script_executor.run_one(parse_inputs=False)
             elif action["actionData"]["runMode"] == "runToFailure":
-                ref_script_executor.run_to_failure()
+                ref_script_executor.run_to_failure(parse_inputs=False)
 
             if 'paused_script' in ref_script_executor.context:
                 self.context['paused_script'] = ''#paused script file name
                 #probably set status to something special
 
-            parsed_output_vars = list(
-                map(
-                    lambda output_var : output_var.strip(),
-                filter(
-                    lambda output_vars: output_vars != '', action["actionData"]["outputVars"].split(",")
-                ))
-            )
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing script outputs for', action['actionData']['scriptName'])
+
             script_logger.set_log_path(self.log_folder + 'stdout.txt')
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing child script', action['actionData']['scriptName'],' output vars ', parsed_output_vars)
-            for output_var in parsed_output_vars:
-                output_var_val = ref_script_executor.state[
-                    output_var] if output_var in ref_script_executor.state else None
-                state[output_var] = output_var_val
-                script_logger.log(self.props['script_name'] + " CONTROL FLOW: output var ", output_var,':', output_var_val)
+            ref_script_executor.parse_outputs(self.state)
             self.context["script_counter"] = ref_script_executor.context["script_counter"]
             self.context["script_timer"] = ref_script_executor.context["script_timer"]
 
@@ -728,7 +747,7 @@ class ScriptExecutor:
 
     def run_to_failure(self, log_level=None, parse_inputs=True):
         if parse_inputs:
-            self.parse_inputs()
+            self.parse_inputs(self.state)
         script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: runToFailure ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
@@ -773,7 +792,7 @@ class ScriptExecutor:
 
     def run_one(self, log_level=None, parse_inputs=True):
         if parse_inputs:
-            self.parse_inputs()
+            self.parse_inputs(self.state)
         script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: runOne ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
@@ -859,7 +878,7 @@ class ScriptExecutor:
 
     def run(self, log_level=None, parse_inputs=True):
         if parse_inputs:
-            self.parse_inputs()
+            self.parse_inputs(self.state)
         script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: run ", "branchingBehavior: ", self.context["branching_behavior"])
         if log_level is not None:
             self.log_level = log_level
