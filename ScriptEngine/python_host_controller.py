@@ -67,34 +67,40 @@ class python_host:
             script_logger.log('clickAction: adjusted coords for pyautogui', x, y, flush=True)
         pyautogui.click(x=x, y=y, button=button)
 
-    def run_script(self, action, state):
+    def run_script(self, action, state, logs_path):
         # script_logger.log('run_script: ', action)
-        if action["actionData"]["openInNewWindow"]:
-
-            run_command = "start cmd /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
-            script_logger.log('shellScript-' + str(action["actionGroup"]), ' opening in new window run command : ', run_command)
-            os.system(run_command)
-            return state
-        elif action["actionData"]["awaitScript"]:
-            await_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
-            script_logger.log('shellScript-' + str(action["actionGroup"]), ' running command ', await_command, ' and awaiting output')
-            outputs = subprocess.run(await_command, cwd="/", shell=True, capture_output=True)
-            state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
-            state[action["actionData"]["returnCodeOutputVarName"]] = outputs.returncode
-            script_logger.log('shellScript-' + str(action["actionGroup"]), 'command output : ', outputs)
-            return state
-        else:
-            process_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
-            script_logger.log('shellScript-' + str(action["actionGroup"]), ' starting process ', process_command, ' without awaiting output')
-            proc = subprocess.Popen(process_command, cwd="/", shell=True)
-            return state
+        with open(logs_path + '-shellScript.txt', 'w') as log_file:
+            if action["actionData"]["openInNewWindow"]:
+                run_command = "start cmd /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
+                script_logger.log('shellScript-' + str(action["actionGroup"]), ' opening in new window run command : ', run_command)
+                log_file.write('running with os.system:')
+                log_file.write(run_command)
+                os.system(run_command)
+                return state
+            elif action["actionData"]["awaitScript"]:
+                await_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
+                script_logger.log('shellScript-' + str(action["actionGroup"]), ' running command ', await_command, ' and awaiting output')
+                log_file.write('running with subprocess.run:')
+                log_file.write(await_command)
+                outputs = subprocess.run(await_command, cwd="/", shell=True, capture_output=True)
+                state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
+                state[action["actionData"]["returnCodeOutputVarName"]] = outputs.returncode
+                script_logger.log('shellScript-' + str(action["actionGroup"]), 'command output : ', outputs)
+                return state
+            else:
+                process_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
+                script_logger.log('shellScript-' + str(action["actionGroup"]), ' starting process ', process_command, ' without awaiting output')
+                log_file.write('running with subprocess.Popen:')
+                log_file.write(process_command)
+                proc = subprocess.Popen(process_command, cwd="/", shell=True)
+                return state
 
 
     def handle_action(self, action, state, context, run_queue, log_level, log_folder, lazy_eval=False):
         # script_logger.log('inside host', self.width, self.height)
         logs_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
         if action["actionName"] == "shellScript":
-            return action, ScriptExecutionState.SUCCESS, self.run_script(action, state), context, run_queue, []
+            return action, ScriptExecutionState.SUCCESS, self.run_script(action, state, logs_path), context, run_queue, []
         elif action["actionName"] == "clickAction":
             var_name = action["actionData"]["inputExpression"]
             point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)

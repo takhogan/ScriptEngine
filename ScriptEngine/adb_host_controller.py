@@ -1073,7 +1073,7 @@ class adb_host:
 
         elif action["actionName"] == "shellScript":
             if self.host_os is not None:
-                state = self.host_os.run_script(action, state)
+                state = self.host_os.run_script(action, state, logs_path)
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationSource":
             source_point = random.choice(action["actionData"]["pointList"])
