@@ -291,11 +291,7 @@ class SystemHostController:
                         action['actionData']['makeBorder'] == 'true'
                     ):
                     if len(image_to_text_input.shape) == 2:
-                        border_color = [
-                            image_to_text_input[0, 0],
-                            image_to_text_input[0, 0],
-                            image_to_text_input[0, 0]
-                        ]
+                        border_color = image_to_text_input[0, 0],
                     else:
                         border_color = image_to_text_input[0,0][::-1]
                     script_logger.log('imageToText border_color', border_color)
