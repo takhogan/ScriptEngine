@@ -56,7 +56,7 @@ class SystemHostController:
         if action["actionName"] == "conditionalStatement":
             condition = action["actionData"]["condition"].replace("\n", " ").strip()
             statement_strip = sanitize_input(condition, state)
-            script_logger.log('condition : ', condition, list(map(ord, condition)), statement_strip)
+            script_logger.log('condition : ', condition, statement_strip)
             if state_eval('(' + condition + ')',{}, state):
                 script_logger.log('conditionalStatement-' + str(action["actionGroup"]), 'condition success!')
                 status = ScriptExecutionState.SUCCESS
@@ -286,6 +286,16 @@ class SystemHostController:
                             31,
                             2
                         )
+                if 'makeBorder' in action['actionData'] and (
+                        action['actionData']['makeBorder'] == True or
+                        action['actionData']['makeBorder'] == 'true'
+                    ):
+                    border_color = [255, 255, 255]
+                    # Add a 2-pixel border to the image
+                    image_to_text_input = cv2.copyMakeBorder(
+                        image_to_text_input, 2, 2, 2, 2,
+                        cv2.BORDER_CONSTANT, value=border_color
+                    )
 
                 cv2.imwrite(log_file_path + '-image_to_text.png', image_to_text_input)
                 tesseract_params = [
