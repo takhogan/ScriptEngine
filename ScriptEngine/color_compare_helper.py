@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 
 from skimage.color import rgb2lab
 from script_logger import ScriptLogger
@@ -10,7 +11,7 @@ class ColorCompareHelper:
         pass
 
     @staticmethod
-    def handle_color_compare(screencap_im_bgr, action, state):
+    def handle_color_compare(screencap_im_bgr, action, state, logs_path):
 
         script_logger.log('colorCompareAction-' + str(action["actionGroup"]) + ' compareMode: ' + action["actionData"][
             "compareMode"] + ' reference color: ' + str(action['actionData']['referenceColor']))
@@ -48,9 +49,12 @@ class ColorCompareHelper:
                 img_colors = [0, 0, 0]  # Default/fallback values in case there's no mode color key
             script_logger.log('colorCompareAction-' + str(action["actionGroup"]), 'mode color:', str(img_colors))
 
-        color_score = (100 - ColorCompareHelper.compare_colors(img_colors, [int(val) for val in action['actionData'][
-            'referenceColor']])) / 100
+        ref_color_ints = list(map(int, action['actionData'][
+            'referenceColor']))
+        color_score = (100 - ColorCompareHelper.compare_colors(img_colors, ref_color_ints)) / 100
         script_logger.log('colorCompareAction-' + str(action["actionGroup"]), 'color score', color_score)
+        ColorCompareHelper.create_color_image(img_colors, logs_path + 'compare_image_color.png')
+        ColorCompareHelper.create_color_image(ref_color_ints, logs_path + 'reference_image_color.png')
         return color_score
 
     @staticmethod
@@ -64,3 +68,13 @@ class ColorCompareHelper:
         # Calculate the Euclidean distance between the two LAB colors (Delta E)
         delta_e = np.sqrt(np.sum((color1_lab - color2_lab) ** 2))
         return delta_e
+
+    @staticmethod
+    def create_color_image(rgb, filename):
+        # Create a 64x64x3 array of the specified color
+        # Note: OpenCV uses BGR format instead of RGB
+        color = np.array([rgb[2], rgb[1], rgb[0]])  # Convert RGB to BGR
+        image = np.full((64, 64, 3), color, dtype=np.uint8)
+
+        # Write the image to a file
+        cv2.imwrite(filename, image)

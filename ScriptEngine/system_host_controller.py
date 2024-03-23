@@ -428,8 +428,9 @@ class SystemHostController:
             }
             # statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
             script_logger.log('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"])
+            with open(log_file_path + '-codeblock.txt', 'w') as log_file:
+                log_file.write(action["actionData"]["codeBlock"])
             exec(action["actionData"]["codeBlock"],globals,state)
-
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "databaseCRUD":
             if action["actionData"]["databaseType"] == "mongoDB":
