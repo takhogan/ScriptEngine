@@ -290,7 +290,7 @@ class SystemHostController:
                         action['actionData']['makeBorder'] == True or
                         action['actionData']['makeBorder'] == 'true'
                     ):
-                    border_color = [255, 255, 255]
+                    border_color = image_to_text_input[0,0][::-1]
                     # Add a 2-pixel border to the image
                     image_to_text_input = cv2.copyMakeBorder(
                         image_to_text_input, 2, 2, 2, 2,
