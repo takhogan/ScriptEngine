@@ -298,6 +298,7 @@ class SystemHostController:
                         ]
                     else:
                         border_color = image_to_text_input[0,0][::-1]
+                    script_logger.log('imageToText border_color', border_color)
                     # Add a 2-pixel border to the image
                     image_to_text_input = cv2.copyMakeBorder(
                         image_to_text_input, 2, 2, 2, 2,
