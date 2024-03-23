@@ -291,10 +291,10 @@ class SystemHostController:
                         action['actionData']['makeBorder'] == 'true'
                     ):
                     if len(image_to_text_input.shape) == 2:
-                        border_color = image_to_text_input[0, 0]
+                        border_color = int(image_to_text_input[0, 0])
                     else:
-                        border_color = image_to_text_input[0,0][::-1]
-                    script_logger.log('imageToText border_color', border_color)
+                        border_color = list(map(int, image_to_text_input[0,0][::-1]))
+                    script_logger.log('imageToText border_color', border_color, type(border_color))
                     # Add a 2-pixel border to the image
                     image_to_text_input = cv2.copyMakeBorder(
                         image_to_text_input, 2, 2, 2, 2,
