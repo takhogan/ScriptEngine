@@ -153,15 +153,20 @@ class ScriptExecutor:
     def parse_inputs(self, input_state):
         script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing_inputs ', self.inputs)
         for [var_name, input_expression, default_value] in self.inputs:
+            var_name = var_name.strip()
             if (len(input_expression) == 0) or \
                ((default_value or default_value == "true") and (var_name in input_state and input_state[var_name] is not None)):
                 script_logger.log(self.props['script_name'],' CONTROL FLOW: Parsing Input: ', var_name,
                       " Default Parameter? ", default_value,
-                      " Overwriting Default? True" if default_value else "")
-                self.state[var_name] = input_state[var_name]
+                      " Overwriting Default? True" if default_value else "Reading from input state")
+                try:
+                    self.state[var_name] = input_state[var_name]
+                except KeyError as k:
+                    script_logger.log('ERROR: key error while parsing output, keys present in input state: ' + ', '.join(list(input_state)))
+                    raise
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Input: ', var_name,
-                                  " Value: ", input_state[var_name] if var_name in input_state else 'None',
-)
+                                  " Value: ", input_state[var_name] if var_name in input_state else 'None'
+                )
                 continue
             globs = {
                 'glob' : glob,
@@ -182,16 +187,24 @@ class ScriptExecutor:
     def parse_outputs(self, outputState):
         script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing outputs ', self.outputs)
         for [var_name, input_expression, default_value] in self.outputs:
+            var_name = var_name.strip()
             if (len(input_expression) == 0) or \
                     ((default_value or default_value == "true") and (
                             var_name in self.state and self.state[var_name] is not None)):
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Output: ', var_name,
                                   " Default Parameter? ", default_value,
-                                  " Overwriting Default? True" if default_value else "")
-                outputState[var_name] = self.state[var_name]
+                                  " Overwriting Default? True" if default_value else "reading from child state")
+                try:
+                    outputState[var_name] = self.state[var_name]
+                except KeyError as k:
+                    script_logger.log('ERROR: key error while parsing output, keys present in input state: ' + ', '.join(list(self.state)))
+                    if self.status == ScriptExecutionState.FINISHED_FAILURE:
+                        script_logger.log(self.props['script_name'], 'script finished with failure, ignoring key error')
+                        continue
+                    raise
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Output: ', var_name,
-                                  " Value: ", self.state[var_name] if var_name in self.state else 'None',
-                                  )
+                                  " Value: ", self.state[var_name] if var_name in self.state else 'None'
+                )
                 continue
             globs = {
                 'glob': glob,
@@ -202,9 +215,9 @@ class ScriptExecutor:
                               " Default Parameter? ", default_value,
                               " Overwriting Default? False" if default_value else "")
             state_copy = self.state.copy()
-            state_copy.update(state_copy)
-            eval_result = state_eval(input_expression, globs, state_copy)
-            state_copy[var_name] = eval_result
+            state_copy.update(outputState)
+            eval_result = state_eval(input_expression, globs, state_copy, crashonerror=self.status !=ScriptExecutionState.FINISHED_FAILURE)
+            outputState[var_name] = eval_result
             script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Output: ', var_name,
                               " Value: ", eval_result)
 
@@ -396,8 +409,7 @@ class ScriptExecutor:
                 ref_script_executor.context["script_counter"] = self.context["script_counter"]
                 ref_script_executor.context["script_timer"] = self.context["script_timer"]
 
-            script_logger.log('CONTROL FLOW parsing inputs for ', self.props["script_name"])
-            ref_script_executor.parse_inputs(self.state)
+            ref_script_executor.parse_inputs(state)
 
             if 'searchAreaObjectHandler' in child_context["script_attributes"]:
                 ref_script_executor.context["object_handler_encountered"] = False
@@ -432,10 +444,10 @@ class ScriptExecutor:
                 self.context['paused_script'] = ''#paused script file name
                 #probably set status to something special
 
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing script outputs for', action['actionData']['scriptName'])
-
             script_logger.set_log_path(self.log_folder + 'stdout.txt')
-            ref_script_executor.parse_outputs(self.state)
+
+            ref_script_executor.parse_outputs(state)
+
             self.context["script_counter"] = ref_script_executor.context["script_counter"]
             self.context["script_timer"] = ref_script_executor.context["script_timer"]
 

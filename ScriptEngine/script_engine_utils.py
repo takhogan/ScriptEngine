@@ -171,6 +171,14 @@ def get_running_scripts():
 
     return running_scripts
 
-def state_eval(statement, globals, locals):
+def state_eval(statement, globals, locals, crashonerror=True):
     globals.update(locals)
-    return eval(statement, globals, locals)
+    try:
+        return eval(statement, globals, locals)
+    except KeyError as k:
+        script_logger.log(
+            'ERROR: key error while parsing eval, keys present in state: ' + ', '.join(list(globals)))
+        if not crashonerror:
+            script_logger.log('script finished with failure, ignoring key error')
+            return None
+        raise
