@@ -47,8 +47,8 @@ class ClickActionHelper:
         return point_choice, state, context
 
     @staticmethod
-    def draw_click(screenshot_bgr, point_choice, logs_path, log_level='info'):
+    def draw_click(screenshot_bgr, point_choice, logs_path, log_level='info', logs_prefix='click_location'):
         # script_logger.log(type(point_choice[0]), type(point_choice[1]), type(point_choice))
         cv2.circle(screenshot_bgr, list(map(int,point_choice)), radius=5, color=(0, 0, 255), thickness=-1)
         if log_level == 'info':
-            cv2.imwrite(logs_path + 'click_location-' + str(point_choice[0]) + '-' + str(point_choice[1]) + '.png', screenshot_bgr)
+            cv2.imwrite(logs_path + logs_prefix + '-' + str(point_choice[0]) + '-' + str(point_choice[1]) + '.png', screenshot_bgr)

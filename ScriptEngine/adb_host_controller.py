@@ -1093,6 +1093,9 @@ class adb_host:
                 target_point = state_eval(action["actionData"]["inputExpression"], {}, state)
             script_logger.log('dragLocationTarget: dragging from ', source_point, ' to ', target_point)
             self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
+            ClickActionHelper.draw_click(self.screenshot(), source_point, logs_path, log_level, logs_prefix='drag_source')
+            ClickActionHelper.draw_click(self.screenshot(), target_point, logs_path, log_level, logs_prefix='drag_target')
+
             del context["dragLocationSource"]
             # script_logger.log(source_point)
             # script_logger.log(target_point)
@@ -1103,7 +1106,7 @@ class adb_host:
             if screencap_im_bgr is None:
                 script_logger.log('colorCompareAction-' + str(action["actionGroup"]) + ' taking screenshot')
                 screencap_im_bgr = self.screenshot()
-            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state)
+            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state, logs_path)
             if color_score > float(action['actionData']['threshold']):
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:

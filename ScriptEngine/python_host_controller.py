@@ -175,7 +175,7 @@ class python_host:
             if screencap_im_bgr is None:
                 script_logger.log('colorCompareAction-' + str(action["actionGroup"]) + ' taking screenshot')
                 screencap_im_bgr = self.screenshot()
-            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state)
+            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state, logs_path)
             if color_score > float(action['actionData']['threshold']):
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
