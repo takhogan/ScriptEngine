@@ -102,6 +102,7 @@ class python_host:
         if action["actionName"] == "shellScript":
             return action, ScriptExecutionState.SUCCESS, self.run_script(action, state, logs_path), context, run_queue, []
         elif action["actionName"] == "clickAction":
+            action["actionData"]["clickCount"] = int(action["actionData"]["clickCount"])
             var_name = action["actionData"]["inputExpression"]
             point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
             # script_logger.log('debug', point_choice, self.width, self.height, self.props['width'])
