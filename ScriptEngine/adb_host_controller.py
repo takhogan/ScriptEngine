@@ -1040,6 +1040,7 @@ class adb_host:
                 )
                 return action, status, state, context, run_queue, update_queue
         elif action["actionName"] == "clickAction":
+            action["actionData"]["clickCount"] = int(action["actionData"]["clickCount"])
             # if '__builtins__' in state:
             #     script_logger.log('deleting builtins')
             #     del state['__builtins__']
