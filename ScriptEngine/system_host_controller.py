@@ -35,7 +35,7 @@ class SystemHostController:
         def sanitize_input(statement_input, state):
             statement_input = statement_input.strip()
             statement_input = statement_input.replace('\n', ' ')
-            operator_pattern = r'[\[\]()+-/*%=<>!^|&~]'
+            operator_pattern = r'[\[\]\(\)+-/*%=<>!^|&~]'
             word_operator_pattern = r'( is )|( in )|( not )|( and )|( or )'
             statement_strip = re.sub(operator_pattern, ' ', statement_input)
             statement_strip = re.sub(word_operator_pattern, ' ', statement_strip)
@@ -47,7 +47,7 @@ class SystemHostController:
                 else:
                     try:
                         term_eval = state_eval(term, {}, state)
-                    except (TypeError,KeyError) as p_err:
+                    except (TypeError,KeyError,SyntaxError) as p_err:
                         script_logger.log(p_err)
                         term_eval = None
                     term_str = str(term) + ': ' + str(term_eval) + ': ' + str(type(term_eval))
@@ -68,8 +68,9 @@ class SystemHostController:
             # script_logger.log(' state (7) : ', state)
         elif action["actionName"] == "variableAssignment":
             # script_logger.log('input Parser : ', action["actionData"]["inputParser"])
+
             outputVarName = action["actionData"]["outputVarName"].strip()
-            outputVarNameInState =  outputVarName in state
+            outputVarNameInState = outputVarName in state
             if (action["actionData"]["setIfNull"] == "true" or action["actionData"]["setIfNull"])\
                     and outputVarNameInState and state[outputVarName] is not None:
                 script_logger.log('output variable ', outputVarName, ' was not null')
@@ -78,8 +79,11 @@ class SystemHostController:
                     log_file.write('[setIfNull was not null] ' + str(action["actionData"]["inputExpression"]) + ':' + str(state[action["actionData"]["outputVarName"]]))
                 return action, status, state, context, run_queue, []
 
-            script_logger.log('variableAssignment-' + str(action["actionGroup"]),' inputExpression : ', action["actionData"]["inputExpression"], end = '')
+            statement_strip = sanitize_input(action["actionData"]["inputExpression"], state)
+
+            script_logger.log('variableAssignment-' + str(action["actionGroup"]),' inputExpression : ', action["actionData"]["inputExpression"], 'inputs', statement_strip, end = '')
             # script_logger.log(' state (4) ', state)
+
             expression = action["actionData"]["inputExpression"].replace("\n", " ")
             if action["actionData"]["inputParser"] == 'eval':
                 expression = state_eval(expression, {}, state)
@@ -112,7 +116,9 @@ class SystemHostController:
                 state[outputVarName] = expression
             status = ScriptExecutionState.SUCCESS
             with open(log_file_path + '-val.txt', 'w') as log_file:
-                log_file.write(str(outputVarName) + ':' + str(expression))
+                log_file.write('inputs: ' +  str(statement_strip))
+                log_file.write(str(outputVarName) + ':=' + str(expression) + '\n')
+
         elif action["actionName"] == "sleepStatement":
             if str(action["actionData"]["inputExpression"]).strip() != '':
                 sleep_length = float(state_eval(str(action["actionData"]["inputExpression"]), {}, state))
@@ -346,23 +352,29 @@ class SystemHostController:
             success_states = context["success_states"] if "success_states" in context else None
             script_counter = context["script_counter"]
             script_timer = context["script_timer"]
-            if action["actionData"]["state"] is not None:
-                state = action["actionData"]["state"].copy()
-            if action["actionData"]["context"] is not None:
-                context = action["actionData"]["context"].copy()
-            if 'state' in action["actionData"]["update_dict"]:
-                for key, value in action["actionData"]["update_dict"]["state"].items():
-                    state[key] = value
-            if 'context' in action["actionData"]["update_dict"]:
-                for key, value in action["actionData"]["update_dict"]["context"].items():
-                    context[key] = value
-            if success_states is not None:
-                context["success_states"] = success_states
-            context["script_counter"] = script_counter
-            context["script_timer"] = script_timer
-            status = ScriptExecutionState.SUCCESS
             with open(log_file_path + '-vars.txt', 'w') as log_file:
+                if action["actionData"]["state"] is not None:
+                    state = action["actionData"]["state"].copy()
+                if action["actionData"]["context"] is not None:
+                    context = action["actionData"]["context"].copy()
+                if 'state' in action["actionData"]["update_dict"]:
+                    for key, value in action["actionData"]["update_dict"]["state"].items():
+                        state[key] = value
+                    log_file.write('context switch state' + str(list(action["actionData"]["update_dict"]["state"])))
+
+                if 'context' in action["actionData"]["update_dict"]:
+                    for key, value in action["actionData"]["update_dict"]["context"].items():
+                        context[key] = value
+                    log_file.write('context switch context' + str(list(action["actionData"]["update_dict"]["context"])))
+
+                if success_states is not None:
+                    context["success_states"] = success_states
+                context["script_counter"] = script_counter
+                context["script_timer"] = script_timer
+                status = ScriptExecutionState.SUCCESS
+
                 log_file.write(str(context["script_counter"]) + '-' + str(context["script_timer"]))
+
         elif action["actionName"] == "sendMessageAction":
             if action["actionData"]["messagingProvider"] == "viber":
                 message = state_eval(action["actionData"]["inputExpression"], {}, state)

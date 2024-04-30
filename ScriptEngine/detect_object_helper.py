@@ -58,7 +58,7 @@ class DetectObjectHelper:
             excess_matches = len(matches) - max_matches
             if excess_matches > 0:
                 script_logger.log('truncated {} excess matches'.format(excess_matches))
-            for match in matches[1:max_matches]:
+            for match_index,match in enumerate(matches[1:max_matches]):
                 switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
                     "state": {
                         action['actionData']['outputVarName']: match
@@ -72,6 +72,9 @@ class DetectObjectHelper:
                         switch_action
                     ]
                 )
+                script_logger.log('DetectObjectHelper: creating contextSwitchAction-' +\
+                                  str(switch_action['actionGroup']) + ' for match number ' + str(match_index) +\
+                                  ' child groups: ' + str(action["childGroups"]))
             update_queue.append(
                 [
                     'update',
