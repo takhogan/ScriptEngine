@@ -91,10 +91,8 @@ def parse_script_file(
                 include_contained_area = 'includeContainedAreaInOutput' in action["actionData"]["detectorAttributes"]
                 exclude_matched_area = 'excludeMatchedAreaFromOutput' in action["actionData"]["detectorAttributes"]
                 for example_index,positive_example in enumerate(action["actionData"]["positiveExamples"]):
-                    script_logger.log('positive', action["actionData"]["positiveExamples"])
                     read_and_set_image(positive_example, action, "mask")
                     positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
-                    script_logger.log("SCRIPT LOAD : ", action["actionName"] + "-" + str(action["actionGroup"]), positive_example["mask_single_channel"].shape)
                     read_and_set_image(positive_example, action, "containedAreaMask")
                     read_and_set_image(positive_example, action, "img")
                     positive_example = set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)
@@ -110,7 +108,6 @@ def parse_script_file(
         props = json.load(props_file)
 
     with inputs_file_obj as inputs_file:
-        # script_logger.log('inputs 2 ', inputs_file.read())
         inputs = json.load(inputs_file)
 
     with outputs_file_obj as outputs_file:
@@ -155,7 +152,7 @@ def parse_zip(script_name, system_script=False):
                 exit(1)
             script_obj['props']["script_path"] = script_file_path
             script_obj['props']["script_name"] = script_name
-            script_obj['include'] = {}
+            include_scripts = {}
             for file_path_split in filter(lambda namelist: namelist[-1] == 'props.json',
                                           filter(lambda namelist: len(namelist) == 4,
                                                  filter(lambda namelist: namelist[0] != '__MACOSX',
@@ -179,7 +176,7 @@ def parse_zip(script_name, system_script=False):
                 )
                 include_script_obj['props']['script_name'] = include_script_name
                 include_script_obj['props']["dir_path"] = include_dir_path
-                script_obj['include'][include_script_name] = include_script_obj
+                include_scripts[include_script_name] = include_script_obj
     else:
         script_path = script_file_path
         action_rows_file_obj = open(script_path + '/actions/actionRows.json', 'r')
@@ -202,7 +199,7 @@ def parse_zip(script_name, system_script=False):
 
         script_obj['props']["script_path"] = script_file_path
         script_obj['props']["script_name"] = script_name
-        script_obj['include'] = {}
+        include_scripts = {}
         for include_file_path in map(lambda filepath: filepath.replace('\\','/'), glob.glob(script_path + '/include/*/')):
             include_file_path = include_file_path[:-1]
             include_script_name = include_file_path.split('/')[-1]
@@ -226,6 +223,8 @@ def parse_zip(script_name, system_script=False):
             inputs_file_obj.close()
             include_script_obj['props']['script_name'] = include_script_name
             include_script_obj['props']["dir_path"] = include_dir_path
-            script_obj['include'][include_script_name] = include_script_obj
+            include_scripts[include_script_name] = include_script_obj
     script_obj['props']["dir_path"] = dir_path
+    include_scripts[script_name] = script_obj
+    script_obj['include'] = include_scripts
     return script_obj
