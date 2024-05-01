@@ -118,6 +118,51 @@ class SystemHostController:
             with open(log_file_path + '-val.txt', 'w') as log_file:
                 log_file.write('inputs: ' +  str(statement_strip))
                 log_file.write(str(outputVarName) + ':=' + str(expression) + '\n')
+        elif action["actionName"] == "countToThresholdAction":
+            counterVarName = action["actionData"]["counterVarName"].strip()
+            counterThreshold = action["actionData"]["counterThreshold"].strip()
+            incrementBy = action["actionData"]["incrementBy"].strip()
+            threhold_stripped = sanitize_input(counterThreshold, state)
+            incrementby_stripped = sanitize_input(incrementBy, state)
+            script_logger.log(
+                'countToThreshold-' + str(action["actionGroup"]),
+                'with counter name', counterVarName,
+                'threshold params', threhold_stripped,
+                'and incrementBy params', incrementby_stripped
+            )
+            counter_value = state_eval(action["actionData"]["counterVarName"], {}, state)
+            threshold_value = state_eval(action["actionData"]["counterThreshold"], {}, state)
+            with open(log_file_path + '-countToThreshold-result.txt', 'w') as log_file:
+                if counter_value < threshold_value:
+                    incrementby_value = state_eval(action["actionData"]["incrementBy"], {}, state)
+                    script_logger.log(
+                        'countToThreshold-' + str(action["actionGroup"]),
+                        'counter value of', counter_value, 'was less than threshold of', threshold_value ,'.',
+                        'incrementing by', incrementby_value, 'and returning failure'
+                    )
+                    log_file.write('counterVarName:' + str(counter_value) + '\n')
+                    log_file.write('threshold:' + str(threshold_value) + '\n')
+                    log_file.write('counterVarName:' + str(incrementby_value) + '\n')
+                    new_counter_value = counter_value + threshold_value
+                    log_file.write('newCounterValue:' + str(new_counter_value) + '\n')
+                    log_file.write('result:failure\n')
+
+                    state[counterVarName] = new_counter_value
+                    status = ScriptExecutionState.FAILURE
+                else:
+                    script_logger.log(
+                        'countToThreshold-' + str(action["actionGroup"]),
+                        'counter value of', counter_value, 'was greater than threshold of', threshold_value, '.',
+                        'returning success'
+                    )
+                    log_file.write('counterVarName:' + str(counter_value) + '\n')
+                    log_file.write('threshold:' + str(threshold_value) + '\n')
+                    log_file.write('result:success\n')
+
+                    status = ScriptExecutionState.SUCCESS
+
+
+
 
         elif action["actionName"] == "sleepStatement":
             if str(action["actionData"]["inputExpression"]).strip() != '':
