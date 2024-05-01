@@ -123,10 +123,10 @@ class SystemHostController:
             if str(action["actionData"]["inputExpression"]).strip() != '':
                 sleep_length = float(state_eval(str(action["actionData"]["inputExpression"]), {}, state))
                 script_logger.log('sleepStatement evaluated expression', action["actionData"]["inputExpression"], ' and sleeping for ', sleep_length, 's')
+                with open(log_file_path + '-sleep-{}.txt'.format(sleep_length), 'w') as log_file:
+                    log_file.write(str(sleep_length))
                 time.sleep(sleep_length)
             status = ScriptExecutionState.SUCCESS
-            with open(log_file_path + '-sleep-{}.txt'.format(sleep_length), 'w') as log_file:
-                log_file.write(str(sleep_length))
         elif action["actionName"] == "timeAction":
             time_val = None
             if action["actionData"]["timezone"] == "local":
