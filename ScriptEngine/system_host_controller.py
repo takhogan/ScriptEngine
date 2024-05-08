@@ -130,11 +130,13 @@ class SystemHostController:
                 'threshold params', threhold_stripped,
                 'and incrementBy params', incrementby_stripped
             )
-            counter_value = state_eval(action["actionData"]["counterVarName"], {}, state)
-            threshold_value = state_eval(action["actionData"]["counterThreshold"], {}, state)
+            if not counterVarName in state:
+                state[counterVarName] = 0
+            counter_value = state_eval(counterVarName, {}, state)
+            threshold_value = state_eval(counterThreshold, {}, state)
             with open(log_file_path + '-countToThreshold-result.txt', 'w') as log_file:
                 if counter_value < threshold_value:
-                    incrementby_value = state_eval(action["actionData"]["incrementBy"], {}, state)
+                    incrementby_value = state_eval(incrementBy, {}, state)
                     script_logger.log(
                         'countToThreshold-' + str(action["actionGroup"]),
                         'counter value of', counter_value, 'was less than threshold of', threshold_value ,'.',
@@ -143,7 +145,7 @@ class SystemHostController:
                     log_file.write('counterVarName:' + str(counter_value) + '\n')
                     log_file.write('threshold:' + str(threshold_value) + '\n')
                     log_file.write('counterVarName:' + str(incrementby_value) + '\n')
-                    new_counter_value = counter_value + threshold_value
+                    new_counter_value = counter_value + incrementby_value
                     log_file.write('newCounterValue:' + str(new_counter_value) + '\n')
                     log_file.write('result:failure\n')
 

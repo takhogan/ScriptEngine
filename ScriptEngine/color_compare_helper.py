@@ -55,6 +55,8 @@ class ColorCompareHelper:
         script_logger.log('colorCompareAction-' + str(action["actionGroup"]), 'color score', color_score)
         ColorCompareHelper.create_color_image(img_colors, logs_path + 'compare_image_color.png')
         ColorCompareHelper.create_color_image(ref_color_ints, logs_path + 'reference_image_color.png')
+        with open(logs_path + 'color_score.txt', 'w') as score_file:
+            score_file.write('colorScore:' + str(color_score) + '\n')
         return color_score
 
     @staticmethod
