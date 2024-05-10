@@ -31,18 +31,25 @@ formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-
 class python_host:
     def __init__(self, props):
         script_logger.log('Initializing Python Host')
-        host_dimensions = pyautogui.size()
-        self.width = host_dimensions.width
-        self.height = host_dimensions.height
+        self.width = None
+        self.height = None
         self.props = props
         self.image_matcher = ImageMatcher()
-        height,width,_ = np.array(pyautogui.screenshot()).shape
-        if (not is_null(self.props['width']) and (self.props['width'] != width)) or \
-                (not is_null(self.props['height']) and self.props['height'] != height):
-            script_logger.log('Warning: python host dims mismatch, expected : ', self.props['height'], self.props['width'],
-                  'observed :', height, width)
-        self.props['width'] = width
-        self.props['height'] = height
+
+    def initialize_host(self):
+        if self.width is None or self.height is None:
+            script_logger.log('PythonHostController: Taking screenshot to initialize python host')
+            host_dimensions = pyautogui.size()
+            self.width = host_dimensions.width
+            self.height = host_dimensions.height
+            height, width, _ = np.array(pyautogui.screenshot()).shape
+            if (not is_null(self.props['width']) and (self.props['width'] != width)) or \
+                    (not is_null(self.props['height']) and self.props['height'] != height):
+                script_logger.log('Warning: python host dims mismatch, expected : ', self.props['height'],
+                                  self.props['width'],
+                                  'observed :', height, width)
+            self.props['width'] = width
+            self.props['height'] = height
 
     def screenshot(self):
         return cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR)
@@ -99,6 +106,7 @@ class python_host:
     def handle_action(self, action, state, context, run_queue, log_level, log_folder, lazy_eval=False):
         # script_logger.log('inside host', self.width, self.height)
         logs_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
+        self.initialize_host()
         if action["actionName"] == "shellScript":
             return action, ScriptExecutionState.SUCCESS, self.run_script(action, state, logs_path), context, run_queue, []
         elif action["actionName"] == "clickAction":
@@ -221,6 +229,7 @@ def parse_inputs(process_host, inputs):
             "data": base64_encoded_string
         }
     elif device_action == "click":
+        python_host.initialize_host()
         script_logger.log('clicked location', inputs[3], inputs[4], flush=True)
         process_host.click(int(float(inputs[3])), int(float(inputs[4])), 'left')
         return {
@@ -229,6 +238,7 @@ def parse_inputs(process_host, inputs):
     elif device_action == "click_and_drag":
         # process_host.click_and_drag(inputs[3], inputs[4], inputs[5], inputs[6])
         script_logger.log('click and drag not implemented on python host')
+        python_host.initialize_host()
         return {
             "data" : "failure"
         }
