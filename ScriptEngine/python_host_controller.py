@@ -229,7 +229,7 @@ def parse_inputs(process_host, inputs):
             "data": base64_encoded_string
         }
     elif device_action == "click":
-        python_host.initialize_host()
+        process_host.initialize_host()
         script_logger.log('clicked location', inputs[3], inputs[4], flush=True)
         process_host.click(int(float(inputs[3])), int(float(inputs[4])), 'left')
         return {
@@ -238,7 +238,7 @@ def parse_inputs(process_host, inputs):
     elif device_action == "click_and_drag":
         # process_host.click_and_drag(inputs[3], inputs[4], inputs[5], inputs[6])
         script_logger.log('click and drag not implemented on python host')
-        python_host.initialize_host()
+        process_host.initialize_host()
         return {
             "data" : "failure"
         }
@@ -283,10 +283,10 @@ async def read_input():
             except pyautogui.FailSafeException as e:
                 script_logger.log('PYTHON CONTROLLER PROCESS: fail safe exception triggered', e)
 
-async def adb_controller_main():
+async def python_controller_main():
     await asyncio.gather(read_input())
 
 if __name__ == '__main__':
     script_logger.set_log_path('./logs/{}-python-host-main.txt'.format(formatted_today))
     os.makedirs('/logs', exist_ok=True)
-    asyncio.run(adb_controller_main())
+    asyncio.run(python_controller_main())
