@@ -13,18 +13,45 @@ script_logger = ScriptLogger()
 
 class MessagingHelper:
     def __init__(self):
-        pass
+        self.server_token = None
 
-    def send_viber_message(self, message):
-        with open(VIBER_CREDENTIALS_FILEPATH, 'r') as creds_file:
-            creds = json.load(creds_file)
-        script_logger.log(requests.post(url=VIBER_CONTROLLER_ENDPOINT_URL, json={
-            'action': 'sendMessage',
-            'payload': message
-        }, headers={
-            'SECRET': creds['SECRET']
-        }).text)
-        del creds
+    def get_server_token(self):
+        try:
+            with open(SERVER_AUTH_HASH_PATH, 'r') as server_auth_file:
+                auth_json = json.load(server_auth_file)
+                self.server_token = auth_json['server_auth_hash']
+            return True
+        except Exception as e:
+            print('Warning: error while getting server token')
+            print(e)
+            return False
+
+
+    def _send_message_request(self, message_obj):
+        request_url = "https://localhost:3849/api/sendMessage"
+        request_result = requests.post(
+            request_url,
+            json=message_obj,
+            headers = {
+                'Authorization': 'Bearer {}'.format(self.server_token)
+            },
+            verify=VERIFY_PATH
+        )
+        return request_result
+    def send_message(self, message_obj):
+        request_result = self._send_message_request(message_obj)
+
+        if int(request_result.status_code) == 403:
+            self.get_server_token()
+            request_result = self._send_message_request(message_obj)
+
+        if int(request_result.status_code) == 403:
+            return False
+        else:
+            return True
+
+
+
 
 
 if __name__ == '__main__':

@@ -423,10 +423,21 @@ class SystemHostController:
                 log_file.write(str(context["script_counter"]) + '-' + str(context["script_timer"]))
 
         elif action["actionName"] == "sendMessageAction":
-            if action["actionData"]["messagingProvider"] == "viber":
-                message = state_eval(action["actionData"]["inputExpression"], {}, state)
-                self.messaging_helper.send_viber_message(message)
-            status = ScriptExecutionState.SUCCESS
+            message = state_eval(action["actionData"]["inputExpression"], {}, state)
+            with open('sendMessageAction-' + str(action["actionData"]["messagingProvider"]) + '.txt', 'w') as log_file:
+                log_file.write('Messaging Provider: ' + str(action["actionData"]["messagingProvider"]) + '\n')
+                log_file.write('Message Type: ' + str(action["actionData"]["messageType"]) + '\n')
+                log_file.write('Message Contents: ' + str(message) + '\n')
+            script_logger.log('Sending message through ' + str(action["actionData"]["messagingProvider"]) + ' of type ' + str(action["actionData"]["messageType"]))
+            messaging_successful = self.messaging_helper.send_message(json.dumps({
+                "messagingProvider" : action["actionData"]["messagingProvider"],
+                "messageType" : action["actionData"]["messageType"],
+                "message" : message
+            }))
+            if messaging_successful:
+                status = ScriptExecutionState.SUCCESS
+            else:
+                status = ScriptExecutionState.FAILURE
         elif action["actionName"] == "returnStatement":
             script_logger.log('returnStatement with params ' + action["actionData"]["returnStatementType"] + ' ' + action["actionData"]["returnStatus"])
             with open(log_file_path + '-return-statement-{}-{}.txt'.format(action["actionData"]["returnStatementType"], action["actionData"]["returnStatus"]), 'w') as log_file:
