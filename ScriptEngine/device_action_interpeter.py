@@ -1,5 +1,6 @@
 import pyautogui
 import time
+
 from rv_helper import RandomVariableHelper
 from script_execution_state import ScriptExecutionState
 from script_logger import ScriptLogger
@@ -18,23 +19,30 @@ class DeviceActionInterpreter:
         is_hot_key = ("isHotKey" in keyboard_action["actionData"] and
                       (keyboard_action["actionData"]["isHotKey"] == 'true' or
                        keyboard_action["actionData"]["isHotKey"] == True))
-        script_logger.log('keyboard-expression-' + str(keyboard_action["actionGroup"]), ' type: ',
-              keyboard_action["actionData"]["keyboardActionType"], ' expression: ',
-              keyboard_action["actionData"]["keyboardExpression"], ' isHotKey: ',
-              is_hot_key,
-              (
-                  keyboard_action["actionData"]["keyboardExpression"].strip()
-              ).split(",") if
-              is_hot_key else '')
+        pre_log_1 = 'KeyboardActionType: {}'.format(keyboard_action["actionData"]["keyboardActionType"])
+        script_logger.log(pre_log_1)
+        pre_log_2 = 'KeyboardExpression: {}'.format(keyboard_action["actionData"]["keyboardExpression"])
+        script_logger.log(pre_log_2)
+        pre_log_3 = 'KeyboardActionIsHotKey {}'.format(str(is_hot_key))
+        script_logger.log(pre_log_3)
+        pre_log_4 = ''
+        typed_chars_log = 'Typed Characters: '
         if is_hot_key:
+            pre_log_4 = 'HotKeyKeys {}'.format(
+                keyboard_action["actionData"]["keyboardExpression"].strip().split(",")
+            )
+            script_logger.log(pre_log_4)
             if keyboard_action["actionData"]["keyboardActionType"] == "keyPress":
-                device.hotkey((
+                hot_key_keys = (
                     keyboard_action["actionData"]["keyboardExpression"].strip()
-                ).split(","))
+                ).split(",")
+                device.hotkey(hot_key_keys)
+                typed_chars_log += ' '.join(hot_key_keys)
             elif keyboard_action["actionData"]["keyboardActionType"] == "keyPressAndHold":
                 hotKeyKeys = keyboard_action["actionData"]["keyboardExpression"].split(",")
                 for hotKeyKey in hotKeyKeys:
                     device.keyDown(hotKeyKey)
+                typed_chars_log += ' '.join(hotKeyKeys)
                 time.sleep(RandomVariableHelper.get_rv_val(keyboard_action))
                 for hotKeyKey in reversed(hotKeyKeys):
                     device.keyUp(hotKeyKey)
@@ -62,10 +70,19 @@ class DeviceActionInterpreter:
             if keyboard_action["actionData"]["keyboardActionType"] == "keyPress":
                 for keyPressKey in keyPressKeys:
                     device.press(keyPressKey)
+                    typed_chars_log += keyPressKey + ' '
             elif keyboard_action["actionData"]["keyboardActionType"] == "keyPressAndHold":
                 for keyPressKey in keyPressKeys:
                     device.keyDown(keyPressKey)
+                    typed_chars_log += keyPressKey + ' '
                 time.sleep(RandomVariableHelper.get_rv_val(keyboard_action))
                 for keyPressKey in keyPressKeys:
                     device.keyUp(keyPressKey)
+        script_logger.log(typed_chars_log)
+        script_logger.get_action_log().add_post_file(
+            'text',
+            'keyboardAction-log.txt',
+            pre_log_1 + '\n' + pre_log_2 + '\n' + pre_log_3 + '\n' +\
+            (pre_log_4 + '\n' if is_hot_key else '') + typed_chars_log
+        )
         return ScriptExecutionState.SUCCESS, state, context

@@ -29,6 +29,7 @@ def do_template_match(action, og_time):
     screencap_mask_gray = action["actionData"]["positiveExamples"][0]["mask_single_channel"]
     # script_logger.log('matching ', action['actionGroup'], time.time() - og_time)
     logs_path = './logs'
+    log_header = '' #TODO update this
     image_matcher = ImageMatcher()
     match_result = image_matcher.template_match(
         action,
@@ -41,6 +42,7 @@ def do_template_match(action, og_time):
         logs_path,
         'train',
         None,
+        log_header,
         log_level='info',
         check_image_scale=False,
         output_cropping=action["actionData"]["maskLocation"] if
@@ -81,7 +83,6 @@ def test_parallel(script_executor, script_object, parallel=True):
                 script_executor.state,
                 script_executor.context,
                 script_executor.run_queue,
-                script_executor.log_level,
                 script_executor.log_folder
             )
     script_logger.log('final ', time.time() - time_1)
@@ -107,7 +108,6 @@ if __name__ == '__main__':
         start_time_str,
         script_id,
         device_manager,
-        log_level=log_level,
         state=constants,
         start_time=start_time_str
     )

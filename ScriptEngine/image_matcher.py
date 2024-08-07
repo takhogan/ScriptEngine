@@ -6,6 +6,8 @@ from script_engine_utils import masked_mse
 MINIMUM_MATCH_PIXEL_SPACING = 15
 from script_logger import ScriptLogger
 from script_engine_utils import state_eval
+from script_action_log import ScriptActionLog
+
 script_logger = ScriptLogger()
 class ImageMatcher:
     def __init__(self):
@@ -13,9 +15,9 @@ class ImageMatcher:
 
     @staticmethod
     def template_match(detectObject,
-                       screencap_im_bgr, screencap_search_bgr, screencap_mask_gray, screencap_outputmask_bgr, screencap_outputmask_gray,
-                       detector_name, logs_path, script_mode, match_point,
-                       log_level='info',
+                       screencap_im_bgr, screencap_search_bgr, screencap_mask_gray,
+                       screencap_outputmask_bgr, screencap_outputmask_gray,
+                       detector_name, script_mode, match_point,
                        check_image_scale=True,
                        output_cropping=None,
                        threshold=0.96, use_color=True, use_mask=True):
@@ -26,10 +28,8 @@ class ImageMatcher:
                 screencap_search_bgr,
                 screencap_mask_gray,
                 screencap_outputmask_bgr,
-                logs_path,
                 int(detectObject['actionData']['sourceScreenHeight']),
                 int(detectObject['actionData']['sourceScreenWidth']),
-                log_level=log_level,
                 check_image_scale=check_image_scale,
                 output_cropping=output_cropping,
                 threshold=threshold,
@@ -46,10 +46,15 @@ class ImageMatcher:
             exit(0)
 
         h, w = screencap_outputmask_gray.shape[0:2]
-        if log_level == 'info':
-            cv2.imwrite(logs_path + 'matching_overlay.png', result_im_bgr)
-            cv2.imwrite(logs_path + 'match_result.png', match_result * 255)
-            cv2.imwrite(logs_path + 'output_mask.png', screencap_outputmask_gray)
+        if script_logger.get_log_level() == 'info':
+            matching_overlay_relative_path = script_logger.get_log_path_prefix() + 'detectObject-matchOverlayed.png'
+            cv2.imwrite(matching_overlay_relative_path, result_im_bgr)
+            script_logger.get_action_log().add_supporting_file_reference('image', matching_overlay_relative_path)
+
+            comparison_img_relative_path = script_logger.get_log_path_prefix() + 'detectObject-matchinghHeatMap.png'
+            cv2.imwrite(comparison_img_relative_path, match_result * 255)
+            script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
+
         n_matches = len(matches)
         return [{
                 'input_type': 'shape',
@@ -70,11 +75,9 @@ class ImageMatcher:
             screencap_search_bgr,
             screencap_mask_gray,
             screencap_outputmask_bgr,
-            logs_path,
             source_screen_height,
             source_screen_width,
             check_image_scale,
-            log_level='info',
             output_cropping=None,
             threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
         # https://docs.opencv.org/3.4/de/da9/tutorial_template_matching.html
@@ -88,6 +91,17 @@ class ImageMatcher:
         is_match_error = False
         threshold_match_results = lambda match_results: np.where((np.inf > match_results) & (match_results >= threshold))
         use_resized_im_only = detectObject["actionData"]["useImageRescaledToScreenOnly"] == "true" or detectObject["actionData"]["useImageRescaledToScreenOnly"]
+
+        pre_log = 'Performing template match with options use_color {}, use_mask {}\n'.format(
+            str(use_color), str(use_mask)
+        ) + ' on image of size {}, search image of size {} and mask of size {}'.format(
+            str(screencap_im_bgr.shape),
+            str(screencap_search_bgr.shape),
+            str(screencap_mask_gray.shape)
+        )
+        script_logger.log(pre_log)
+        script_logger.get_action_log().append_pre_file('text', '\n' + pre_log)
+        resized_im_log = ''
         if not use_resized_im_only:
             try:
                 match_result = cv2.matchTemplate(
@@ -100,7 +114,10 @@ class ImageMatcher:
 
             if match_result is not None:
                 thresholded_match_results = threshold_match_results(match_result)
-
+        else:
+            resized_im_log = 'Skipping unresized template match as use resized image only is selected'
+            script_logger.log(resized_im_log)
+            pre_log += '\n' + resized_im_log
         if ((
             is_match_error
             or (thresholded_match_results is not None
@@ -113,7 +130,14 @@ class ImageMatcher:
                     (source_screen_width, source_screen_height),
                     interpolation=cv2.INTER_AREA
                 )
-                script_logger.log('resize : ', screencap_im_bgr_resized.shape, screencap_im_bgr.shape, source_screen_width, source_screen_height)
+                mid_log = ('Unresized template match failed. ' if resized_im_log == '' else '') + \
+                          'Performing resized template match' +\
+                          ' on image of size {}, search image of size {} and mask of size {}'.format(
+                    str(screencap_im_bgr.shape),
+                    str(screencap_search_bgr.shape),
+                    str(screencap_mask_gray.shape)
+                )
+                script_logger.get_action_log().append_pre_file('text', '\n' + mid_log)
                 match_result_resized = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr_resized.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr_resized,
                     cv2.cvtColor(screencap_search_bgr.copy(),
@@ -134,8 +158,6 @@ class ImageMatcher:
                 thresholded_match_results = threshold_match_results(match_result)
                 height_translation = capture_height/source_screen_height
                 width_translation = capture_width/source_screen_width
-                script_logger.log('translation : ', height_translation, capture_height,source_screen_height, width_translation, capture_width, source_screen_width)
-
         # if there is an erorr resize image to original dims, pass translation factor to filter_matches
 
         return ImageMatcher.filter_matches_and_get_result_im(
@@ -145,8 +167,6 @@ class ImageMatcher:
             screencap_im_bgr,
             screencap_search_bgr,
             screencap_outputmask_bgr,
-            logs_path,
-            log_level=log_level,
             height_translation=height_translation,
             width_translation=width_translation,
             script_mode=script_mode,
@@ -161,8 +181,6 @@ class ImageMatcher:
             screencap_im_bgr,
             screencap_search_bgr,
             screencap_outputmask_bgr,
-            logs_path,
-            log_level='info',
             height_translation=1,
             width_translation=1,
             script_mode='test', output_cropping=None):
@@ -216,23 +234,27 @@ class ImageMatcher:
                     )
                 )
                 # exit(0)
-                if script_mode == "train" and log_level == 'info':
+                # if script_mode == "train" and log_level == 'info':
                     # change name to fit image format
-                    cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(
-                        match_result[pt[1], pt[0]]) + '-img.png', match_img_bgr)
+                    # cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(
+                    #     match_result[pt[1], pt[0]]) + '-img.png', match_img_bgr)
                 match_img_index += 1
-        best_match = 'none'
         best_match_pt = None
-        if match_result[np.where(np.inf > match_result)].size > 0:
-            best_match_pt = np.unravel_index(np.argmax(match_result[np.where(np.inf > match_result)]), match_result.shape)
-            best_match = str(np.max(match_result[np.where(np.inf > match_result)]))
-        else:
-            script_logger.log('a not valid')
-        best_match_str = str(best_match)
-        script_logger.log('n matches : ', len(matches), ' best match : ', best_match_pt, best_match_str)
 
-        with open(logs_path + '-best-' + best_match_str + '.txt', 'w') as log_file:
-            log_file.write('n matches : ' + str(len(matches)))
+        valid_matched_points = match_result[np.where(np.inf > match_result)]
+        if valid_matched_points.size > 0:
+            best_match_pt = np.unravel_index(np.argmax(valid_matched_points), match_result.shape)
+            result_log = 'Matches found.'
+        else:
+            result_log = 'No valid match points.'
+        result_log += '{} matches total. Best Match: {}'.format(len(matches), str(best_match_pt))
+        script_logger.log(result_log)
+        script_logger.get_action_log().append_supporting_file(
+            'text',
+            'detect_result.txt',
+            result_log
+        )
+
         result_im_bgr = screencap_im_bgr.copy()
         matches.sort(reverse=True, key=lambda match: match[1])
         def adjust_box_to_bounds(pt, box_width, box_height, screen_width, screen_height, box_thickness):
