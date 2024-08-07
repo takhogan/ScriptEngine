@@ -25,6 +25,7 @@ from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
 from forward_detect_peek_helper import ForwardDetectPeekHelper
 from script_logger import ScriptLogger
+
 script_logger = ScriptLogger()
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
@@ -74,48 +75,72 @@ class python_host:
             script_logger.log('clickAction: adjusted coords for pyautogui', x, y, flush=True)
         pyautogui.click(x=x, y=y, button=button)
 
-    def run_script(self, action, state, logs_path):
-        # script_logger.log('run_script: ', action)
-        with open(logs_path + '-shellScript.txt', 'w') as log_file:
-            if action["actionData"]["openInNewWindow"]:
-                run_command = "start cmd /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
-                script_logger.log('shellScript-' + str(action["actionGroup"]), ' opening in new window run command : ', run_command)
-                log_file.write('running with os.system:')
-                log_file.write(run_command)
-                os.system(run_command)
-                return state
-            elif action["actionData"]["awaitScript"]:
-                await_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
-                script_logger.log('shellScript-' + str(action["actionGroup"]), ' running command ', await_command, ' and awaiting output')
-                log_file.write('running with subprocess.run:')
-                log_file.write(await_command)
-                outputs = subprocess.run(await_command, cwd="/", shell=True, capture_output=True)
-                state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
-                state[action["actionData"]["returnCodeOutputVarName"]] = outputs.returncode
-                script_logger.log('shellScript-' + str(action["actionGroup"]), 'command output : ', outputs)
-                return state
-            else:
-                process_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
-                script_logger.log('shellScript-' + str(action["actionGroup"]), ' starting process ', process_command, ' without awaiting output')
-                log_file.write('running with subprocess.Popen:')
-                log_file.write(process_command)
-                proc = subprocess.Popen(process_command, cwd="/", shell=True)
-                return state
+    def run_script(self, action, state):
+        pre_log = 'Running Shell Script: {}'.format(action["actionData"]["shellScript"])
+        script_logger.log(pre_log)
+        pre_log_2 = 'Shell Script options: openinNewWindow: {} awaitScript: {}'.format(
+            str(action["actionData"]["openInNewWindow"]),
+            str(action["actionData"]["awaitScript"])
+        )
+        script_logger.log(pre_log_2)
+        if action["actionData"]["openInNewWindow"]:
+            run_command = "start cmd /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
+
+            mid_log = 'Running command {} using os.system'.format(run_command)
+            script_logger.log(mid_log)
+
+            outputs = os.system(run_command)
+
+            post_log = 'Command completed successfully'
+            script_logger.log(post_log)
+
+            state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
+            state[action["actionData"]["returnCodeOutputVarName"]] = outputs.returncode
 
 
-    def handle_action(self, action, state, context, run_queue, log_level, log_folder, lazy_eval=False):
-        # script_logger.log('inside host', self.width, self.height)
-        logs_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
+        elif action["actionData"]["awaitScript"]:
+            await_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
+
+            mid_log = 'Running command {} using subprocess.run cwd="/", shell=True, capture_output=True'.format(
+                await_command
+            )
+            script_logger.log(mid_log)
+
+            outputs = subprocess.run(await_command, cwd="/", shell=True, capture_output=True)
+
+            post_log = 'Command completed successfully'
+            script_logger.log(post_log)
+
+            state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
+            state[action["actionData"]["returnCodeOutputVarName"]] = outputs.returncode
+
+        else:
+            process_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
+
+            mid_log = 'Running command {} using subprocess.Popen cwd="/", shell=True'.format(
+                process_command
+            )
+            script_logger.log(mid_log)
+            proc = subprocess.Popen(process_command, cwd="/", shell=True)
+
+            post_log = 'Command process started successfully'
+            script_logger.log(post_log)
+        script_logger.get_action_log().add_post_file(
+            'text',
+            'shellScript-log.txt',
+            pre_log + '\n' + pre_log_2 + '\n' + mid_log + '\n' + post_log
+        )
+        return state
+
+
+    def handle_action(self, action, state, context, run_queue, lazy_eval=False):
         self.initialize_host()
         if action["actionName"] == "shellScript":
-            return action, ScriptExecutionState.SUCCESS, self.run_script(action, state, logs_path), context, run_queue, []
+            return action, ScriptExecutionState.SUCCESS, self.run_script(action, state), context, run_queue, []
         elif action["actionName"] == "clickAction":
             action["actionData"]["clickCount"] = int(action["actionData"]["clickCount"])
             var_name = action["actionData"]["inputExpression"]
-            point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
-            # script_logger.log('debug', point_choice, self.width, self.height, self.props['width'])
-            # point_choice = (point_choice[0] * self.width / self.props['width'],point_choice[1] * self.height / self.props['height'])
-            script_logger.log('clickAction-' + str(action["actionGroup"]), ' input: ', var_name, ' output : ', point_choice)
+            point_choice, point_list, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
             delays = []
             if action["actionData"]["delayState"] == "active":
                 if action["actionData"]["distType"] == 'normal':
@@ -124,8 +149,10 @@ class python_host:
                     mins = (np.repeat(action["actionData"]["min"], action["actionData"]["clickCount"]) - mean) / stddev
                     maxes = (np.repeat(action["actionData"]["max"], action["actionData"]["clickCount"]) - mean) / stddev
                     delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev) if action["actionData"]["clickCount"] > 1 else [truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]
-
-            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path, log_level=log_level)
+            if script_logger.get_log_level() == 'info':
+                ClickActionHelper.draw_click(
+                    self.screenshot(), point_choice, point_list
+                )
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1], button=action['actionData']['mouseButton'])
                 time.sleep(delays[click_count])
@@ -133,11 +160,18 @@ class python_host:
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "mouseScrollAction":
             var_name = action["actionData"]["inputExpression"]
-            point_choice, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context)
+            point_choice, point_list, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context)
+
+            if script_logger.get_log_level() == 'info':
+                ClickActionHelper.draw_click(
+                    self.screenshot(), point_choice, point_list
+                )
             pyautogui.scroll(action["actionData"]["scrollDistance"])
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "keyboardAction":
-            status, state, context = DeviceActionInterpreter.parse_keyboard_action(self, action, state, context)
+            status, state, context = DeviceActionInterpreter.parse_keyboard_action(
+                self, action, state, context
+            )
             return action, status, state, context, run_queue, []
         elif action["actionName"] == "detectObject":
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
@@ -146,8 +180,17 @@ class python_host:
 
 
             if screencap_im_bgr is None:
-                script_logger.log('detectObject-' + str(action["actionGroup"]) + ' taking screenshot')
+                script_logger.log('No cached screenshot or input expression, taking screenshot')
                 screencap_im_bgr = self.screenshot()
+
+            if script_logger.get_log_level() == 'info':
+                input_image_relative_path = script_logger.get_log_header() + 'detectObject-inputImage.png'
+                cv2.imwrite(input_image_relative_path, screencap_im_bgr)
+                script_logger.get_action_log().set_pre_file(
+                    'image',
+                    input_image_relative_path
+                )
+
             if lazy_eval:
                 return DetectObjectHelper.handle_detect_object, (
                     action,
@@ -158,9 +201,6 @@ class python_host:
                     match_point,
                     check_image_scale,
                     self.props['scriptMode'],
-                    log_level,
-                    logs_path,
-                    self.props['dir_path'],
                     True
                 )
             else:
@@ -173,27 +213,50 @@ class python_host:
                     match_point=match_point,
                     check_image_scale=check_image_scale,
                     script_mode=self.props['scriptMode'],
-                    log_level=log_level,
-                    logs_path=logs_path,
-                    dir_path=self.props['dir_path']
                 )
                 return action, status, state, context, run_queue, update_queue
         elif action["actionName"] == "colorCompareAction":
-            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state,
-                                                                               output_type='matched_pixels')
+            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(
+                action, state, output_type='matched_pixels'
+            )
             if screencap_im_bgr is None:
-                script_logger.log('colorCompareAction-' + str(action["actionGroup"]) + ' taking screenshot')
+                script_logger.log('No cached screenshot or input expression, taking screenshot')
                 screencap_im_bgr = self.screenshot()
-            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state, logs_path)
+
+            if script_logger.get_log_level() == 'info':
+                input_image_relative_path = script_logger.get_log_header() + 'detectObject-inputImage.png'
+                cv2.imwrite(input_image_relative_path, screencap_im_bgr)
+                script_logger.get_action_log().set_pre_file(
+                    'image',
+                    input_image_relative_path
+                )
+
+            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state)
             if color_score > float(action['actionData']['threshold']):
+                script_logger.get_action_log().append_supporting_file(
+                    'text',
+                    'compare-result.txt',
+                    '\nAction successful. Color Score of {} was above threshold of {}'.format(
+                        color_score,
+                        float(action['actionData']['threshold'])
+                    )
+                )
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
+                script_logger.get_action_log().append_supporting_file(
+                    'text',
+                    'compare-result.txt',
+                    '\nAction failed. Color Score of {} was below threshold of {}'.format(
+                        color_score,
+                        float(action['actionData']['threshold'])
+                    )
+                )
                 return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
-
         elif action["actionName"] == "randomVariable":
             delays = RandomVariableHelper.get_rv_val(action)
             state[action["actionData"]["outputVarName"]] = delays
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+        #TODO: deprecated
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
                 # script_logger.log(np.array(pyautogui.screenshot()).shape)
@@ -204,6 +267,7 @@ class python_host:
             else:
                 script_logger.log('log type unimplemented ' + action["actionData"]["logType"])
                 exit(0)
+        # TODO: dprecated
         elif action["actionName"] == "timeAction":
             time_val = None
             if action["actionData"]["timezone"] == "local":
@@ -268,7 +332,8 @@ async def read_input():
             script_logger.log('PYTHON CONTROLLER: device key mismatch ', device_key, inputs[1])
             continue
         if process_python_host is None:
-            script_logger.set_log_path('./logs/{}-python-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
+            script_logger.set_log_file_path('./logs/{}-python-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
+            script_logger.set_log_header('')
             script_logger.log('PYTHON CONTROLLER PROCESS: starting process for device {}'.format(device_key))
             script_logger.log('PYTHON CONTROLLER PROCESS: processing inputs ', inputs)
             process_python_host = python_host({
@@ -287,6 +352,7 @@ async def python_controller_main():
     await asyncio.gather(read_input())
 
 if __name__ == '__main__':
-    script_logger.set_log_path('./logs/{}-python-host-main.txt'.format(formatted_today))
+    script_logger.set_log_file_path('./logs/{}-python-host-main.txt'.format(formatted_today))
+    script_logger.set_log_header('')
     os.makedirs('/logs', exist_ok=True)
     asyncio.run(python_controller_main())

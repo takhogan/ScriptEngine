@@ -15,6 +15,7 @@ from pymongo import MongoClient
 
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
+from script_action_log import ScriptActionLog
 from script_execution_state import ScriptExecutionState
 from script_engine_constants import *
 from script_engine_utils import generate_context_switch_action, state_eval
@@ -30,8 +31,11 @@ class SystemHostController:
         self.props = props
         self.messaging_helper = MessagingHelper()
 
-    def handle_action(self, action, state, context, run_queue, log_level, log_folder):
-        log_file_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
+    def handle_action(self, action, state, context, run_queue):
+        script_logger.set_log_header(
+            str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]))
+        script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
+        script_logger.set_action_log(ScriptActionLog(action, script_logger.get_log_path_prefix()))
         def sanitize_input(statement_input, state):
             statement_input = statement_input.strip()
             statement_input = statement_input.replace('\n', ' ')
@@ -56,124 +60,163 @@ class SystemHostController:
         if action["actionName"] == "conditionalStatement":
             condition = action["actionData"]["condition"].replace("\n", " ").strip()
             statement_strip = sanitize_input(condition, state)
-            script_logger.log('condition : ', condition, statement_strip)
+            pre_log = 'condition: {} {}'.format(condition, statement_strip)
+            script_logger.log(pre_log)
             if state_eval('(' + condition + ')',{}, state):
-                script_logger.log('conditionalStatement-' + str(action["actionGroup"]), 'condition success!')
+                post_log = 'condition successful'
+                script_logger.log(post_log)
                 status = ScriptExecutionState.SUCCESS
             else:
-                script_logger.log('conditionalStatement-' + str(action["actionGroup"]), 'condition failure!')
+                post_log = 'condition failure'
+                script_logger.log(post_log)
                 status = ScriptExecutionState.FAILURE
-            with open(log_file_path + ('-SUCCESS.txt' if status == ScriptExecutionState.SUCCESS else '-FAILURE.txt'), 'w') as log_file:
-                log_file.write(str(condition) + '\n' + str(statement_strip))
-            # script_logger.log(' state (7) : ', state)
-        elif action["actionName"] == "variableAssignment":
-            # script_logger.log('input Parser : ', action["actionData"]["inputParser"])
 
+            script_logger.get_action_log().add_post_file(
+                'text',
+                ('condition-success.txt' if status == ScriptExecutionState.SUCCESS else 'condition-failure.txt'),
+                pre_log + '\n' + post_log
+            )
+        elif action["actionName"] == "variableAssignment":
             outputVarName = action["actionData"]["outputVarName"].strip()
             outputVarNameInState = outputVarName in state
-            if (action["actionData"]["setIfNull"] == "true" or action["actionData"]["setIfNull"])\
-                    and outputVarNameInState and state[outputVarName] is not None:
-                script_logger.log('output variable ', outputVarName, ' was not null')
+            isSetIfNull = action["actionData"]["setIfNull"] == "true" or action["actionData"]["setIfNull"]
+            pre_log = ('assignment configuration is set if null' if isSetIfNull else '')
+            if isSetIfNull and outputVarNameInState and state[outputVarName] is not None:
+                pre_log += ' and output variable {} was not null'.format(outputVarName)
+                script_logger.log(pre_log)
                 status = ScriptExecutionState.SUCCESS
-                with open(log_file_path + '-val.txt', 'w') as log_file:
-                    log_file.write('[setIfNull was not null] ' + str(action["actionData"]["inputExpression"]) + ':' + str(state[action["actionData"]["outputVarName"]]))
-                return action, status, state, context, run_queue, []
-
-            statement_strip = sanitize_input(action["actionData"]["inputExpression"], state)
-
-            script_logger.log('variableAssignment-' + str(action["actionGroup"]),' inputExpression : ', action["actionData"]["inputExpression"], 'inputs', statement_strip, end = '')
-            # script_logger.log(' state (4) ', state)
-
-            expression = action["actionData"]["inputExpression"].replace("\n", " ")
-            if action["actionData"]["inputParser"] == 'eval':
-                expression = state_eval(expression, {}, state)
-            elif action["actionData"]["inputParser"] == "jsonload":
-                expression = json.loads(expression)
-            script_logger.log('variableAssignment-' + str(action["actionGroup"]),' : result : ', expression)
-            # script_logger.log(' state (5) ', state)
-            # script_logger.log(' expression : ', expression, ', ', type(expression))
-
-
-            script_logger.log('variableAssignment-' + str(action["actionGroup"]), 'state :', list(state))
-
-            if '[' in outputVarName and ']' in outputVarName:
-                keys = outputVarName.split('[')  # Split the key string by '][' to get individual keys
-                # Evaluate variable names within the state dictionary
-                script_logger.log('variableAssignment' + str(action["actionGroup"]) + ' keys', keys)
-                for i, k in enumerate(keys[1:]):
-                    k = k.rstrip(']')
-                    keys[i + 1] = state_eval(k, {}, state)
-
-                # Assign the value to the corresponding key within the state dictionary
-                current = state
-                script_logger.log('variableAssignment-' + str(action["actionGroup"]) + ' keys', keys)
-                for i in range(len(keys) - 1):
-                    if keys[i] in current:
-                        current = current[keys[i]]
-                current[keys[-1]] = expression
-                script_logger.log('variableAssignment-' + str(action["actionGroup"]), ' setting ', outputVarName, keys, ' to ', expression)
+                script_logger.get_action_log().add_post_file(
+                    'text',
+                    'variableAssignment-{}.txt'.format(outputVarName),
+                    (pre_log + '\n' if pre_log != '' else '')
+                )
             else:
-                state[outputVarName] = expression
-            status = ScriptExecutionState.SUCCESS
-            with open(log_file_path + '-val.txt', 'w') as log_file:
-                log_file.write('inputs: ' +  str(statement_strip))
-                log_file.write(str(outputVarName) + ':=' + str(expression) + '\n')
+                pre_log += ('and output variable {} was null'.format(outputVarName) if isSetIfNull else '')
+                statement_strip = sanitize_input(action["actionData"]["inputExpression"], state)
+
+                mid_log = ('inputExpression : ' + action["actionData"]["inputExpression"])
+                mid_log_2 = ('inputs: ' + str(statement_strip))
+                script_logger.log(mid_log)
+                script_logger.log(mid_log_2)
+
+
+                expression = action["actionData"]["inputExpression"].replace("\n", " ")
+                if action["actionData"]["inputParser"] == 'eval':
+                    expression = state_eval(expression, {}, state)
+                elif action["actionData"]["inputParser"] == "jsonload":
+                    expression = json.loads(expression)
+                late_mid_log = 'parse result: ' + str(expression)
+                script_logger.log('parse result: ', expression)
+
+                late_mid_log_2 = 'state variables :' + str(list(state))
+                script_logger.log(late_mid_log_2)
+
+                if '[' in outputVarName and ']' in outputVarName:
+                    keys = outputVarName.split('[')  # Split the key string by '][' to get individual keys
+                    # Evaluate variable names within the state dictionary
+                    for i, k in enumerate(keys[1:]):
+                        k = k.rstrip(']')
+                        keys[i + 1] = state_eval(k, {}, state)
+
+                    # Assign the value to the corresponding key within the state dictionary
+                    current = state
+                    for i in range(len(keys) - 1):
+                        if keys[i] in current:
+                            current = current[keys[i]]
+                    current[keys[-1]] = expression
+                else:
+                    state[outputVarName] = expression
+                post_log = 'setting ' + outputVarName + ' to ' + str(expression)
+                script_logger.log(
+                    ' setting ',
+                    outputVarName,
+                    ' to ',
+                    expression
+                )
+                status = ScriptExecutionState.SUCCESS
+                script_logger.get_action_log().add_post_file(
+                    'text',
+                    'variableAssignment-{}.txt'.format(outputVarName),
+                    (pre_log + '\n' if pre_log != '' else '') + \
+                    mid_log + '\n' + \
+                    mid_log_2 + '\n' + \
+                    late_mid_log + '\n' + \
+                    late_mid_log_2 + '\n' + \
+                    post_log
+                )
+
         elif action["actionName"] == "countToThresholdAction":
             counterVarName = action["actionData"]["counterVarName"].strip()
             counterThreshold = action["actionData"]["counterThreshold"].strip()
             incrementBy = action["actionData"]["incrementBy"].strip()
             threhold_stripped = sanitize_input(counterThreshold, state)
             incrementby_stripped = sanitize_input(incrementBy, state)
-            script_logger.log(
-                'countToThreshold-' + str(action["actionGroup"]),
-                'with counter name', counterVarName,
-                'threshold params', threhold_stripped,
-                'and incrementBy params', incrementby_stripped
-            )
+            pre_log = 'with counter name {}'.format(counterVarName) +\
+                'threshold params {}'.format(threhold_stripped) +\
+                'and incrementBy params {}'.format(incrementby_stripped)
+            script_logger.log(pre_log)
             if not counterVarName in state:
                 state[counterVarName] = 0
             counter_value = state_eval(counterVarName, {}, state)
             threshold_value = state_eval(counterThreshold, {}, state)
-            with open(log_file_path + '-countToThreshold-result.txt', 'w') as log_file:
-                if counter_value < threshold_value:
-                    incrementby_value = state_eval(incrementBy, {}, state)
-                    script_logger.log(
-                        'countToThreshold-' + str(action["actionGroup"]),
-                        'counter value of', counter_value, 'was less than threshold of', threshold_value ,'.',
-                        'incrementing by', incrementby_value, 'and returning failure'
-                    )
-                    log_file.write('counterVarName:' + str(counter_value) + '\n')
-                    log_file.write('threshold:' + str(threshold_value) + '\n')
-                    log_file.write('counterVarName:' + str(incrementby_value) + '\n')
-                    new_counter_value = counter_value + incrementby_value
-                    log_file.write('newCounterValue:' + str(new_counter_value) + '\n')
-                    log_file.write('result:failure\n')
+            if counter_value < threshold_value:
+                incrementby_value = state_eval(incrementBy, {}, state)
+                post_log = 'For counter {}'.format(counterVarName) +\
+                    'counter value of {}'.format(counter_value) +\
+                    'was less than threshold of {}'.format(threshold_value) + '.'+\
+                    'incrementing by {}'.format(incrementby_value) +\
+                    'and returning failure'
+                script_logger.log(
+                    post_log
+                )
+                new_counter_value = counter_value + incrementby_value
+                state[counterVarName] = new_counter_value
+                status = ScriptExecutionState.FAILURE
+                post_post_log = 'new counter value is {}'.format(new_counter_value)
+                script_logger.log(
+                    post_post_log
+                )
+            else:
+                post_log = 'For counter {}'.format(counterVarName) + \
+                           'counter value of {}'.format(counter_value) + \
+                           'was greater than threshold of {}'.format(threshold_value) + '.' + \
+                           'returning success.'
+                script_logger.log(
+                    'counter value of', counter_value, 'was greater than threshold of', threshold_value, '.',
+                    'returning success'
+                )
+                post_post_log = ''
 
-                    state[counterVarName] = new_counter_value
-                    status = ScriptExecutionState.FAILURE
-                else:
-                    script_logger.log(
-                        'countToThreshold-' + str(action["actionGroup"]),
-                        'counter value of', counter_value, 'was greater than threshold of', threshold_value, '.',
-                        'returning success'
-                    )
-                    log_file.write('counterVarName:' + str(counter_value) + '\n')
-                    log_file.write('threshold:' + str(threshold_value) + '\n')
-                    log_file.write('result:success\n')
-
-                    status = ScriptExecutionState.SUCCESS
-
-
-
-
+                status = ScriptExecutionState.SUCCESS
+            script_logger.get_action_log().add_post_file(
+                'text',
+                'counterVarName-{}.txt'.format(counterVarName),
+                pre_log + '\n' +\
+                post_log + '\n' +\
+                post_post_log
+            )
         elif action["actionName"] == "sleepStatement":
-            if str(action["actionData"]["inputExpression"]).strip() != '':
-                sleep_length = float(state_eval(str(action["actionData"]["inputExpression"]), {}, state))
-                script_logger.log('sleepStatement evaluated expression', action["actionData"]["inputExpression"], ' and sleeping for ', sleep_length, 's')
-                with open(log_file_path + '-sleep-{}.txt'.format(sleep_length), 'w') as log_file:
-                    log_file.write(str(sleep_length))
+            input_expression = str(action["actionData"]["inputExpression"]).strip()
+            pre_log = 'inputExpression: ' + input_expression
+            script_logger.log(pre_log)
+            sleep_length = 0
+            if input_expression != '':
+                sleep_length = float(state_eval(input_expression, {}, state))
+                mid_log = 'evaluated inputExpression and sleeping for ' + str(sleep_length) + 's'
+                script_logger.log(mid_log)
+                script_logger.get_action_log().add_pre_file(
+                    'text',
+                    'sleepStatement-begin-{:.2f}'.format(sleep_length).replace('.', '_') + '.txt',
+                    pre_log + '\n' + mid_log
+                )
                 time.sleep(sleep_length)
+            script_logger.get_action_log().add_post_file(
+                'text',
+                'sleepStatement-end-{:.2f}'.format(sleep_length).replace('.', '_') + '.txt',
+                'slept for {}s'.format(sleep_length)
+            )
             status = ScriptExecutionState.SUCCESS
+        #TODO: will be removed, should use regular variable assignment and the datetime module
         elif action["actionName"] == "timeAction":
             time_val = None
             if action["actionData"]["timezone"] == "local":
@@ -186,8 +229,13 @@ class SystemHostController:
             delays = RandomVariableHelper.get_rv_val(action)
             state[action["actionData"]["outputVarName"]] = delays
             status = ScriptExecutionState.SUCCESS
-            with open(log_file_path + '-output.txt', 'w') as log_file:
-                log_file.write(str(delays))
+            script_logger.log('created random values', delays)
+            script_logger.get_action_log().add_post_file(
+                'text',
+                'randomVariable-{}.txt'.format(action["actionData"]["outputVarName"]),
+                'Created random values: ' + str(delays)
+            )
+        #TODO: will be removed, need a new file io type action
         elif action["actionName"] == "jsonFileAction":
             if action["actionData"]["mode"] == "read":
                 json_filepath = self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"]
@@ -213,6 +261,10 @@ class SystemHostController:
                 exit(1)
 
             transform_im = state[action['actionData']['inputExpression']]['matched_area']
+            pre_image_relative_path = script_logger.get_log_header() + 'imageTransformationAction-input.png'
+            cv2.imwrite(script_logger.get_log_folder() + pre_image_relative_path, transform_im)
+            script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
+
             if action["actionData"]["transformationType"] == "blur":
                 if action["actionData"]["blurType"] == 'bilateralFilter':
                     transform_im = cv2.bilateralFilter(transform_im, int(action["actionData"]["blurKernelSize"]), 75, 75)
@@ -287,8 +339,10 @@ class SystemHostController:
                     transform_im = cv2.bitwise_not(transform_im)
                     transform_im = cv2.cvtColor(transform_im, cv2.COLOR_GRAY2BGR)
 
+            post_image_relative_path = script_logger.get_log_header() + 'imageTransformationAction-output.png'
+            cv2.imwrite(script_logger.get_log_folder() + post_image_relative_path, transform_im)
+            script_logger.get_action_log().set_post_file('image', post_image_relative_path)
 
-            cv2.imwrite(log_file_path + '-transformed_image.png', transform_im)
             if len(action['actionData']['outputVarName']) > 0:
                 state[action['actionData']['outputVarName']] = state[action['actionData']['inputExpression']].copy()
                 state[action['actionData']['outputVarName']]['matched_area'] = transform_im
@@ -305,23 +359,54 @@ class SystemHostController:
                     'rawLine' : '13'
                 }
 
-                search_im, match_pt = DetectObjectHelper.get_detect_area(action, state)
+                search_im, match_pt = DetectObjectHelper.get_detect_area(
+                    action, state
+                )
+                pre_log = 'Image Transformations:\n'
+
+                pre_image_relative_path = script_logger.get_log_header() + 'imageToTextAction-raw-input.png'
+                cv2.imwrite(script_logger.get_log_folder() + pre_image_relative_path, search_im)
+                script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
+
                 image_to_text_input = cv2.cvtColor(search_im.copy(), cv2.COLOR_BGR2GRAY)
+                conversion_log = 'converted to grayscale'
+                script_logger.log(conversion_log)
+                pre_log += conversion_log +'\n'
+
                 if action["actionData"]["increaseContrast"]:
                     image_to_text_input = cv2.equalizeHist(image_to_text_input)
+                    conversion_log = 'increased contrast'
+                    script_logger.log(conversion_log)
+                    pre_log += conversion_log + '\n'
+
                 if action["actionData"]["invertColors"]:
                     image_to_text_input = cv2.bitwise_not(image_to_text_input)
+                    conversion_log = 'inverted colors'
+                    script_logger.log(conversion_log)
+                    pre_log += conversion_log + '\n'
 
                 im_height = image_to_text_input.shape[0]
                 if im_height < 50:
                     image_to_text_input = cv2.resize(image_to_text_input, None, fx=int(100 / im_height), fy=int(100 / im_height), interpolation=cv2.INTER_CUBIC)
+                    conversion_log = 'input too small, boosted size by factor of {}'.format(int(100 / im_height))
+                    script_logger.log(conversion_log)
+                    pre_log += conversion_log + '\n'
                 if 'blur' in action['actionData']:
                     if action["actionData"]["blur"] == 'bilateralFilter':
                         image_to_text_input = cv2.bilateralFilter(image_to_text_input, 5, 75, 75)
+                        conversion_log = 'applied bilateral filter'
+                        script_logger.log(conversion_log)
+                        pre_log += conversion_log + '\n'
                     elif action["actionData"]["blur"] == 'medianBlur':
                         image_to_text_input = cv2.medianBlur(image_to_text_input, 3)
+                        conversion_log = 'applied median blur'
+                        script_logger.log(conversion_log)
+                        pre_log += conversion_log + '\n'
                     elif action["actionData"]["blur"] == 'gaussianBlur':
                         image_to_text_input = cv2.GaussianBlur(image_to_text_input, (5, 5), 0)
+                        conversion_log = 'applied gaussian blur'
+                        script_logger.log(conversion_log)
+                        pre_log += conversion_log + '\n'
                 if 'binarize' in action['actionData']:
                     if action["actionData"]["binarize"] == 'regular':
                         image_to_text_input = cv2.threshold(
@@ -330,6 +415,9 @@ class SystemHostController:
                             255,
                             cv2.THRESH_BINARY + cv2.THRESH_OTSU
                         )[1]
+                        conversion_log = 'applied regular binarization'
+                        script_logger.log(conversion_log)
+                        pre_log += conversion_log + '\n'
                     elif action["actionData"]["binarize"] == 'adaptive':
                         image_to_text_input = cv2.adaptiveThreshold(
                             image_to_text_input,
@@ -339,6 +427,9 @@ class SystemHostController:
                             31,
                             2
                         )
+                        conversion_log = 'applied adaptive binarization'
+                        script_logger.log(conversion_log)
+                        pre_log += conversion_log + '\n'
                 if 'makeBorder' in action['actionData'] and (
                         action['actionData']['makeBorder'] == True or
                         action['actionData']['makeBorder'] == 'true'
@@ -347,14 +438,19 @@ class SystemHostController:
                         border_color = int(image_to_text_input[0, 0])
                     else:
                         border_color = list(map(int, image_to_text_input[0,0][::-1]))
-                    script_logger.log('imageToText border_color', border_color, type(border_color))
                     # Add a 2-pixel border to the image
                     image_to_text_input = cv2.copyMakeBorder(
                         image_to_text_input, 2, 2, 2, 2,
                         cv2.BORDER_CONSTANT, value=border_color
                     )
+                    conversion_log = 'added border'
+                    script_logger.log(conversion_log)
+                    pre_log += conversion_log + '\n'
 
-                cv2.imwrite(log_file_path + '-image_to_text.png', image_to_text_input)
+                mid_image_relative_path = script_logger.get_log_header() + 'imageToTextAction-parsed-input.png'
+                cv2.imwrite(script_logger.get_log_folder() + mid_image_relative_path, image_to_text_input)
+                script_logger.get_action_log().add_supporting_file_reference('image', mid_image_relative_path)
+
                 tesseract_params = [
                     [
                         TARGET_TYPE_TO_PSM[action['actionData']['targetType']],
@@ -373,6 +469,7 @@ class SystemHostController:
                     ]
 
                 outputs = []
+                inputs_log = ''
                 for [psm_value, character_white_list] in tesseract_params:
                     with tesserocr.PyTessBaseAPI() as api:
                         api.SetImage(Image.fromarray(image_to_text_input))
@@ -382,24 +479,37 @@ class SystemHostController:
                         # may want to consider bgr to rgb conversion
                         output_text = api.GetUTF8Text().strip()
                         outputs.append(output_text)
-                        script_logger.log('running with options --psm ',
-                              psm_value,
-                              '--characterWhiteList ',
-                              character_white_list if len(character_white_list) > 0 else 'none', 'output : ', output_text)
-                with open(log_file_path + '-output.txt', 'w') as log_file:
-                    log_file.write(outputs[0])
+                        input_result_log = 'running with options --psm {} --characterWhiteList {}'.format(
+                            psm_value,
+                            character_white_list if len(character_white_list) > 0 else 'none'
+                        ) + ' and output was: {}'.format(output_text)
+                        script_logger.log(input_result_log)
+                        inputs_log += input_result_log +'\n'
+
+                post_log = 'final primary output was:{}'.format(
+                    outputs[0]
+                )
                 if is_image_to_text_debug_mode:
-                    for output_index,output in enumerate(outputs[1:]):
-                        with open(log_file_path + '-output-debug-psm-' + tesseract_params[output_index + 1][0] + '.txt', 'w') as log_file:
-                            log_file.write(output)
-                script_logger.log('main output_text : ', outputs[0])
+                    for output_index,debug_output in enumerate(outputs[1:]):
+                        post_log += '\n' + 'final debug output for psm {} was:{}'.format(
+                            tesseract_params[output_index + 1][0],
+                            debug_output
+                        )
+
+                script_logger.log(post_log)
+                script_logger.get_action_log().add_post_file(
+                    'text',
+                    'imageToText-results.txt',
+                    pre_log + '\n' + inputs_log + '\n' + post_log
+                )
                 state[action["actionData"]["outputVarName"]] = outputs[0]
                 status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "contextSwitchAction":
             success_states = context["success_states"] if "success_states" in context else None
             script_counter = context["script_counter"]
             script_timer = context["script_timer"]
-            with open(log_file_path + '-vars.txt', 'w') as log_file:
+            post_log = ''
+            with open(script_logger.get_log_path_prefix() + '-vars.txt', 'w') as log_file:
                 if action["actionData"]["state"] is not None:
                     state = action["actionData"]["state"].copy()
                 if action["actionData"]["context"] is not None:
@@ -407,57 +517,109 @@ class SystemHostController:
                 if 'state' in action["actionData"]["update_dict"]:
                     for key, value in action["actionData"]["update_dict"]["state"].items():
                         state[key] = value
-                    log_file.write('context switch state' + str(list(action["actionData"]["update_dict"]["state"])))
+                    input_state_log = 'Keys in input state: {}'.format(
+                        str(list(action["actionData"]["update_dict"]["state"]))
+                    )
+                    post_log += input_state_log + '\n'
+                    script_logger.log(input_state_log)
 
                 if 'context' in action["actionData"]["update_dict"]:
                     for key, value in action["actionData"]["update_dict"]["context"].items():
                         context[key] = value
-                    log_file.write('context switch context' + str(list(action["actionData"]["update_dict"]["context"])))
+                    input_context_log = 'Keys in input context: {}'.format(
+                        str(list(action["actionData"]["update_dict"]["context"]))
+                    )
+                    post_log += input_context_log + '\n'
+                    script_logger.log(input_context_log)
+
 
                 if success_states is not None:
                     context["success_states"] = success_states
                 context["script_counter"] = script_counter
                 context["script_timer"] = script_timer
                 status = ScriptExecutionState.SUCCESS
-
-                log_file.write(str(context["script_counter"]) + '-' + str(context["script_timer"]))
+                iteration_log = 'Script Counter: {}'.format(
+                    str(context["script_counter"])
+                ) + '\n' + 'Script Timer: {}'.format(
+                    str(context["script_timer"])
+                )
+                script_logger.log(iteration_log)
+                post_log += iteration_log + '\n'
+            script_logger.get_action_log().add_post_file(
+                'text',
+                'contextSwitchAction-log.txt',
+                'System Created Action - Context Switch Action\n' + post_log
+            )
 
         elif action["actionName"] == "sendMessageAction":
             message = state_eval(action["actionData"]["inputExpression"], {}, state)
-            with open('sendMessageAction-' + str(action["actionData"]["messagingProvider"]) + '.txt', 'w') as log_file:
-                log_file.write('Messaging Provider: ' + str(action["actionData"]["messagingProvider"]) + '\n')
-                log_file.write('Message Type: ' + str(action["actionData"]["messageType"]) + '\n')
-                log_file.write('Message Contents: ' + str(message) + '\n')
-            script_logger.log('Sending message through ' + str(action["actionData"]["messagingProvider"]) + ' of type ' + str(action["actionData"]["messageType"]))
+
+            pre_log = 'Sending message through ' + str(action["actionData"]["messagingProvider"]) +\
+                      ' of type ' + str(action["actionData"]["messageType"])
+            script_logger.log(pre_log)
+
+            mid_log = 'Message Contents: ' + str(message)
+            script_logger.log(mid_log)
+
             messaging_successful = self.messaging_helper.send_message(json.dumps({
                 "messagingProvider" : action["actionData"]["messagingProvider"],
                 "messageType" : action["actionData"]["messageType"],
                 "message" : message
             }))
+
             if messaging_successful:
                 status = ScriptExecutionState.SUCCESS
+                post_log = 'Message Send Successful'
             else:
                 status = ScriptExecutionState.FAILURE
+                post_log = 'Message Send Failed'
+            script_logger.log(post_log)
+            script_logger.get_action_log().add_post_file(
+                'text',
+                'sendMessage-log.txt',
+                pre_log + '\n' + mid_log + '\n' + post_log
+            )
         elif action["actionName"] == "returnStatement":
-            script_logger.log('returnStatement with params ' + action["actionData"]["returnStatementType"] + ' ' + action["actionData"]["returnStatus"])
-            with open(log_file_path + '-return-statement-{}-{}.txt'.format(action["actionData"]["returnStatementType"], action["actionData"]["returnStatus"]), 'w') as log_file:
-                log_file.write('returningStatement ran with params: ' + action["actionData"]["returnStatementType"] + ' ' + action["actionData"]["returnStatus"])
+            pre_log = 'Return Statement Type: {}'.format(action["actionData"]["returnStatementType"])
+            script_logger.log(pre_log)
+
+            mid_log = 'Desired Return Status: {}'.format(action["actionData"]["returnStatus"])
+            script_logger.log(mid_log)
+            status_name = 'undefined'
             if action["actionData"]["returnStatementType"] == 'exitBranch':
                 if action["actionData"]["returnStatus"] == 'failure':
                     status = ScriptExecutionState.FINISHED_FAILURE_BRANCH
+                    status_name = 'FINISHED_FAILURE_BRANCH'
                 elif action["actionData"]["returnStatus"] == 'success':
                     status = ScriptExecutionState.FINISHED_BRANCH
+                    status_name = 'FINISHED_BRANCH'
             elif action["actionData"]["returnStatementType"] == 'exitScript':
                 if action["actionData"]["returnStatus"] == 'failure':
                     status = ScriptExecutionState.FINISHED_FAILURE
+                    status_name = 'FINISHED_FAILURE'
                 elif action["actionData"]["returnStatus"] == 'success':
                     status = ScriptExecutionState.FINISHED
+                    status_name = 'FINISHED'
             elif action["actionData"]["returnStatementType"] == 'exitProgram':
-                script_logger.log('encountered exit program return statement')
+                post_log = 'Exiting Program'
+                script_logger.log(post_log)
+                script_logger.get_action_log().add_post_file(
+                    'text',
+                    'returnStatement-{}.txt'.format('exit-0'),
+                    pre_log + '\n' + mid_log + '\n' + post_log
+                )
                 exit(0)
             else:
                 script_logger.log('return statement type not implemented', action["actionData"]["returnStatementType"])
                 exit(1)
+            post_log = 'Setting Status: {}'.format(status_name)
+            script_logger.log(post_log)
+            script_logger.get_action_log().add_post_file(
+                'text',
+                'returnStatement-{}.txt'.format(status_name),
+                pre_log + '\n' + mid_log + '\n' + post_log
+            )
+        #TODO: will be removed, use returnStatement instead
         elif action["actionName"] == "exceptionAction":
             script_logger.log('exceptionAction-' + str(action["actionGroup"]), ' message: ', action["actionData"]["exceptionMessage"])
             if action["actionData"]["takeScreenshot"]:
@@ -466,31 +628,71 @@ class SystemHostController:
                 script_logger.log('exiting program')
                 exit(0)
             status = ScriptExecutionState.FINISHED_FAILURE
-            with open(log_file_path + '-return-failure.txt', 'w') as log_file:
+            with open(script_logger.get_log_path_prefix() + '-return-failure.txt', 'w') as log_file:
                 log_file.write('returning failure state')
         elif action["actionName"] == "forLoopAction":
-            script_logger.log('CONTROL FLOW: initiating forLoopAction-' + str(action["actionGroup"]))
-
+            pre_log = 'Initializing Context Switch Actions for For Loop Action'
             first_loop = True
+            script_logger.log(pre_log)
             in_variable = state_eval(action["actionData"]["inVariables"], {}, state)
 
-            script_logger.log('forLoopAction-' + str(action["actionGroup"]), 'input inVariable : ', action["actionData"]["inVariables"], ' value: ', in_variable)
+            mid_log_1 = 'inVariable: {} evaluated to: {}'.format(
+                str(action["actionData"]["inVariables"]),
+                str(in_variable)
+            )
+
+            script_logger.log(
+                'inVariable:',
+                action["actionData"]["inVariables"],
+                'evaluated to:',
+                in_variable
+            )
             for_variable_list = action["actionData"]["forVariables"].split(',')
+
+            mid_log_2 = 'forVariables: {} evaluated to: {}'.format(
+                str(action["actionData"]["forVariables"]),
+                str(for_variable_list)
+            )
+
+            script_logger.log(
+                'forVariables:',
+                action["actionData"]["forVariables"],
+                'evaluated to:',
+                for_variable_list
+            )
+            post_log = ''
+            for_iteration = 0
             for for_variables in in_variable:
                 state_update_dict = {
                     var_name:for_variables[var_index] for var_index,var_name in enumerate(for_variable_list)
                 } if len(for_variable_list) > 1 else {
-                    for_variable_list[0]:for_variables
+                    for_variable_list[0]: for_variables
                 }
-                script_logger.log('forLoopAction-' + str(action["actionGroup"]), 'defining forVariables : ', for_variable_list, ' values: ', for_variables)
+                script_logger.log(
+                    'for variables for iteration {}'.format(for_iteration),
+                    for_variables
+                )
+                post_log += 'for variables for iteration {}: {}'.format(
+                    for_iteration,
+                    str(for_variables)
+                )
+
+                for_iteration += 1
                 if first_loop:
                     state.update(state_update_dict)
                     first_loop = False
+                    post_log += '\n' + 'copying for variables to current state for first loop'
                     continue
+                post_log += '\n' + 'creating context switch action for iteration {}'.format(for_iteration)
                 switch_action = generate_context_switch_action(action["childGroups"], None, None, {
                     "state": state_update_dict
                 })
                 run_queue.append(switch_action)
+            script_logger.get_action_log().add_post_file(
+                'text',
+                'forLoopAction-log.txt',
+                pre_log + '\n' + mid_log_1 + '\n' + mid_log_2 + '\n' + post_log
+            )
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "codeBlock":
             globals = {
@@ -500,12 +702,18 @@ class SystemHostController:
                 'shutil' : shutil,
                 'numpy' : np
             }
+            pre_log = 'Running Code Block: \n{}'.format(action["actionData"]["codeBlock"])
             # statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
-            script_logger.log('codeBlock-' + str(action["actionGroup"]) + ' : ', action["actionData"]["codeBlock"])
-            with open(log_file_path + '-codeblock.txt', 'w') as log_file:
-                log_file.write(action["actionData"]["codeBlock"])
+            script_logger.log(pre_log)
+
             exec(action["actionData"]["codeBlock"],globals,state)
+            script_logger.get_action_log().add_post_file(
+                'text',
+                'codeBlock-log.txt',
+                pre_log + '\n' + 'Code Block completed successfully'
+            )
             status = ScriptExecutionState.SUCCESS
+        #TODO : unsupported for now
         elif action["actionName"] == "databaseCRUD":
             if action["actionData"]["databaseType"] == "mongoDB":
                 with open(SERVICE_CREDENTIALS_FILE_PATH, 'r') as service_credentials_file:

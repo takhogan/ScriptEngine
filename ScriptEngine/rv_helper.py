@@ -27,7 +27,6 @@ class RandomVariableHelper:
             mins = (action["actionData"]["min"] - mean) / stddev
             maxes = (action["actionData"]["max"] - mean) / stddev
             delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)
-            script_logger.log(delays)
             return delays
         elif action["actionData"]["distType"] == "uniform":
             min_val = action["actionData"]["min"]

@@ -51,7 +51,8 @@ class ForwardDetectPeekHelper:
         if screencap_im_bgr is not None:
             return screencap_im_bgr
         if 'screencap_im_bgr' in action['actionData'] and action['actionData']['screencap_im_bgr'] is not None:
-            script_logger.log('detectObject-' + str(action["actionGroup"]) + ' loading cached screenshot')
+            script_logger.log('loading cached screenshot')
+
             screencap_im_bgr = action['actionData']['screencap_im_bgr']
             del action['actionData']['screencap_im_bgr']
         else:

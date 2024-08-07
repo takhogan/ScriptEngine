@@ -11,14 +11,23 @@ class ColorCompareHelper:
         pass
 
     @staticmethod
-    def handle_color_compare(screencap_im_bgr, action, state, logs_path):
+    def handle_color_compare(screencap_im_bgr, action, state):
 
-        script_logger.log('colorCompareAction-' + str(action["actionGroup"]) + ' compareMode: ' + action["actionData"][
-            "compareMode"] + ' reference color: ' + str(action['actionData']['referenceColor']))
+        pre_log_1 = 'Compare Mode: {}'.format(
+            action["actionData"]["compareMode"]
+        )
+        script_logger.log(pre_log_1)
+
+        pre_log_2 = 'Reference Color: {}'.format(
+            str(action['actionData']['referenceColor'])
+        )
+        script_logger.log(pre_log_2)
+
+        pre_log_3 = ''
         if action["actionData"]["compareMode"] == 'mean':
             img_colors = np.mean(screencap_im_bgr, axis=0)
             img_colors = [img_colors[2], img_colors[1], img_colors[0]]
-            script_logger.log('colorCompareAction-' + str(action["actionGroup"]), 'mean color', img_colors)
+            pre_log_3 = 'Mean Color: {}'.format(img_colors)
         elif action["actionData"]["compareMode"] == 'mode':
             color_counts = {}
             # Iterate over each pixel
@@ -47,16 +56,28 @@ class ColorCompareHelper:
                 img_colors = [int(val) * 4 for val in mode_color_key.split(',')]
             else:
                 img_colors = [0, 0, 0]  # Default/fallback values in case there's no mode color key
-            script_logger.log('colorCompareAction-' + str(action["actionGroup"]), 'mode color:', str(img_colors))
+            pre_log_3 = 'Mode Color: {}'.format(img_colors)
+        script_logger.log(pre_log_3)
 
-        ref_color_ints = list(map(int, action['actionData'][
-            'referenceColor']))
+        ref_color_ints = list(map(int, action['actionData']['referenceColor']))
         color_score = (100 - ColorCompareHelper.compare_colors(img_colors, ref_color_ints)) / 100
-        script_logger.log('colorCompareAction-' + str(action["actionGroup"]), 'color score', color_score)
-        ColorCompareHelper.create_color_image(img_colors, logs_path + 'compare_image_color.png')
-        ColorCompareHelper.create_color_image(ref_color_ints, logs_path + 'reference_image_color.png')
-        with open(logs_path + 'color_score.txt', 'w') as score_file:
-            score_file.write('colorScore:' + str(color_score) + '\n')
+
+        post_log = 'Color Score: {}'.format(color_score)
+
+        script_logger.get_action_log().add_supporting_file(
+            'text',
+            'compare-result.txt',
+            pre_log_1 + '\n' + pre_log_2 + '\n' + pre_log_3 + '\n' + post_log
+        )
+
+        input_color_relative_path = script_logger.get_log_header() + '-input_color.png'
+        ColorCompareHelper.create_color_image(img_colors, script_logger.get_log_folder() + input_color_relative_path)
+        script_logger.get_action_log().set_post_file('image', input_color_relative_path)
+
+        reference_color_relative_path = script_logger.get_log_header() + '-reference_color.png'
+        ColorCompareHelper.create_color_image(ref_color_ints, script_logger.get_log_folder() + reference_color_relative_path)
+        script_logger.get_action_log().set_post_file('image', reference_color_relative_path)
+
         return color_score
 
     @staticmethod

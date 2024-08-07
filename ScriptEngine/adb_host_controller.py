@@ -38,6 +38,8 @@ from detect_object_helper import DetectObjectHelper
 from forward_detect_peek_helper import ForwardDetectPeekHelper
 from rv_helper import RandomVariableHelper
 from color_compare_helper import ColorCompareHelper
+from script_action_log import ScriptActionLog
+
 
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
 KEY_TO_KEYCODE = {
@@ -985,9 +987,11 @@ class adb_host:
         # script_logger.log((''.join(command_string)).encode('utf-8'))
         self.event_counter += 1
 
-    def handle_action(self, action, state, context, run_queue, log_level, log_folder, lazy_eval=False):
-        logs_path = log_folder + str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]) + '-'
-
+    def handle_action(self, action, state, context, run_queue, lazy_eval=False):
+        script_logger.set_log_header(
+            str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]))
+        script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
+        script_logger.set_action_log(ScriptActionLog(action, script_logger.get_log_path_prefix()))
 
         #initialize
         if action["actionName"] == "ADBConfigurationAction":
@@ -998,16 +1002,21 @@ class adb_host:
 
         #execute action
         if action["actionName"] == "detectObject":
-            # https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html
-            # https://learnopencv.com/image-resizing-with-opencv/
-
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
             check_image_scale = screencap_im_bgr is None
             screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, screencap_im_bgr)
 
             if screencap_im_bgr is None:
-                script_logger.log('detectObject-' + str(action["actionGroup"]) + ' taking screenshot')
+                script_logger.log('No cached screenshot or input expression, taking screenshot')
                 screencap_im_bgr = self.screenshot()
+
+            if script_logger.get_log_level() == 'info':
+                input_image_relative_path = script_logger.get_log_header() + 'detectObject-inputImage.png'
+                cv2.imwrite(input_image_relative_path, screencap_im_bgr)
+                script_logger.get_action_log().set_pre_file(
+                    'image',
+                    input_image_relative_path
+                )
 
             if lazy_eval:
                 return DetectObjectHelper.handle_detect_object, (
@@ -1019,9 +1028,6 @@ class adb_host:
                     match_point,
                     check_image_scale,
                     self.props['scriptMode'],
-                    log_level,
-                    logs_path,
-                    self.props['dir_path'],
                     True
                 )
             else:
@@ -1034,26 +1040,15 @@ class adb_host:
                     match_point=match_point,
                     check_image_scale=check_image_scale,
                     script_mode=self.props['scriptMode'],
-                    log_level=log_level,
-                    logs_path=logs_path,
-                    dir_path=self.props['dir_path']
                 )
                 return action, status, state, context, run_queue, update_queue
         elif action["actionName"] == "clickAction":
             action["actionData"]["clickCount"] = int(action["actionData"]["clickCount"])
-            # if '__builtins__' in state:
-            #     script_logger.log('deleting builtins')
-            #     del state['__builtins__']
-            # script_logger.log('pre clickaction state ', state)
             var_name = action["actionData"]["inputExpression"]
-            point_choice,state,context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
-            # if '__builtins__' in state:
-            #     script_logger.log('deleting builtins')
-            #     del state['__builtins__']
-            # script_logger.log('post clickaction state ', state)
-            # point_choice = (
-            # point_choice[0] * self.width / self.props['width'], point_choice[1] * self.height / self.props['height'])
-            script_logger.log('clickAction-' + str(action["actionGroup"]), ' input: ', var_name, ' output : ', point_choice)
+            point_choice,point_list,state,context = ClickActionHelper.get_point_choice(
+                action, var_name, state, context,
+                self.width, self.height
+            )
             delays = []
             if action["actionData"]["delayState"] == "active":
                 if action["actionData"]["distType"] == 'normal':
@@ -1065,7 +1060,9 @@ class adb_host:
                                                                                        "clickCount"] > 1 else [
                         truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]
 
-            ClickActionHelper.draw_click(self.screenshot(), point_choice, logs_path, log_level)
+            ClickActionHelper.draw_click(
+                self.screenshot(), point_choice, point_list
+            )
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1])
                 time.sleep(delays[click_count])
@@ -1074,7 +1071,7 @@ class adb_host:
 
         elif action["actionName"] == "shellScript":
             if self.host_os is not None:
-                state = self.host_os.run_script(action, state, logs_path)
+                state = self.host_os.run_script(action, state)
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationSource":
             source_point = random.choice(action["actionData"]["pointList"])
@@ -1094,27 +1091,53 @@ class adb_host:
                 target_point = state_eval(action["actionData"]["inputExpression"], {}, state)
             script_logger.log('dragLocationTarget: dragging from ', source_point, ' to ', target_point)
             self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
-            ClickActionHelper.draw_click(self.screenshot(), source_point, logs_path, log_level, logs_prefix='drag_source')
-            ClickActionHelper.draw_click(self.screenshot(), target_point, logs_path, log_level, logs_prefix='drag_target')
+            ClickActionHelper.draw_click(self.screenshot(), source_point, logs_prefix='drag_source')
+            ClickActionHelper.draw_click(self.screenshot(), target_point, logs_prefix='drag_target')
 
             del context["dragLocationSource"]
             # script_logger.log(source_point)
             # script_logger.log(target_point)
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "colorCompareAction":
-            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state,
-                                                                               output_type='matched_pixels')
+            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(
+                action, state, output_type='matched_pixels'
+            )
             if screencap_im_bgr is None:
-                script_logger.log('colorCompareAction-' + str(action["actionGroup"]) + ' taking screenshot')
+                script_logger.log('No cached screenshot or input expression, taking screenshot')
                 screencap_im_bgr = self.screenshot()
-            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state, logs_path)
+
+            if script_logger.get_log_level() == 'info':
+                input_image_relative_path = script_logger.get_log_header() + 'detectObject-inputImage.png'
+                cv2.imwrite(input_image_relative_path, screencap_im_bgr)
+                script_logger.get_action_log().set_pre_file(
+                    'image',
+                    input_image_relative_path
+                )
+
+            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state)
             if color_score > float(action['actionData']['threshold']):
+                script_logger.get_action_log().append_supporting_file(
+                    'text',
+                    'compare-result.txt',
+                    '\nAction successful. Color Score of {} was above threshold of {}'.format(
+                        color_score,
+                        float(action['actionData']['threshold'])
+                    )
+                )
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
+                script_logger.get_action_log().append_supporting_file(
+                    'text',
+                    'compare-result.txt',
+                    '\nAction failed. Color Score of {} was below threshold of {}'.format(
+                        color_score,
+                        float(action['actionData']['threshold'])
+                    )
+                )
                 return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
 
         elif action["actionName"] == "searchPatternStartAction":
-            context = self.search_pattern_helper.generate_pattern(action, context, log_folder, self.props['dir_path'])
+            # context = self.search_pattern_helper.generate_pattern(action, context, log_folder, self.props['dir_path'])
             # script_logger.log(state)
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "searchPatternContinueAction":
@@ -1353,12 +1376,13 @@ class adb_host:
             #
             # del context["search_patterns"][action["actionData"]["searchPatternID"]]
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+        #TODO: deprecated
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
                 # script_logger.log(np.array(pyautogui.screenshot()).shape)
                 # exit(0)
                 log_image = self.screenshot()
-                cv2.imwrite(logs_path + '-logImage.png', log_image)
+                cv2.imwrite(script_logger.get_log_path_prefix() + '-logImage.png', log_image)
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
                 script_logger.log('log type unimplemented ' + action["actionData"]["logType"])
@@ -1368,7 +1392,9 @@ class adb_host:
             # self.state[action["actionData"]["outputVarName"]] = expression
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "keyboardAction":
-            status, state, context = DeviceActionInterpreter.parse_keyboard_action(self, action, state, context)
+            status, state, context = DeviceActionInterpreter.parse_keyboard_action(
+                self, action, state, context
+            )
             return action, status, state, context, run_queue, []
         else:
             script_logger.log("action uninplemented on adb " + action["actionName"])
@@ -1465,7 +1491,8 @@ async def read_input():
             script_logger.log('ADB CONTROLLER: device key mismatch ', device_key, inputs[1])
             continue
         if process_adb_host is None:
-            script_logger.set_log_path('./logs/{}-adb-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
+            script_logger.set_log_file_path('./logs/{}-adb-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
+            script_logger.set_log_header('')
             script_logger.log('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
             script_logger.log('ADB CONTROLLER PROCESS: processing inputs ', inputs)
                 # process_file.write(json.dumps(adb_args) + '\n')
@@ -1483,6 +1510,8 @@ async def adb_controller_main():
 
 if __name__ == '__main__':
     os.makedirs('/logs', exist_ok=True)
-    script_logger.set_log_path('/logs/' + formatted_today + '-adb-host-controller-main.txt')
+    script_logger.set_log_file_path('/logs/' + formatted_today + '-adb-host-controller-main.txt')
+    script_logger.set_log_header('')
+
 
     asyncio.run(adb_controller_main())

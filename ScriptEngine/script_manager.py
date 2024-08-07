@@ -62,7 +62,7 @@ def update_running_scripts_file(scriptname, action):
                 with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
                     json.dump(running_scripts, running_script_file)
 
-def load_and_run(script_name, script_id, timeout, constants=None, start_time_str=None, log_level='info', device_details=None, system_script=False):
+def load_and_run(script_name, script_id, timeout, constants=None, start_time_str=None, device_details=None, system_script=False):
     # if you want to open zip then you pass .zip in command line args
     # update_running_scripts_file(script_name, 'push')
     script_logger.log('SCRIPT_MANAGER: ', ' script trigger time: ',
@@ -104,7 +104,6 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         start_time_str,
         script_id,
         device_manager,
-        log_level=log_level,
         state=constants,
         script_start_time=start_time
     )
@@ -165,16 +164,19 @@ if __name__=='__main__':
 
     log_folder = './logs/' + str(0).zfill(5) + '-' +\
                  script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/stdout.txt'
-    script_logger.set_log_path(log_folder)
+    script_logger.set_log_file_path(log_folder)
+    script_logger.set_log_header('')
+    script_logger.set_log_level(log_level)
     script_logger.log('SCRIPT MANAGER: completed parsing args ', sys.argv)
-    script_logger.log('SCRIPT MANAGER: loading script {} and running with log level {}'.format(script_name, log_level))
+    script_logger.log('SCRIPT MANAGER: loading script {} and running with log level {}'.format(
+        script_name, script_logger.get_log_level())
+    )
     load_and_run(
         script_name,
         script_id,
         timeout=(start_time + datetime.timedelta(minutes=30)).astimezone(tz=tz.tzutc()) if end_time is None else end_time,
         start_time_str=start_time_str,
         constants=constants,
-        log_level=log_level,
         device_details=device_details,
         system_script=system_script
     )
