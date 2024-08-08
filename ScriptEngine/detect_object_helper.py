@@ -140,6 +140,11 @@ class DetectObjectHelper:
             script_mode='train',
             lazy_eval=False
     ):
+        script_logger.get_action_log().add_supporting_file(
+            'text',
+            'detect_result.txt',
+            ''
+        )
         screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
         if script_mode == "train" and script_logger.get_log_level() == 'info':
             template_image_relative_path = script_logger.get_log_path_prefix() + 'templateImage.png'

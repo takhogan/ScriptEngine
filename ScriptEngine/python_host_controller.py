@@ -184,8 +184,8 @@ class python_host:
                 screencap_im_bgr = self.screenshot()
 
             if script_logger.get_log_level() == 'info':
-                input_image_relative_path = script_logger.get_log_header() + 'detectObject-inputImage.png'
-                cv2.imwrite(input_image_relative_path, screencap_im_bgr)
+                input_image_relative_path = script_logger.get_log_header() + '-detectObject-inputImage.png'
+                cv2.imwrite(script_logger.get_log_folder() + input_image_relative_path, screencap_im_bgr)
                 script_logger.get_action_log().set_pre_file(
                     'image',
                     input_image_relative_path
@@ -224,8 +224,8 @@ class python_host:
                 screencap_im_bgr = self.screenshot()
 
             if script_logger.get_log_level() == 'info':
-                input_image_relative_path = script_logger.get_log_header() + 'detectObject-inputImage.png'
-                cv2.imwrite(input_image_relative_path, screencap_im_bgr)
+                input_image_relative_path = script_logger.get_log_header() + '-detectObject-inputImage.png'
+                cv2.imwrite(script_logger.get_log_folder() + input_image_relative_path, screencap_im_bgr)
                 script_logger.get_action_log().set_pre_file(
                     'image',
                     input_image_relative_path
@@ -262,7 +262,7 @@ class python_host:
                 # script_logger.log(np.array(pyautogui.screenshot()).shape)
                 # exit(0)
                 log_image = self.screenshot()
-                cv2.imwrite(logs_path + '-logImage.png', log_image)
+                cv2.imwrite(script_logger.get_log_path_prefix() + '-logImage.png', log_image)
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
                 script_logger.log('log type unimplemented ' + action["actionData"]["logType"])

@@ -294,15 +294,14 @@ class ScriptExecutor:
 
 
     def handle_action(self, action, lazy_eval=False):
+        self.context["script_counter"] += 1
         script_logger.set_log_header(
             str(self.context['script_counter']).zfill(5) + '-' +\
             action["actionName"] + '-' + str(action["actionGroup"])
         )
         script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
-        script_logger.set_action_log(ScriptActionLog(action, script_logger.get_log_path_prefix()))
-
+        script_logger.set_action_log(ScriptActionLog(action, script_logger.get_log_folder(), script_logger.get_log_header()))
         self.log_action_details(action)
-        self.context["script_counter"] += 1
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
                 handle_action_result = self.device_manager.adb_host.handle_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
