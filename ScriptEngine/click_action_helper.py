@@ -99,14 +99,14 @@ class ClickActionHelper:
     def draw_click(screenshot_bgr, point_choice, point_list):
         overlay = screenshot_bgr.copy()
         if point_list['input_type'] == 'point_list':
-            for point in point_list:
+            for point in point_list['point_list']:
                 cv2.circle(overlay, point, radius=1, color=(0, 0, 255), thickness=-1)
         elif point_list['input_type'] == 'rectangle':
             cv2.rectangle(
                 overlay,
                 point_list["point"],
-                (point_list["point"][0] + point_list["width"],
-                 point_list["point"][1] + point_list["height"]),
+                (int(point_list["point"][0] + point_list["width"]),
+                 int(point_list["point"][1] + point_list["height"])),
                 color=(0,0,255),
                 thickness=-1
             )
@@ -116,8 +116,8 @@ class ClickActionHelper:
                 cv2.circle(
                     overlay,
                     (
-                        point_list["point"][0] + point[0],
-                        point_list["point"][1] + point[1]
+                        int(point_list["point"][0] + point[0]),
+                        int(point_list["point"][1] + point[1])
                     ),
                     radius=1,
                     color=(0, 0, 255),

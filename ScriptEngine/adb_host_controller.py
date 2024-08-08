@@ -988,11 +988,6 @@ class adb_host:
         self.event_counter += 1
 
     def handle_action(self, action, state, context, run_queue, lazy_eval=False):
-        script_logger.set_log_header(
-            str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]))
-        script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
-        script_logger.set_action_log(ScriptActionLog(action, script_logger.get_log_path_prefix()))
-
         #initialize
         if action["actionName"] == "ADBConfigurationAction":
             status, state, context = self.configure_adb(action, state, context)
@@ -1011,8 +1006,8 @@ class adb_host:
                 screencap_im_bgr = self.screenshot()
 
             if script_logger.get_log_level() == 'info':
-                input_image_relative_path = script_logger.get_log_header() + 'detectObject-inputImage.png'
-                cv2.imwrite(input_image_relative_path, screencap_im_bgr)
+                input_image_relative_path = script_logger.get_log_header() + '-detectObject-inputImage.png'
+                cv2.imwrite(script_logger.get_log_folder() + input_image_relative_path, screencap_im_bgr)
                 script_logger.get_action_log().set_pre_file(
                     'image',
                     input_image_relative_path
@@ -1074,29 +1069,32 @@ class adb_host:
                 state = self.host_os.run_script(action, state)
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationSource":
-            source_point = random.choice(action["actionData"]["pointList"])
-            script_logger.log('dragLocationSource : input expression : ', action["actionData"]["inputExpression"])
-            drag_input = action["actionData"]["inputExpression"]
-            if drag_input is not None and len(drag_input) > 0:
-                source_point = state_eval(action["actionData"]["inputExpression"], {}, state)
-                script_logger.log('dragLocationSource : reading input expression ', action["actionData"]["inputExpression"])
-            context["dragLocationSource"] = source_point
+            point_choice, point_list, state, context = ClickActionHelper.get_point_choice(
+                action, action['actionData']['inputExpression'], state, context,
+                self.width, self.height
+            )
+            context["dragLocationSource"] = point_choice
+            ClickActionHelper.draw_click(self.screenshot(), point_choice, point_list)
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationTarget":
             source_point = context["dragLocationSource"]
-            target_point = random.choice(action["actionData"]["pointList"])
-            drag_input = action["actionData"]["inputExpression"]
-            if drag_input is not None and len(drag_input) > 0:
-                script_logger.log('dragLocationTarget : input expression : ', action["actionData"]["inputExpression"])
-                target_point = state_eval(action["actionData"]["inputExpression"], {}, state)
-            script_logger.log('dragLocationTarget: dragging from ', source_point, ' to ', target_point)
+            target_point, point_list, state, context = ClickActionHelper.get_point_choice(
+                action, action['actionData']['inputExpression'], state, context,
+                self.width, self.height
+            )
+            drag_log = 'Dragging from {} to {}'.format(
+                str(source_point),
+                str(target_point)
+            )
+            script_logger.log(drag_log)
             self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
-            ClickActionHelper.draw_click(self.screenshot(), source_point, logs_prefix='drag_source')
-            ClickActionHelper.draw_click(self.screenshot(), target_point, logs_prefix='drag_target')
-
+            ClickActionHelper.draw_click(self.screenshot(), target_point, point_list)
+            script_logger.get_action_log().add_supporting_file(
+                'text',
+                'drag-log.txt',
+                drag_log
+            )
             del context["dragLocationSource"]
-            # script_logger.log(source_point)
-            # script_logger.log(target_point)
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "colorCompareAction":
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(
@@ -1107,8 +1105,8 @@ class adb_host:
                 screencap_im_bgr = self.screenshot()
 
             if script_logger.get_log_level() == 'info':
-                input_image_relative_path = script_logger.get_log_header() + 'detectObject-inputImage.png'
-                cv2.imwrite(input_image_relative_path, screencap_im_bgr)
+                input_image_relative_path = script_logger.get_log_header() + '-detectObject-inputImage.png'
+                cv2.imwrite(script_logger.get_log_folder() + input_image_relative_path, screencap_im_bgr)
                 script_logger.get_action_log().set_pre_file(
                     'image',
                     input_image_relative_path

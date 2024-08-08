@@ -51,7 +51,7 @@ class ImageMatcher:
             cv2.imwrite(matching_overlay_relative_path, result_im_bgr)
             script_logger.get_action_log().add_supporting_file_reference('image', matching_overlay_relative_path)
 
-            comparison_img_relative_path = script_logger.get_log_path_prefix() + 'detectObject-matchinghHeatMap.png'
+            comparison_img_relative_path = script_logger.get_log_path_prefix() + 'detectObject-matchingHeatMap.png'
             cv2.imwrite(comparison_img_relative_path, match_result * 255)
             script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
 
@@ -100,7 +100,11 @@ class ImageMatcher:
             str(screencap_mask_gray.shape)
         )
         script_logger.log(pre_log)
-        script_logger.get_action_log().append_pre_file('text', '\n' + pre_log)
+        script_logger.get_action_log().append_supporting_file(
+            'text',
+            'detect_result.txt',
+            '\n' + pre_log
+        )
         resized_im_log = ''
         if not use_resized_im_only:
             try:
@@ -137,7 +141,11 @@ class ImageMatcher:
                     str(screencap_search_bgr.shape),
                     str(screencap_mask_gray.shape)
                 )
-                script_logger.get_action_log().append_pre_file('text', '\n' + mid_log)
+                script_logger.get_action_log().append_supporting_file(
+                    'text',
+                    'detect_result.txt',
+                    '\n' + mid_log
+                )
                 match_result_resized = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr_resized.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr_resized,
                     cv2.cvtColor(screencap_search_bgr.copy(),

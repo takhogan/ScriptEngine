@@ -32,10 +32,6 @@ class SystemHostController:
         self.messaging_helper = MessagingHelper()
 
     def handle_action(self, action, state, context, run_queue):
-        script_logger.set_log_header(
-            str(context['script_counter']).zfill(5) + '-' + action["actionName"] + '-' + str(action["actionGroup"]))
-        script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
-        script_logger.set_action_log(ScriptActionLog(action, script_logger.get_log_path_prefix()))
         def sanitize_input(statement_input, state):
             statement_input = statement_input.strip()
             statement_input = statement_input.replace('\n', ' ')
@@ -87,7 +83,7 @@ class SystemHostController:
                 status = ScriptExecutionState.SUCCESS
                 script_logger.get_action_log().add_post_file(
                     'text',
-                    'variableAssignment-{}.txt'.format(outputVarName),
+                    'variableAssignment-log.txt',
                     (pre_log + '\n' if pre_log != '' else '')
                 )
             else:
@@ -136,7 +132,7 @@ class SystemHostController:
                 status = ScriptExecutionState.SUCCESS
                 script_logger.get_action_log().add_post_file(
                     'text',
-                    'variableAssignment-{}.txt'.format(outputVarName),
+                    'variableAssignment-log.txt',
                     (pre_log + '\n' if pre_log != '' else '') + \
                     mid_log + '\n' + \
                     mid_log_2 + '\n' + \
@@ -190,7 +186,7 @@ class SystemHostController:
                 status = ScriptExecutionState.SUCCESS
             script_logger.get_action_log().add_post_file(
                 'text',
-                'counterVarName-{}.txt'.format(counterVarName),
+                'counterVarName-log.txt',
                 pre_log + '\n' +\
                 post_log + '\n' +\
                 post_post_log
@@ -232,7 +228,7 @@ class SystemHostController:
             script_logger.log('created random values', delays)
             script_logger.get_action_log().add_post_file(
                 'text',
-                'randomVariable-{}.txt'.format(action["actionData"]["outputVarName"]),
+                'randomVariable-log.txt',
                 'Created random values: ' + str(delays)
             )
         #TODO: will be removed, need a new file io type action
