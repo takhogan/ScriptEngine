@@ -70,12 +70,16 @@ class ColorCompareHelper:
             pre_log_1 + '\n' + pre_log_2 + '\n' + pre_log_3 + '\n' + post_log
         )
 
-        input_color_relative_path = script_logger.get_log_header() + '-input_color.png'
-        ColorCompareHelper.create_color_image(img_colors, script_logger.get_log_folder() + input_color_relative_path)
+        input_color_relative_path = 'input_color.png'
+        ColorCompareHelper.create_color_image(
+            img_colors, script_logger.get_log_path_prefix() + input_color_relative_path
+        )
         script_logger.get_action_log().set_post_file('image', input_color_relative_path)
 
-        reference_color_relative_path = script_logger.get_log_header() + '-reference_color.png'
-        ColorCompareHelper.create_color_image(ref_color_ints, script_logger.get_log_folder() + reference_color_relative_path)
+        reference_color_relative_path = 'reference_color.png'
+        ColorCompareHelper.create_color_image(
+            ref_color_ints, script_logger.get_log_path_prefix() + reference_color_relative_path
+        )
         script_logger.get_action_log().set_post_file('image', reference_color_relative_path)
 
         return color_score
