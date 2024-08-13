@@ -11,6 +11,14 @@ class ScriptLogger:
             cls._instance = super(ScriptLogger, cls).__new__(cls, *args, **kwargs)
         return cls._instance
 
+    def __init__(self):
+        self.action_log = None
+        self.log_file_path = None
+        self.log_path_prefix = None
+        self.log_folder_path = None
+        self.log_header = None
+        self.log_level = 'info'
+
     def set_log_file_path(self, log_file_path):
         self.log_file_path = log_file_path
 
@@ -32,7 +40,7 @@ class ScriptLogger:
     def get_log_folder(self) -> str:
         return self.log_folder_path
 
-    def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=False):
+    def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True):
         text = str(datetime.datetime.now()) + ': ' + (
             self.log_header if log_header else ''
         ) + sep.join(map(str, args)) + end

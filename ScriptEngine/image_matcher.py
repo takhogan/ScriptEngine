@@ -47,12 +47,12 @@ class ImageMatcher:
 
         h, w = screencap_outputmask_gray.shape[0:2]
         if script_logger.get_log_level() == 'info':
-            matching_overlay_relative_path = script_logger.get_log_path_prefix() + 'detectObject-matchOverlayed.png'
-            cv2.imwrite(matching_overlay_relative_path, result_im_bgr)
+            matching_overlay_relative_path = 'detectObject-matchOverlayed.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
             script_logger.get_action_log().add_supporting_file_reference('image', matching_overlay_relative_path)
 
-            comparison_img_relative_path = script_logger.get_log_path_prefix() + 'detectObject-matchingHeatMap.png'
-            cv2.imwrite(comparison_img_relative_path, match_result * 255)
+            comparison_img_relative_path = 'detectObject-matchingHeatMap.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, match_result * 255)
             script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
 
         n_matches = len(matches)

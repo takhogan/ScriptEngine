@@ -114,6 +114,7 @@ class ScriptExecutor:
             'actionOrder': 'sequential',
             'success_states': None
         }
+        self.script_action_log = None
         # script_logger.log('update context : ', context["action_attempts"] if (context is not None and "action_attempts" in context) else 'none')
         if context is not None:
             self.context.update(context)
@@ -141,6 +142,8 @@ class ScriptExecutor:
         script_logger.set_log_file_path(self.log_folder + 'stdout.txt')
         script_logger.set_log_folder(self.log_folder)
 
+    def set_action_log(self, script_action_log):
+        self.script_action_log = script_action_log
 
     def rewind(self, input_vars):
         # script_logger.log('rewind context : ', self.context["action_attempts"])
@@ -309,6 +312,8 @@ class ScriptExecutor:
                 handle_action_result = self.device_manager.python_host.handle_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
             elif action["actionData"]["targetSystem"] == "none":
                 if action["actionName"] == "scriptReference":
+                    if self.script_action_log is not None:
+                        self.script_action_log.add_child_script(script_logger.get_action_log())
                     handle_action_result = self.handle_script_reference(action, self.state, self.context, self.run_queue)
                 else:
                     handle_action_result = self.device_manager.system_host.handle_action(action, self.state, self.context, self.run_queue)
@@ -425,6 +430,7 @@ class ScriptExecutor:
 
                 ref_script_executor.context["script_counter"] = self.context["script_counter"]
                 ref_script_executor.context["script_timer"] = self.context["script_timer"]
+            ref_script_executor.set_action_log(script_logger.get_action_log())
             child_log_folder = ref_script_executor.create_log_folders(
                 parent_folder=self.log_folder,
                 refresh_start_time=True

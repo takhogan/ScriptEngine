@@ -128,8 +128,8 @@ class ClickActionHelper:
         screenshot_bgr = cv2.addWeighted(overlay, alpha, screenshot_bgr, 1 - alpha, 0)
 
         cv2.circle(screenshot_bgr, list(map(int,point_choice)), radius=5, color=(255, 0, 0), thickness=-1)
-        output_image_relative_path = script_logger.get_log_header() + 'clickLocation.png'
-        cv2.imwrite(script_logger.get_log_folder() + output_image_relative_path, screenshot_bgr)
+        output_image_relative_path = 'clickLocation.png'
+        cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
         script_logger.get_action_log().set_post_file(
             'text',
             output_image_relative_path

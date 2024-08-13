@@ -257,8 +257,8 @@ class SystemHostController:
                 exit(1)
 
             transform_im = state[action['actionData']['inputExpression']]['matched_area']
-            pre_image_relative_path = script_logger.get_log_header() + 'imageTransformationAction-input.png'
-            cv2.imwrite(script_logger.get_log_folder() + pre_image_relative_path, transform_im)
+            pre_image_relative_path = 'imageTransformationAction-input.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, transform_im)
             script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
 
             if action["actionData"]["transformationType"] == "blur":
@@ -335,8 +335,8 @@ class SystemHostController:
                     transform_im = cv2.bitwise_not(transform_im)
                     transform_im = cv2.cvtColor(transform_im, cv2.COLOR_GRAY2BGR)
 
-            post_image_relative_path = script_logger.get_log_header() + 'imageTransformationAction-output.png'
-            cv2.imwrite(script_logger.get_log_folder() + post_image_relative_path, transform_im)
+            post_image_relative_path = 'imageTransformationAction-output.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + post_image_relative_path, transform_im)
             script_logger.get_action_log().set_post_file('image', post_image_relative_path)
 
             if len(action['actionData']['outputVarName']) > 0:
@@ -360,8 +360,8 @@ class SystemHostController:
                 )
                 pre_log = 'Image Transformations:\n'
 
-                pre_image_relative_path = script_logger.get_log_header() + 'imageToTextAction-raw-input.png'
-                cv2.imwrite(script_logger.get_log_folder() + pre_image_relative_path, search_im)
+                pre_image_relative_path = 'imageToTextAction-raw-input.png'
+                cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, search_im)
                 script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
 
                 image_to_text_input = cv2.cvtColor(search_im.copy(), cv2.COLOR_BGR2GRAY)
@@ -443,8 +443,8 @@ class SystemHostController:
                     script_logger.log(conversion_log)
                     pre_log += conversion_log + '\n'
 
-                mid_image_relative_path = script_logger.get_log_header() + 'imageToTextAction-parsed-input.png'
-                cv2.imwrite(script_logger.get_log_folder() + mid_image_relative_path, image_to_text_input)
+                mid_image_relative_path = 'imageToTextAction-parsed-input.png'
+                cv2.imwrite(script_logger.get_log_path_prefix() + mid_image_relative_path, image_to_text_input)
                 script_logger.get_action_log().add_supporting_file_reference('image', mid_image_relative_path)
 
                 tesseract_params = [
@@ -505,42 +505,39 @@ class SystemHostController:
             script_counter = context["script_counter"]
             script_timer = context["script_timer"]
             post_log = ''
-            with open(script_logger.get_log_path_prefix() + '-vars.txt', 'w') as log_file:
-                if action["actionData"]["state"] is not None:
-                    state = action["actionData"]["state"].copy()
-                if action["actionData"]["context"] is not None:
-                    context = action["actionData"]["context"].copy()
-                if 'state' in action["actionData"]["update_dict"]:
-                    for key, value in action["actionData"]["update_dict"]["state"].items():
-                        state[key] = value
-                    input_state_log = 'Keys in input state: {}'.format(
-                        str(list(action["actionData"]["update_dict"]["state"]))
-                    )
-                    post_log += input_state_log + '\n'
-                    script_logger.log(input_state_log)
-
-                if 'context' in action["actionData"]["update_dict"]:
-                    for key, value in action["actionData"]["update_dict"]["context"].items():
-                        context[key] = value
-                    input_context_log = 'Keys in input context: {}'.format(
-                        str(list(action["actionData"]["update_dict"]["context"]))
-                    )
-                    post_log += input_context_log + '\n'
-                    script_logger.log(input_context_log)
-
-
-                if success_states is not None:
-                    context["success_states"] = success_states
-                context["script_counter"] = script_counter
-                context["script_timer"] = script_timer
-                status = ScriptExecutionState.SUCCESS
-                iteration_log = 'Script Counter: {}'.format(
-                    str(context["script_counter"])
-                ) + '\n' + 'Script Timer: {}'.format(
-                    str(context["script_timer"])
+            if action["actionData"]["state"] is not None:
+                state = action["actionData"]["state"].copy()
+            if action["actionData"]["context"] is not None:
+                context = action["actionData"]["context"].copy()
+            if 'state' in action["actionData"]["update_dict"]:
+                for key, value in action["actionData"]["update_dict"]["state"].items():
+                    state[key] = value
+                input_state_log = 'Keys in input state: {}'.format(
+                    str(list(action["actionData"]["update_dict"]["state"]))
                 )
-                script_logger.log(iteration_log)
-                post_log += iteration_log + '\n'
+                post_log += input_state_log + '\n'
+                script_logger.log(input_state_log)
+
+            if 'context' in action["actionData"]["update_dict"]:
+                for key, value in action["actionData"]["update_dict"]["context"].items():
+                    context[key] = value
+                input_context_log = 'Keys in input context: {}'.format(
+                    str(list(action["actionData"]["update_dict"]["context"]))
+                )
+                post_log += input_context_log + '\n'
+                script_logger.log(input_context_log)
+            if success_states is not None:
+                context["success_states"] = success_states
+            context["script_counter"] = script_counter
+            context["script_timer"] = script_timer
+            status = ScriptExecutionState.SUCCESS
+            iteration_log = 'Script Counter: {}'.format(
+                str(context["script_counter"])
+            ) + '\n' + 'Script Timer: {}'.format(
+                str(context["script_timer"])
+            )
+            script_logger.log(iteration_log)
+            post_log += iteration_log + '\n'
             script_logger.get_action_log().add_post_file(
                 'text',
                 'contextSwitchAction-log.txt',

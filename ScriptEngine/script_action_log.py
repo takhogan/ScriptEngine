@@ -8,6 +8,7 @@ class ScriptActionLog:
         self.pre_file = None
         self.post_file = None
         self.supporting_files = []
+        self.children = []
         self.id = str(uuid.uuid4())
         self.to_dict()
 
@@ -29,15 +30,27 @@ class ScriptActionLog:
                         'file_type' : supporting_file[0],
                         'file_path' : supporting_file[1]
                     } for supporting_file in self.supporting_files
+                ],
+                'children' : [
+                    {
+                        'child_id' : child.get_id(),
+                        'child_path' : child.get_action_log_path()
+                    } for child in self.children
                 ]
             }, action_log_file)
 
-    def set_pre_file(self, file_type, relative_path):
-        self.pre_file = (file_type, self.base_path + relative_path)
+    def set_pre_file(self, file_type, relative_path, log_header=True):
+        self.pre_file = (
+            file_type,
+            (self.default_path_header if log_header else self.base_path) + relative_path
+        )
         self.to_dict()
 
-    def add_pre_file(self, file_type, relative_path, file_contents, end='\n'):
-        self.pre_file = (file_type, self.base_path + relative_path)
+    def add_pre_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
+        self.pre_file = (
+            file_type,
+            (self.default_path_header if log_header else self.base_path) + relative_path
+        )
         self.to_dict()
         if file_type == 'text':
             with open(self.pre_file[1], 'w') as pre_file:
@@ -53,12 +66,18 @@ class ScriptActionLog:
         else:
             raise Exception('Unsupported File Type')
 
-    def set_post_file(self, file_type, relative_path):
-        self.post_file = (file_type, self.base_path + relative_path)
+    def set_post_file(self, file_type, relative_path, log_header=True):
+        self.post_file = (
+            file_type,
+            (self.default_path_header if log_header else self.base_path) + relative_path
+        )
         self.to_dict()
 
-    def add_post_file(self, file_type, relative_path, file_contents, end='\n'):
-        self.post_file = (file_type, self.base_path + relative_path)
+    def add_post_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
+        self.post_file = (
+            file_type,
+            (self.default_path_header if log_header else self.base_path) + relative_path
+        )
         self.to_dict()
         if file_type == 'text':
             with open(self.post_file[1], 'w') as post_file:
@@ -74,15 +93,19 @@ class ScriptActionLog:
         else:
             raise Exception('Unsupported File Type')
 
-    def add_supporting_file_reference(self, file_type, relative_path):
-        new_supporting_file_path = self.base_path + relative_path
+    def add_supporting_file_reference(self, file_type, relative_path, log_header=True):
+        new_supporting_file_path = (
+           self.default_path_header if log_header else self.base_path
+        ) + relative_path
         for supporting_file_type,supporting_file_path in self.supporting_files:
             assert supporting_file_path != new_supporting_file_path
         self.supporting_files.append((file_type, new_supporting_file_path))
         self.to_dict()
 
-    def add_supporting_file(self, file_type, relative_path, file_contents, end='\n'):
-        new_supporting_file_path = self.base_path + relative_path
+    def add_supporting_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
+        new_supporting_file_path = (
+            self.default_path_header if log_header else self.base_path
+        ) + relative_path
         for supporting_file_type, supporting_file_path in self.supporting_files:
             assert supporting_file_path != new_supporting_file_path
         self.supporting_files.append((file_type, new_supporting_file_path))
@@ -93,8 +116,10 @@ class ScriptActionLog:
         else:
             raise Exception('Unsupported File Type')
 
-    def append_supporting_file(self, file_type, relative_path, file_contents, end='\n'):
-        existing_supporting_file_path = self.base_path + relative_path
+    def append_supporting_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
+        existing_supporting_file_path = (
+            self.default_path_header if log_header else self.base_path
+        ) + relative_path
         file_exists = False
         for supporting_file_type, supporting_file_path in self.supporting_files:
             if supporting_file_path == existing_supporting_file_path:
@@ -107,5 +132,11 @@ class ScriptActionLog:
         else:
             raise Exception('Unsupported File Type')
 
-    def default_file(self, fields, title) -> str:
-        pass
+    def add_child_script(self, action_logger):
+        self.children.append(action_logger)
+
+    def get_id(self):
+        return self.id
+
+    def get_action_log_path(self):
+        return self.default_path_header + 'action-log.json'

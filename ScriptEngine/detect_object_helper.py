@@ -147,8 +147,10 @@ class DetectObjectHelper:
         )
         screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
         if script_mode == "train" and script_logger.get_log_level() == 'info':
-            template_image_relative_path = script_logger.get_log_path_prefix() + 'templateImage.png'
-            cv2.imwrite(template_image_relative_path, screencap_search_bgr)
+            template_image_relative_path = 'templateImage.png'
+            cv2.imwrite(
+                script_logger.get_log_path_prefix() + template_image_relative_path, screencap_search_bgr
+            )
             script_logger.get_action_log().add_supporting_file_reference(
                 'image',
                 template_image_relative_path
