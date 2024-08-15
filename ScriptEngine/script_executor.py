@@ -295,16 +295,24 @@ class ScriptExecutor:
                         # self.actions[action_index] = action
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Finished forward peek')
 
-
-    def handle_action(self, action, lazy_eval=False):
-        self.context["script_counter"] += 1
+    def configure_action_logger(self, action):
         script_logger.set_log_header(
-            str(self.context['script_counter']).zfill(5) + '-' +\
+            str(self.context['script_counter']).zfill(5) + '-' + \
             action["actionName"] + '-' + str(action["actionGroup"])
         )
         script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
-        script_logger.set_action_log(ScriptActionLog(action, script_logger.get_log_folder(), script_logger.get_log_header()))
+        script_logger.set_action_log(ScriptActionLog(
+            action,
+            script_logger.get_log_folder(),
+            script_logger.get_log_header()
+        ))
+
+    def handle_action(self, action, lazy_eval=False):
+        self.context["script_counter"] += 1
+        self.configure_action_logger(action)
         self.log_action_details(action)
+        if self.script_action_log is not None:
+            self.script_action_log.add_child(script_logger.get_action_log())
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
                 handle_action_result = self.device_manager.adb_host.handle_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
@@ -312,8 +320,6 @@ class ScriptExecutor:
                 handle_action_result = self.device_manager.python_host.handle_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
             elif action["actionData"]["targetSystem"] == "none":
                 if action["actionName"] == "scriptReference":
-                    if self.script_action_log is not None:
-                        self.script_action_log.add_child_script(script_logger.get_action_log())
                     handle_action_result = self.handle_script_reference(action, self.state, self.context, self.run_queue)
                 else:
                     handle_action_result = self.device_manager.system_host.handle_action(action, self.state, self.context, self.run_queue)
@@ -328,6 +334,8 @@ class ScriptExecutor:
         if 'postActionDelay' in action['actionData'] and len(action['actionData']['postActionDelay']) > 0:
             RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], self.state)
 
+        _, status, _, _, _, _ = handle_action_result
+        script_logger.get_action_log().set_status(status)
         return handle_action_result
 
     def handle_script_reference(self, action, state, context, run_queue):

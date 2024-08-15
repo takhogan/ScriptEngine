@@ -1,3 +1,4 @@
+import datetime
 import uuid
 import json
 
@@ -10,6 +11,14 @@ class ScriptActionLog:
         self.supporting_files = []
         self.children = []
         self.id = str(uuid.uuid4())
+        self.status = 'started'
+        self.start_time = datetime.datetime.now()
+
+        if action["actionData"]["targetSystem"] == "none" and action["actionName"] == "scriptReference":
+            self.type = 'script'
+        else:
+            self.type = 'action'
+
         self.to_dict()
 
     def to_dict(self):
@@ -17,6 +26,9 @@ class ScriptActionLog:
             json.dump({
                 'base_path' : self.base_path,
                 'id' : self.id,
+                'type' : self.type,
+                'status' : self.get_status(),
+                'elapsed' : datetime.datetime.now() - self.start_time,
                 'pre_file' : {
                     'file_type' : self.pre_file[0],
                     'file_path' : self.pre_file[1]
@@ -33,8 +45,9 @@ class ScriptActionLog:
                 ],
                 'children' : [
                     {
-                        'child_id' : child.get_id(),
-                        'child_path' : child.get_action_log_path()
+                        'id' : child.get_id(),
+                        'type' : child.get_type(),
+                        'action_log_path' : child.get_action_log_path()
                     } for child in self.children
                 ]
             }, action_log_file)
@@ -132,11 +145,22 @@ class ScriptActionLog:
         else:
             raise Exception('Unsupported File Type')
 
-    def add_child_script(self, action_logger):
+    def add_child(self, action_logger):
         self.children.append(action_logger)
+        self.to_dict()
 
     def get_id(self):
         return self.id
 
+    def get_type(self):
+        return self.type
+
     def get_action_log_path(self):
         return self.default_path_header + 'action-log.json'
+
+    def get_status(self):
+        return self.status
+
+    def set_status(self, status):
+        self.status = status
+        self.to_dict()
