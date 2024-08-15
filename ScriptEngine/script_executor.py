@@ -335,7 +335,7 @@ class ScriptExecutor:
             RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], self.state)
 
         _, status, _, _, _, _ = handle_action_result
-        script_logger.get_action_log().set_status(status)
+        script_logger.get_action_log().set_status(status.name)
         return handle_action_result
 
     def handle_script_reference(self, action, state, context, run_queue):
