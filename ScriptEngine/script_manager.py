@@ -108,11 +108,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         script_start_time=start_time
     )
     try:
-        main_script.handle_script_reference(
-            script_object['props']['scriptReference'],
-            main_script.state,
-            main_script.context,
-            main_script.run_queue
+        main_script.handle_action(
+            script_object['props']['scriptReference']
         )
     except:
         traceback.print_exc()
