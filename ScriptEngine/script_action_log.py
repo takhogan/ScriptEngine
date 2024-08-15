@@ -28,7 +28,7 @@ class ScriptActionLog:
                 'id' : self.id,
                 'type' : self.type,
                 'status' : self.get_status(),
-                'elapsed' : datetime.datetime.now() - self.start_time,
+                'elapsed' : (datetime.datetime.now() - self.start_time).total_seconds(),
                 'pre_file' : {
                     'file_type' : self.pre_file[0],
                     'file_path' : self.pre_file[1]
