@@ -2,6 +2,7 @@ import datetime
 import uuid
 import json
 
+
 class ScriptActionLog:
     def __init__(self, action, log_folder, log_header):
         self.default_path_header = log_folder + log_header + '-'
@@ -25,8 +26,10 @@ class ScriptActionLog:
         with open(self.default_path_header + 'action-log.json', 'w') as action_log_file:
             json.dump({
                 'base_path' : self.base_path,
+                'action_log_path' : self.get_action_log_path(),
                 'id' : self.id,
-                'type' : self.type,
+                'log_object_type' : self.type,
+                'tree_entity_type' : 'node',
                 'status' : self.get_status(),
                 'elapsed' : (datetime.datetime.now() - self.start_time).total_seconds(),
                 'pre_file' : {
@@ -46,7 +49,8 @@ class ScriptActionLog:
                 'children' : [
                     {
                         'id' : child.get_id(),
-                        'type' : child.get_type(),
+                        'log_object_type' : child.get_type(),
+                        'tree_entity_type' : 'child',
                         'action_log_path' : child.get_action_log_path()
                     } for child in self.children
                 ]
