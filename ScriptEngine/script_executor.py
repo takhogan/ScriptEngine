@@ -114,6 +114,7 @@ class ScriptExecutor:
             'actionOrder': 'sequential',
             'success_states': None
         }
+        self.parent_action_log = None
         self.script_action_log = None
         # script_logger.log('update context : ', context["action_attempts"] if (context is not None and "action_attempts" in context) else 'none')
         if context is not None:
@@ -142,8 +143,8 @@ class ScriptExecutor:
         script_logger.set_log_file_path(self.log_folder + 'stdout.txt')
         script_logger.set_log_folder(self.log_folder)
 
-    def set_action_log(self, script_action_log):
-        self.script_action_log = script_action_log
+    def set_parent_action_log(self, script_action_log):
+        self.parent_action_log = script_action_log
 
     def rewind(self, input_vars):
         # script_logger.log('rewind context : ', self.context["action_attempts"])
@@ -295,7 +296,7 @@ class ScriptExecutor:
                         # self.actions[action_index] = action
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Finished forward peek')
 
-    def configure_action_logger(self, action):
+    def configure_action_logger(self, action, create=True):
         script_logger.set_log_header(
             str(self.context['script_counter']).zfill(5) + '-' + \
             action["actionName"] + '-' + str(action["actionGroup"])
@@ -311,8 +312,8 @@ class ScriptExecutor:
         self.context["script_counter"] += 1
         self.configure_action_logger(action)
         self.log_action_details(action)
-        if self.script_action_log is not None:
-            self.script_action_log.add_child(script_logger.get_action_log())
+        if self.parent_action_log is not None:
+            self.parent_action_log.add_child(script_logger.get_action_log())
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
                 handle_action_result = self.device_manager.adb_host.handle_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
@@ -438,7 +439,8 @@ class ScriptExecutor:
 
                 ref_script_executor.context["script_counter"] = self.context["script_counter"]
                 ref_script_executor.context["script_timer"] = self.context["script_timer"]
-            ref_script_executor.set_action_log(script_logger.get_action_log())
+            self.script_action_log = script_logger.get_action_log()
+            ref_script_executor.set_parent_action_log(self.script_action_log)
             child_log_folder = ref_script_executor.create_log_folders(
                 parent_folder=self.log_folder,
                 refresh_start_time=True
@@ -477,6 +479,12 @@ class ScriptExecutor:
                 #probably set status to something special
 
             self.set_log_paths()
+            script_logger.set_log_header(
+                str(self.context['script_counter']).zfill(5) + '-' + \
+                action["actionName"] + '-' + str(action["actionGroup"])
+            )
+            script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
+            script_logger.set_action_log(self.script_action_log)
 
             ref_script_executor.parse_outputs(state, child_log_folder + 'outputs.txt')
 

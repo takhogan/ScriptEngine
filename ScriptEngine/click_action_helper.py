@@ -112,7 +112,7 @@ class ClickActionHelper:
             )
         elif point_list['input_type'] == 'shape':
             shape_ys, shape_xs = np.where(point_list["shape"] > 1)
-            for point in zip(shape_ys, shape_xs):
+            for point in zip(shape_xs, shape_ys):
                 cv2.circle(
                     overlay,
                     (

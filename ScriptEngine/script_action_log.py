@@ -12,13 +12,15 @@ class ScriptActionLog:
         self.supporting_files = []
         self.children = []
         self.id = str(uuid.uuid4())
-        self.status = 'started'
+        self.status = 'RUNNING'
         self.start_time = datetime.datetime.now()
 
         if action["actionData"]["targetSystem"] == "none" and action["actionName"] == "scriptReference":
             self.type = 'script'
+            self.name = action["actionData"]["scriptName"]
         else:
             self.type = 'action'
+            self.name = action["actionName"]
 
         self.to_dict()
 
@@ -28,6 +30,7 @@ class ScriptActionLog:
                 'base_path' : self.base_path,
                 'action_log_path' : self.get_action_log_path(),
                 'id' : self.id,
+                'name' : self.name,
                 'log_object_type' : self.type,
                 'tree_entity_type' : 'node',
                 'status' : self.get_status(),
