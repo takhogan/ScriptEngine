@@ -43,7 +43,7 @@ class ScriptLogger:
     def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True):
         text = str(datetime.datetime.now()) + ': ' + (
             self.log_header if log_header else ''
-        ) + sep.join(map(str, args)) + end
+        ) + ' ' + sep.join(map(str, args)) + end
         if file is None:
             with open(self.log_file_path, 'a') as log_file:
                 log_file.write(text)
