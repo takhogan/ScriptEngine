@@ -82,7 +82,7 @@ class DetectSceneHelper:
         if script_logger.get_log_level() == 'info':
             matching_overlay_relative_path = 'detectScene-matchOverlayed.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, screencap_im_bgr)
-            script_logger.get_action_log().add_supporting_file_reference('image', matching_overlay_relative_path)
+            script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
             masked_img_relative_path = 'detectScene-maskApplied.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + masked_img_relative_path, screencap_masked)
             script_logger.get_action_log().add_supporting_file_reference('image', masked_img_relative_path)

@@ -131,6 +131,6 @@ class ClickActionHelper:
         output_image_relative_path = 'clickLocation.png'
         cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
         script_logger.get_action_log().set_post_file(
-            'text',
+            'image',
             output_image_relative_path
         )

@@ -49,7 +49,7 @@ class ImageMatcher:
         if script_logger.get_log_level() == 'info':
             matching_overlay_relative_path = 'detectObject-matchOverlayed.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
-            script_logger.get_action_log().add_post_file('image', matching_overlay_relative_path)
+            script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
 
             comparison_img_relative_path = 'detectObject-matchingHeatMap.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, match_result * 255)
