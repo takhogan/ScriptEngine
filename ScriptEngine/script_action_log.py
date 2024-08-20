@@ -4,7 +4,7 @@ import json
 
 
 class ScriptActionLog:
-    def __init__(self, action, log_folder, log_header):
+    def __init__(self, action, log_folder, log_header, script_counter):
         self.default_path_header = log_folder + log_header + '-'
         self.base_path = log_folder
         self.pre_file = None
@@ -12,15 +12,17 @@ class ScriptActionLog:
         self.supporting_files = []
         self.children = []
         self.id = str(uuid.uuid4())
+        self.name = action["actionName"] + '-' + str(action["actionGroup"])
+        self.script_counter = script_counter
         self.status = 'RUNNING'
         self.start_time = datetime.datetime.now()
 
         if action["actionData"]["targetSystem"] == "none" and action["actionName"] == "scriptReference":
             self.type = 'script'
-            self.name = action["actionData"]["scriptName"]
+            self.script_name = action["actionData"]["scriptName"]
         else:
             self.type = 'action'
-            self.name = action["actionName"]
+            self.script_name = None
 
         self.to_dict()
 
@@ -31,6 +33,8 @@ class ScriptActionLog:
                 'action_log_path' : self.get_action_log_path(),
                 'id' : self.id,
                 'name' : self.name,
+                'script_name' : self.script_name,
+                'script_counter' : self.get_script_counter(),
                 'log_object_type' : self.type,
                 'tree_entity_type' : 'node',
                 'status' : self.get_status(),
@@ -52,6 +56,7 @@ class ScriptActionLog:
                 'children' : [
                     {
                         'id' : child.get_id(),
+                        'script_counter' : child.get_script_counter(),
                         'log_object_type' : child.get_type(),
                         'tree_entity_type' : 'child',
                         'action_log_path' : child.get_action_log_path()
@@ -171,3 +176,6 @@ class ScriptActionLog:
     def set_status(self, status):
         self.status = status
         self.to_dict()
+
+    def get_script_counter(self):
+        return self.script_counter
