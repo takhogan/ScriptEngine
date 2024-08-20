@@ -8,7 +8,6 @@ from script_execution_state import ScriptExecutionState
 from image_matcher import ImageMatcher
 from detect_scene_helper import DetectSceneHelper
 from script_logger import ScriptLogger
-from script_action_log import ScriptActionLog
 script_logger = ScriptLogger()
 
 class DetectObjectHelper:

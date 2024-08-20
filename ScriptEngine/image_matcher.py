@@ -6,7 +6,6 @@ from script_engine_utils import masked_mse
 MINIMUM_MATCH_PIXEL_SPACING = 15
 from script_logger import ScriptLogger
 from script_engine_utils import state_eval
-from script_action_log import ScriptActionLog
 
 script_logger = ScriptLogger()
 class ImageMatcher:

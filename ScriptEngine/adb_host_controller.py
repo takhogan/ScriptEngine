@@ -38,7 +38,6 @@ from detect_object_helper import DetectObjectHelper
 from forward_detect_peek_helper import ForwardDetectPeekHelper
 from rv_helper import RandomVariableHelper
 from color_compare_helper import ColorCompareHelper
-from script_action_log import ScriptActionLog
 
 
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)

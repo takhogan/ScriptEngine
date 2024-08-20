@@ -305,7 +305,8 @@ class ScriptExecutor:
         script_logger.set_action_log(ScriptActionLog(
             action,
             script_logger.get_log_folder(),
-            script_logger.get_log_header()
+            script_logger.get_log_header(),
+            self.context['script_counter']
         ))
 
     def handle_action(self, action, lazy_eval=False):

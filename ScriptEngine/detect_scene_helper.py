@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 
-from script_action_log import ScriptActionLog
 from script_engine_utils import masked_mse
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
