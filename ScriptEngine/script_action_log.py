@@ -16,6 +16,7 @@ class ScriptActionLog:
         self.script_counter = script_counter
         self.status = 'RUNNING'
         self.start_time = datetime.datetime.now()
+        self.script_log_folder = None
 
         if action["actionData"]["targetSystem"] == "none" and action["actionName"] == "scriptReference":
             self.type = 'script'
@@ -34,6 +35,7 @@ class ScriptActionLog:
                 'id' : self.id,
                 'name' : self.name,
                 'script_name' : self.script_name,
+                'script_log_folder': self.get_script_log_folder(),
                 'script_counter' : self.get_script_counter(),
                 'log_object_type' : self.type,
                 'tree_entity_type' : 'node',
@@ -179,3 +181,10 @@ class ScriptActionLog:
 
     def get_script_counter(self):
         return self.script_counter
+
+    def get_script_log_folder(self):
+        return self.script_log_folder
+
+    def set_script_log_folder(self, script_log_folder_path):
+        self.script_log_folder = script_log_folder_path
+        self.to_dict()

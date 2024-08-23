@@ -446,6 +446,7 @@ class ScriptExecutor:
                 parent_folder=self.log_folder,
                 refresh_start_time=True
             )
+            self.script_action_log.set_script_log_folder(child_log_folder)
             ref_script_executor.parse_inputs(state, child_log_folder + 'inputs.txt')
 
             # I don't know what this does anymore
