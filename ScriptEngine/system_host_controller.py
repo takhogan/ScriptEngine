@@ -76,14 +76,20 @@ class SystemHostController:
             outputVarName = action["actionData"]["outputVarName"].strip()
             outputVarNameInState = outputVarName in state
             isSetIfNull = action["actionData"]["setIfNull"] == "true" or action["actionData"]["setIfNull"]
+            post_file_name = 'variableAssignment-log.txt'
             pre_log = ('assignment configuration is set if null' if isSetIfNull else '')
+            script_logger.get_action_log().add_post_file(
+                'text',
+                post_file_name,
+                (pre_log + '\n' if pre_log != '' else '')
+            )
             if isSetIfNull and outputVarNameInState and state[outputVarName] is not None:
                 pre_log += ' and output variable {} was not null'.format(outputVarName)
                 script_logger.log(pre_log)
                 status = ScriptExecutionState.SUCCESS
-                script_logger.get_action_log().add_post_file(
+                script_logger.get_action_log().append_post_file(
                     'text',
-                    'variableAssignment-log.txt',
+                    post_file_name,
                     (pre_log + '\n' if pre_log != '' else '')
                 )
             else:
@@ -94,6 +100,12 @@ class SystemHostController:
                 mid_log_2 = ('inputs: ' + str(statement_strip))
                 script_logger.log(mid_log)
                 script_logger.log(mid_log_2)
+                script_logger.get_action_log().append_post_file(
+                    'text',
+                    post_file_name,
+                    mid_log + '\n' + \
+                    mid_log_2 + '\n'
+                )
 
 
                 expression = action["actionData"]["inputExpression"].replace("\n", " ")
@@ -130,12 +142,9 @@ class SystemHostController:
                     expression
                 )
                 status = ScriptExecutionState.SUCCESS
-                script_logger.get_action_log().add_post_file(
+                script_logger.get_action_log().append_post_file(
                     'text',
-                    'variableAssignment-log.txt',
-                    (pre_log + '\n' if pre_log != '' else '') + \
-                    mid_log + '\n' + \
-                    mid_log_2 + '\n' + \
+                    post_file_name,
                     late_mid_log + '\n' + \
                     late_mid_log_2 + '\n' + \
                     post_log
