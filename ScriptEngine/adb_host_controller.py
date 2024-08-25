@@ -24,7 +24,7 @@ import random
 import time
 import sys
 from scipy.stats import truncnorm
-from script_engine_utils import get_glob_digit_regex_string, is_null, masked_mse, state_eval
+from script_engine_utils import get_glob_digit_regex_string, is_null, masked_mse, state_eval, DummyFile
 import pyautogui
 
 sys.path.append("..")
@@ -1500,7 +1500,8 @@ async def read_input():
                 "height" : None
             }, None, adb_args)
         if len(inputs) > 2:
-            script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_adb_host, inputs)) + '<--{}-->'.format(inputs[0]), flush=True)
+            script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_adb_host, inputs)) + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
+            script_logger.log('ADB CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
 
 async def adb_controller_main():
     await asyncio.gather(read_input())

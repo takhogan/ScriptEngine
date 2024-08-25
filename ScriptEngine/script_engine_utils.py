@@ -9,6 +9,24 @@ script_logger = ScriptLogger()
 RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
 
 
+class DummyFile:
+    def write(self, *args, **kwargs):
+        # Ignore anything written
+        pass
+
+    def writelines(self, lines):
+        # Ignore any lines written
+        pass
+
+    def flush(self):
+        # No-op for flushing
+        pass
+
+    def close(self):
+        # No-op for closing
+        pass
+
+
 def generate_context_switch_action(childGroups, state, context, update_dict):
     return {
         "actionName" : "contextSwitchAction",

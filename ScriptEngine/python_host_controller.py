@@ -13,7 +13,7 @@ import numpy as np
 import pyautogui
 import cv2
 from image_matcher import ImageMatcher
-from script_engine_utils import is_null, apply_state_to_cmd_str
+from script_engine_utils import is_null, apply_state_to_cmd_str, DummyFile
 
 import time
 from color_compare_helper import ColorCompareHelper
@@ -344,7 +344,9 @@ async def read_input():
             })
         if len(inputs) > 1:
             try:
-                script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_python_host, inputs)) + '<--{}-->'.format(inputs[0]) , flush=True)
+                script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_python_host, inputs)) + '<--{}-->'.format(inputs[0]) , file=DummyFile(),flush=True)
+                script_logger.log('ADB CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
+
             except pyautogui.FailSafeException as e:
                 script_logger.log('PYTHON CONTROLLER PROCESS: fail safe exception triggered', e)
 
