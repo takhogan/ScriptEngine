@@ -6,6 +6,10 @@ https://pypi.org/project/tesserocr/
 #On Windows:
 Installing via wheel is relatively painless
 https://github.com/simonflueckiger/tesserocr-windows_build/releases
+eg:
+venv\Scripts\activate
+pip install tesserocr-2.7.1-cp311-cp311-win_amd64.whl
+
 You also need to install the tessdata
 https://github.com/UB-Mannheim/tesseract/wiki
 

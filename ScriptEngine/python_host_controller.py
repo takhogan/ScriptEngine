@@ -30,14 +30,27 @@ script_logger = ScriptLogger()
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
 class python_host:
-    def __init__(self, props):
+    def __init__(self, props, input_source=None):
         script_logger.log('Initializing Python Host')
         self.width = None
         self.height = None
         self.props = props
         self.image_matcher = ImageMatcher()
 
+        if input_source is not None:
+            self.dummy_mode = True
+            self.input_source = input_source
+            self.width = input_source["width"]
+            self.props['width'] = self.width
+            self.height = input_source["height"]
+            self.props['height'] = self.height
+        else:
+            self.dummy_mode = False
+
     def initialize_host(self):
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from intialize host')
+            return
         if self.width is None or self.height is None:
             script_logger.log('PythonHostController: Taking screenshot to initialize python host')
             host_dimensions = pyautogui.size()
@@ -53,6 +66,9 @@ class python_host:
             self.props['height'] = height
 
     def screenshot(self):
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning screenshot from input source')
+            return self.input_source['screenshot']()
         return cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR)
 
     def keyUp(self, key):
@@ -69,13 +85,16 @@ class python_host:
         pyautogui.hotkey(*keys)
 
     def click(self, x, y, button):
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from click')
+            return
         if (self.width != self.props['width'] or self.height != self.props['height']):
             x = (self.width / self.props['width']) * x
             y = (self.height / self.props['height']) * y
             script_logger.log('clickAction: adjusted coords for pyautogui', x, y, flush=True)
         pyautogui.click(x=x, y=y, button=button)
 
-    def run_script(self, action, state):
+    def run_shell_script(self, action, state):
         pre_log = 'Running Shell Script: {}'.format(action["actionData"]["shellScript"])
         script_logger.log(pre_log)
         pre_log_2 = 'Shell Script options: openinNewWindow: {} awaitScript: {}'.format(
@@ -136,7 +155,7 @@ class python_host:
     def handle_action(self, action, state, context, run_queue, lazy_eval=False):
         self.initialize_host()
         if action["actionName"] == "shellScript":
-            return action, ScriptExecutionState.SUCCESS, self.run_script(action, state), context, run_queue, []
+            return action, ScriptExecutionState.SUCCESS, self.run_shell_script(action, state), context, run_queue, []
         elif action["actionName"] == "clickAction":
             action["actionData"]["clickCount"] = int(action["actionData"]["clickCount"])
             var_name = action["actionData"]["inputExpression"]

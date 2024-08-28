@@ -26,6 +26,21 @@ class DummyFile:
         # No-op for closing
         pass
 
+imageFileExtensions = [
+    'jpg', 'jpeg',
+    'png',
+    'gif',
+    'bmp',
+    'tiff', 'tif',
+    'svg',
+    'webp',
+    'ico',
+    'heif',
+    'heic',
+    'jfif',
+    'pjpeg',
+    'pjp'
+  ]
 
 def generate_context_switch_action(childGroups, state, context, update_dict):
     return {

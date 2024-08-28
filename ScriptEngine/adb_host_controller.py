@@ -127,7 +127,7 @@ script_logger = ScriptLogger()
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
 class adb_host:
-    def __init__(self, props, host_os, adb_args):
+    def __init__(self, props, host_os, adb_args, input_source=None):
         script_logger.log('Configuring ADB with adb_args', adb_args)
         self.stop_command_gather = False
         self.device_profile = 'windows-bluestacks'
@@ -164,7 +164,16 @@ class adb_host:
         self.adb_port = None
         self.full_ip = None
         self.screen_orientation = None
-        if len(adb_args) > 0:
+
+        if input_source is not None:
+            self.dummy_mode = True
+            self.input_source = input_source
+            self.width = input_source["width"]
+            self.height = input_source["height"]
+        else:
+            self.dummy_mode = False
+
+        if len(adb_args) > 0 and input_source is None:
             try:
                 status, _, _ = self.configure_adb({
                     'actionData' : {
@@ -320,6 +329,9 @@ class adb_host:
         return self.screen_orientation
 
     def init_system(self, reinitialize=False):
+        if self.dummy_mode:
+            script_logger.log('skipping adb init system. script running in mock mode')
+            return
         max_adb_attempts = 6
         max_window_attempts = 36
         adb_attempts = 0
@@ -579,6 +591,9 @@ class adb_host:
             return None
 
     def screenshot(self):
+        if self.dummy_mode:
+            script_logger.log('ADB CONTROLLER: script running in dummy mode, returning screenshot of input source')
+            return self.input_source['screenshot']()
         script_logger.log('ADB CONTROLLER', 'taking screenshot')
         get_im_command = subprocess.run(
             self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip),
@@ -638,6 +653,9 @@ class adb_host:
 
     def click(self, x, y, important=False):
         # 1st point always the og x,y
+        if self.dummy_mode:
+            script_logger.log('ADB CONTROLLER: script running in dummy mode, adb click returning')
+            return
 
         if self.device_profile == 'mac-avd':
             mapped_x_val = int((x / self.width) * self.xmax)
@@ -879,6 +897,9 @@ class adb_host:
         self.event_counter += 1
 
     def click_and_drag(self, source_x, source_y, target_x, target_y):
+        if self.dummy_mode:
+            script_logger.log('ADB CONTROLLER: script running in dummy mode, adb click and drag returning')
+            return
 
         if self.device_profile == 'mac-avd':
             frac_source_x = (source_x / self.width)
@@ -1065,7 +1086,7 @@ class adb_host:
 
         elif action["actionName"] == "shellScript":
             if self.host_os is not None:
-                state = self.host_os.run_script(action, state)
+                state = self.host_os.run_shell_script(action, state)
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationSource":
             point_choice, point_list, state, context = ClickActionHelper.get_point_choice(

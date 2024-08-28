@@ -3,6 +3,7 @@ import random
 import time
 from dateutil import tz
 import os
+import cv2
 import json
 import traceback
 import multiprocessing, logging
@@ -13,7 +14,7 @@ from script_loader import parse_zip
 from script_executor import ScriptExecutor
 from script_engine_constants import *
 from device_manager import DeviceManager
-from script_engine_utils import datetime_to_local_str
+from script_engine_utils import datetime_to_local_str, imageFileExtensions
 from system_script_handler import SystemScriptHandler
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
@@ -73,22 +74,33 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
     script_object = parse_zip(script_name, system_script)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
-    adb_args = {}
+    device_params = {}
     if device_details is not None and device_details != '' and device_details != 'null':
-        with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
-            devices_config = json.load(devices_config_file)
-            if device_details in devices_config:
-                adb_args = devices_config[device_details]
+        if device_details.startswith('bluestacks'):
+            with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
+                devices_config = json.load(devices_config_file)
+                if device_details in devices_config:
+                    device_params = devices_config[device_details]
+                    device_params['script-engine-device-type'] = 'bluestacks'
+                else:
+                    script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
+        elif device_details.startswith('file'):
+            file_path = ''.join(device_details.split(':')[1:])
+            file_type = os.path.splitext(file_path)[1]
+            script_logger.log('SCRIPT MANAGER: loading input source', file_path, 'file exists', os.path.exists(file_path))
+            if file_type[1:] in imageFileExtensions:
+                input_img = cv2.imread(file_path)
+                height,width,_ = input_img.shape
+                device_params = {
+                    'script-engine-device-type': 'file',
+                    'screenshot' : lambda: input_img,
+                    'width' : width,
+                    'height' : height,
+                }
             else:
-                script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
-    elif 'DEVICE_NAME' in constants and 'AUTO_DETECT_ADB_PORT' in constants and constants['AUTO_DETECT_ADB_PORT'] == 'True':
-        adb_args = {
-            'DEVICE_NAME' : constants['DEVICE_NAME'],
-            'AUTO_DETECT_ADB_PORT' : True
-        }
-        script_logger.log('SCRIPT MANAGER: setting params through inputs is deprecated ', adb_args)
-    script_logger.log('SCRIPT MANAGER: loading adb_args', adb_args)
-    device_manager = DeviceManager(script_name, script_object['props'], adb_args)
+                raise Exception('file type not supported "' + file_type + '"')
+    script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
+    device_manager = DeviceManager(script_name, script_object['props'], device_params)
     logger = multiprocessing.log_to_stderr()
     logger.setLevel(multiprocessing.SUBDEBUG)
 
@@ -154,8 +166,9 @@ if __name__=='__main__':
     else:
         system_script = False
 
-    if n_args > 8:
-        for arg_index in range(8, n_args):
+    args_index = 8
+    if n_args > args_index:
+        for arg_index in range(args_index, n_args):
             arg_split = sys.argv[arg_index].strip().split(':')
             constants[arg_split[0]] = arg_split[1]
 
