@@ -195,7 +195,7 @@ class ImageMatcher:
         dist_threshold = max(min(w, h) * 0.2, MINIMUM_MATCH_PIXEL_SPACING)
         matches = []
         match_img_index = 1
-
+        script_logger.log('filtering matches')
         for pt in zip(*thresholded_match_results[::-1]):
             redundant = False
             match_score = match_result[pt[1], pt[0]]

@@ -11,7 +11,7 @@ KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
 
 
 class DeviceActionInterpreter:
-    def __init__(self):
+    def __init__(self, dummy_mode=False):
         pass
 
     @staticmethod
@@ -27,6 +27,15 @@ class DeviceActionInterpreter:
         script_logger.log(pre_log_3)
         pre_log_4 = ''
         typed_chars_log = 'Typed Characters: '
+        script_logger.get_action_log().add_post_file(
+            'text',
+            'keyboardAction-log.txt',
+            pre_log_1 + '\n' + pre_log_2 + '\n' + pre_log_3 + '\n' + \
+            (pre_log_4 + '\n' if is_hot_key else '')
+        )
+        if device.dummy_mode:
+            script_logger.log('DeviceActionIntepreter: script running in dummy mode, returning from keyboard action')
+            return
         if is_hot_key:
             pre_log_4 = 'HotKeyKeys {}'.format(
                 keyboard_action["actionData"]["keyboardExpression"].strip().split(",")
@@ -79,10 +88,9 @@ class DeviceActionInterpreter:
                 for keyPressKey in keyPressKeys:
                     device.keyUp(keyPressKey)
         script_logger.log(typed_chars_log)
-        script_logger.get_action_log().add_post_file(
+        script_logger.get_action_log().append_post_file(
             'text',
             'keyboardAction-log.txt',
-            pre_log_1 + '\n' + pre_log_2 + '\n' + pre_log_3 + '\n' +\
-            (pre_log_4 + '\n' if is_hot_key else '') + typed_chars_log
+            typed_chars_log
         )
         return ScriptExecutionState.SUCCESS, state, context
