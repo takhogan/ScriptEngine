@@ -478,7 +478,7 @@ class SystemHostController:
                 for [psm_value, character_white_list] in tesseract_params:
                     with tesserocr.PyTessBaseAPI() as api:
                         api.SetImage(Image.fromarray(image_to_text_input))
-                        api.SetVariable("psm", psm_value)
+                        api.SetPageSegMode(int(psm_value))
                         if len(character_white_list) > 0:
                             api.SetVariable("tessedit_char_whitelist", character_white_list)
                         # may want to consider bgr to rgb conversion
@@ -564,6 +564,8 @@ class SystemHostController:
             script_logger.log(mid_log)
 
             messaging_successful = self.messaging_helper.send_message(json.dumps({
+                "action" : "sendMessage",
+                "messagingChannelName" : action["actionData"]["messagingChannelName"],
                 "messagingProvider" : action["actionData"]["messagingProvider"],
                 "messageType" : action["actionData"]["messageType"],
                 "message" : message
