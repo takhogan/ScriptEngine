@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import datetime
 from script_engine_utils import dist
 from script_engine_utils import masked_mse
 
@@ -195,7 +196,8 @@ class ImageMatcher:
         dist_threshold = max(min(w, h) * 0.2, MINIMUM_MATCH_PIXEL_SPACING)
         matches = []
         match_img_index = 1
-        script_logger.log('filtering matches')
+        checkpoint_1 = datetime.datetime.now()
+        script_logger.log('checkpoint 1', checkpoint_1)
         for pt in zip(*thresholded_match_results[::-1]):
             redundant = False
             match_score = match_result[pt[1], pt[0]]
@@ -255,6 +257,8 @@ class ImageMatcher:
         else:
             result_log = 'No valid match points.'
         result_log += '{} matches total. Best Match: {}'.format(len(matches), str(best_match_pt))
+        checkpoint_2 = datetime.datetime.now()
+        script_logger.log('checkpoint_2', checkpoint_2, checkpoint_2 - checkpoint_1)
         script_logger.log(result_log)
         script_logger.get_action_log().append_supporting_file(
             'text',

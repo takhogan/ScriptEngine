@@ -7,7 +7,7 @@ script_logger = ScriptLogger()
 class DeviceManager:
     def __init__(self, base_script_name, props, device_params):
         script_logger.log('Intializing Device Manager')
-        if device_params['script-engine-device-type'] == 'file':
+        if 'script-engine-device-type' in device_params and device_params['script-engine-device-type'] == 'file':
             input_source = device_params
         else:
             input_source = None

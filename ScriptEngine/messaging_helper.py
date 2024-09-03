@@ -29,6 +29,7 @@ class MessagingHelper:
 
     def _send_message_request(self, message_obj):
         request_url = "https://localhost:3849/api/sendMessage"
+        script_logger.log('sending request to ', request_url, 'with contents', message_obj)
         request_result = requests.post(
             request_url,
             json=message_obj,
