@@ -563,13 +563,13 @@ class SystemHostController:
             mid_log = 'Message Contents: ' + str(message)
             script_logger.log(mid_log)
 
-            messaging_successful = self.messaging_helper.send_message(json.dumps({
+            messaging_successful = self.messaging_helper.send_message({
                 "action" : "sendMessage",
                 "messagingChannelName" : action["actionData"]["messagingChannelName"],
                 "messagingProvider" : action["actionData"]["messagingProvider"],
                 "messageType" : action["actionData"]["messageType"],
                 "message" : message
-            }))
+            })
 
             if messaging_successful:
                 status = ScriptExecutionState.SUCCESS
