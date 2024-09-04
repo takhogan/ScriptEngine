@@ -195,7 +195,12 @@ class ScriptExecutor:
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Input: ', var_name,
                                     " Value: ", eval_result)
                 input_log_file.write(str(var_name) + ': ' + str(self.state[var_name]) + '\n')
-        script_logger.get_action_log().set_pre_file('text', 'inputs.txt', log_header=False)
+        script_logger.get_action_log().set_pre_file(
+            'text',
+            input_log_file_path,
+            log_header=False,
+            absolute_path = True
+        )
 
     def parse_outputs(self, outputState, outputs_log_file_path):
         with open(outputs_log_file_path, 'w') as outputs_log_file:
@@ -238,8 +243,12 @@ class ScriptExecutor:
                 outputs_log_file.write(
                     str(var_name) + ': ' + str(outputState[var_name]) + '\n'
                 )
-        script_logger.get_action_log().set_post_file('text', 'outputs.txt', log_header=False)
-
+        script_logger.get_action_log().set_post_file(
+            'text',
+            outputs_log_file_path,
+            log_header=False,
+            absolute_path=True
+        )
     def log_action_details(self, action):
         now = datetime.datetime.now()
         elapsed = now - self.context['script_timer']
@@ -468,6 +477,7 @@ class ScriptExecutor:
             # script_logger.log('runMode: ', action["actionData"]["runMode"])
 
             ref_script_executor.set_log_paths()
+            
 
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing child script', action['actionData']['scriptName'])
 
