@@ -1,4 +1,5 @@
 import sys
+from typing import Dict
 
 if __package__ is None or __package__ == '':
     from script_engine_constants import *
@@ -14,6 +15,7 @@ script_logger = ScriptLogger()
 class MessagingHelper:
     def __init__(self):
         self.server_token = None
+        self.get_server_token()
 
     def get_server_token(self):
         try:
@@ -26,22 +28,23 @@ class MessagingHelper:
             print(e)
             return False
 
-
-    def _send_message_request(self, message_obj):
+    def _send_message_request(self, message_obj : Dict):
         request_url = "https://localhost:3849/api/sendMessage"
         script_logger.log('sending request to ', request_url, 'with contents', message_obj)
         request_result = requests.post(
             request_url,
             json=message_obj,
-            headers = {
+            headers={
                 'Authorization': 'Bearer {}'.format(self.server_token)
             },
             verify=VERIFY_PATH
         )
         return request_result
-    def send_message(self, message_obj):
-        request_result = self._send_message_request(message_obj)
 
+    def send_message(self, message_obj : Dict):
+        request_result = self._send_message_request(message_obj)
+        script_logger.log('printing response')
+        script_logger.log('response', request_result.text)
         if int(request_result.status_code) == 403:
             self.get_server_token()
             request_result = self._send_message_request(message_obj)
