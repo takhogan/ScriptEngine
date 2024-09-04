@@ -363,6 +363,9 @@ class SystemHostController:
                     'character' : '10',
                     'rawLine' : '13'
                 }
+                PSM_TO_TARGET_TYPE = {
+                    value:key for key,value in TARGET_TYPE_TO_PSM.items()
+                }
 
                 search_im, match_pt = DetectObjectHelper.get_detect_area(
                     action, state
@@ -484,8 +487,9 @@ class SystemHostController:
                         # may want to consider bgr to rgb conversion
                         output_text = api.GetUTF8Text().strip()
                         outputs.append(output_text)
-                        input_result_log = 'running with options --psm {} --characterWhiteList {}'.format(
+                        input_result_log = 'Running with psm {} ({}) characterWhiteList {}'.format(
                             psm_value,
+                            PSM_TO_TARGET_TYPE[psm_value],
                             character_white_list if len(character_white_list) > 0 else 'none'
                         ) + ' and output was: {}'.format(output_text)
                         script_logger.log(input_result_log)
