@@ -17,6 +17,7 @@ class ScriptActionLog:
         self.status = 'RUNNING'
         self.start_time = datetime.datetime.now()
         self.script_log_folder = None
+        self.target_system = action['actionData']['targetSystem']
 
         if action["actionData"]["targetSystem"] == "none" and action["actionName"] == "scriptReference":
             self.type = 'script'
@@ -34,6 +35,7 @@ class ScriptActionLog:
                 'action_log_path' : self.get_action_log_path(),
                 'id' : self.id,
                 'name' : self.name,
+                'target_system' : self.target_system,
                 'script_name' : self.script_name,
                 'script_log_folder': self.get_script_log_folder(),
                 'script_counter' : self.get_script_counter(),
@@ -66,10 +68,12 @@ class ScriptActionLog:
                 ]
             }, action_log_file)
 
-    def set_pre_file(self, file_type, relative_path, log_header=True):
+    def set_pre_file(self, file_type, relative_path : str, log_header : bool =True, absolute_path : bool =False):
         self.pre_file = (
             file_type,
-            (self.default_path_header if log_header else self.base_path) + relative_path
+            (
+                (self.default_path_header if log_header else self.base_path) + relative_path
+            ) if not absolute_path else relative_path
         )
         self.to_dict()
 
@@ -93,10 +97,12 @@ class ScriptActionLog:
         else:
             raise Exception('Unsupported File Type')
 
-    def set_post_file(self, file_type, relative_path, log_header=True):
+    def set_post_file(self, file_type, relative_path, log_header=True, absolute_path=False):
         self.post_file = (
             file_type,
-            (self.default_path_header if log_header else self.base_path) + relative_path
+            (
+                (self.default_path_header if log_header else self.base_path) + relative_path
+            ) if not absolute_path else relative_path
         )
         self.to_dict()
 
