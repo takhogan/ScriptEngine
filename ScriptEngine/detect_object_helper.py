@@ -73,14 +73,16 @@ class DetectObjectHelper:
         context_copy = context.copy()
         script_logger.log('updating update queue')
         if len(matches) > 0:
-
+            update_update_queue_log = ''
             if str(action['actionData']['maxMatches']).isdigit():
                 max_matches = int(action['actionData']['maxMatches'])
             else:
                 max_matches = state_eval(action['actionData']['maxMatches'], {}, state)
             excess_matches = len(matches) - max_matches
             if excess_matches > 0:
-                script_logger.log('truncated {} excess matches'.format(excess_matches))
+                truncate_log = 'Truncated {} excess matches'.format(excess_matches)
+                update_update_queue_log += truncate_log + '\n'
+                script_logger.log(truncate_log)
             for match_index,match in enumerate(matches[1:max_matches]):
                 switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
                     "state": {
@@ -95,9 +97,16 @@ class DetectObjectHelper:
                         switch_action
                     ]
                 )
-                script_logger.log('DetectObjectHelper: creating contextSwitchAction-' +\
+                context_switch_log = 'Creating contextSwitchAction-' +\
                                   str(switch_action['actionGroup']) + ' for match number ' + str(match_index) +\
-                                  ' child groups: ' + str(action["childGroups"]))
+                                  ' with children: ' + str(action["childGroups"])
+                update_update_queue_log += context_switch_log + '\n'
+                script_logger.log(context_switch_log)
+            script_logger.get_action_log().append_supporting_file(
+                'text',
+                'detect_result.txt',
+                update_update_queue_log
+            )
             update_queue.append(
                 [
                     'update',

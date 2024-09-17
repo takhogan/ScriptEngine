@@ -76,15 +76,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
     # exit(0)
     device_params = {}
     if device_details is not None and device_details != '' and device_details != 'null':
-        if device_details.startswith('bluestacks'):
-            with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
-                devices_config = json.load(devices_config_file)
-                if device_details in devices_config:
-                    device_params = devices_config[device_details]
-                    device_params['script-engine-device-type'] = 'bluestacks'
-                else:
-                    script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
-        elif device_details.startswith('file'):
+        if device_details.startswith('file'):
             file_path = ''.join(device_details.split(':')[1:])
             file_type = os.path.splitext(file_path)[1]
             script_logger.log('SCRIPT MANAGER: loading input source', file_path, 'file exists', os.path.exists(file_path))
@@ -99,6 +91,14 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
                 }
             else:
                 raise Exception('file type not supported "' + file_type + '"')
+        else:
+            with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
+                devices_config = json.load(devices_config_file)
+                if device_details in devices_config:
+                    device_params = devices_config[device_details]
+                    device_params['script-engine-device-type'] = 'bluestacks'
+                else:
+                    script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
     device_manager = DeviceManager(script_name, script_object['props'], device_params)
     logger = multiprocessing.log_to_stderr()

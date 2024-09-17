@@ -177,10 +177,10 @@ class adb_host:
             try:
                 status, _, _ = self.configure_adb({
                     'actionData' : {
-                        'adbPath' : "'adb'",
+                        'adbPath' : adb_args['adbPath'] if 'adbPath' in adb_args else None,
                         'emulatorType' : '"' + adb_args['type'] + '"',
-                        'emulatorPath' : "'C:\\Program Files\\BlueStacks_nxt\\HD-Player.exe'",
-                        'deviceName' : '"' + adb_args['devicename'] + '"',
+                        'emulatorPath' : adb_args['emulatorPath'] if 'emulatorPath' in adb_args else None,
+                        'deviceName' : '"' + adb_args['deviceName'] + '"',
                         'windowName' : '"' + adb_args['name'] + '"',
                         'adbPort' : '"' + adb_args['port'] + '"'
                     }
@@ -195,79 +195,238 @@ class adb_host:
 
     def configure_adb(self, configurationAction, state, context):
         emulator_type = state_eval(configurationAction['actionData']['emulatorType'], {}, state)
-
-        if emulator_type != 'bluestacks':
-            script_logger.log('emulator type not supported!')
-            return ScriptExecutionState.FAILURE, state, context
-
         self.emulator_type = emulator_type
         state['EMULATOR_TYPE'] = emulator_type
+        script_logger.log('configuring emulator of type', self.emulator_type)
 
-        adb_path = state_eval(configurationAction['actionData']["adbPath"], {}, state)
-        self.adb_path = adb_path
-        state['ADB_PATH'] = adb_path
-
-        emulator_path = state_eval(configurationAction['actionData']["emulatorPath"], {}, state)
+        if configurationAction['actionData']["emulatorPath"] is not None:
+            emulator_path = state_eval(configurationAction['actionData']["emulatorPath"], {}, state)
+        else:
+            if self.emulator_type == 'bluestacks':
+                emulator_path = 'C:\\Program Files\\BlueStacks_nxt\\HD-Player.exe'
+            elif self.emulator_type == 'avd':
+                os_name = platform.system()
+                if os_name == 'Windows':
+                    user_home = os.path.expandvars(r'%LOCALAPPDATA%')
+                    emulator_path = os.path.join(user_home, 'Android', 'Sdk', 'emulator', 'emulator.exe')
+                elif os_name == 'Darwin':
+                    user_home = os.path.expanduser("~")
+                    emulator_path = os.path.join(user_home, 'Library/Android/sdk/emulator/emulator')
+                elif os_name == 'Linux':
+                    user_home = os.path.expanduser("~")
+                    emulator_path = os.path.join(user_home, 'Android/Sdk/emulator/emulator')
+                else:
+                    raise Exception(f"Unsupported OS: {os_name}")
+            else:
+                raise Exception(f"Unsupported emulator type: {self.emulator_type}")
         self.emulator_path = emulator_path
         state['EMULATOR_PATH'] = emulator_path
+        script_logger.log('using emulator path', self.emulator_path)
+
+        if configurationAction['actionData']["adbPath"] is not None:
+            adb_path = state_eval(configurationAction['actionData']["adbPath"], {}, state)
+            script_logger.log(f"loading adb path from adb args {adb_path}")
+            self.adb_path = adb_path
+        else:
+            adb_in_path = False
+            os_name = platform.system()
+            try:
+                if os_name == "Windows":
+                    result = subprocess.run(["where", "adb"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                else:
+                    result = subprocess.run(["which", "adb"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+                if result.returncode == 0:
+                    adb_path = result.stdout.decode().strip()
+                    script_logger.log(f"adb found in path at location: {adb_path}")
+                    adb_in_path = True
+                else:
+                    script_logger.log("adb not found in PATH")
+                    adb_in_path = False
+            except Exception as e:
+                pass
+            if adb_in_path:
+                self.adb_path = 'adb'
+            else:
+                if os_name == 'Windows':
+                    # On Windows, use the AppData path for Android SDK
+                    user_home = os.path.expandvars(r'%LOCALAPPDATA%')
+                    adb_path = os.path.join(user_home, 'Android', 'Sdk', 'platform-tools', 'adb.exe')
+                elif os_name == 'Darwin':
+                    # macOS
+                    user_home = os.path.expanduser("~")
+                    adb_path = os.path.join(user_home, 'Library/Android/sdk/platform-tools/adb')
+                elif os_name == 'Linux':
+                    # Linux
+                    user_home = os.path.expanduser("~")
+                    adb_path = os.path.join(user_home, 'Android/Sdk/platform-tools/adb')
+                else:
+                    raise Exception(f"Unsupported OS: {os_name}")
+                if os.path.exists(adb_path):
+                    script_logger.log(f'configuring adb path, found adb at location {adb_path}')
+                else:
+                    raise Exception('Failed to find adb command path')
+                self.adb_path = adb_path
+
+        state['ADB_PATH'] = self.adb_path
 
         device_name = state_eval(configurationAction['actionData']["deviceName"], {}, state)
         self.device_name = device_name
         state['DEVICE_NAME'] = device_name
 
-        init_bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
-        instance_window_name = init_bluestacks_config['bst.instance.{}.display_name'.format(
-            self.device_name
-        )]
-        script_logger.log('ADB CONTROLLER: detected window name {} for device {}'.format(
-            instance_window_name,
-            self.device_name
-        ))
-        self.window_name = instance_window_name
-        state['WINDOW_NAME'] = instance_window_name
-
-        adb_port = str(state_eval(configurationAction['actionData']['adbPort'], {}, state))
-        self.auto_detect_adb_port = (adb_port == 'auto')
-        if self.auto_detect_adb_port:
-            og_port = adb_port
-            bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
-            self.adb_port = bluestacks_config['bst.instance.{}.status.adb_port'.format(
+        if self.emulator_type == 'bluestacks':
+            init_bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
+            instance_window_name = init_bluestacks_config['bst.instance.{}.display_name'.format(
                 self.device_name
             )]
-            script_logger.log('ADB CONTROLLER: changed adb port from {} to auto detected port {}'.format(
-                og_port,
-                self.adb_port
+            script_logger.log('ADB CONTROLLER: detected window name {} for device {}'.format(
+                instance_window_name,
+                self.device_name
             ))
+            self.window_name = instance_window_name
+            state['WINDOW_NAME'] = instance_window_name
         else:
-            self.adb_port = adb_port
+            self.window_name = state_eval(configurationAction['actionData']["windowName"], {}, state)
+        self.adb_port = str(state_eval(configurationAction['actionData']['adbPort'], {}, state))
+        self.auto_detect_adb_port = (self.adb_port == 'auto')
+        self.detect_adb_port()
         state['ADB_PORT'] = self.adb_port
-        self.full_ip = self.adb_ip + ':' + self.adb_port
         state['AUTO_DETECT_ADB_PORT'] = self.auto_detect_adb_port
 
         self.status = 'initialized'
         script_logger.log('Configured ADB: ',
-              'adb_path', adb_path,
-              'emulator_path', emulator_path,
-              'device_name', device_name,
-              'window_name', instance_window_name,
-              'adb_port', adb_port,
+              'adb_path', self.adb_path,
+              'emulator_path', self.emulator_path,
+              'device_name', self.device_name,
+              'window_name', self.window_name,
+              'adb_port', self.adb_port,
               'auto_detect_adb_port', self.auto_detect_adb_port)
         return ScriptExecutionState.SUCCESS, state, context
+
+    def get_device_name_to_emulator_name_mapping(self):
+        device_list = self.get_device_list_output()
+        script_logger.log('device_list', device_list)
+        devices = {}
+        lines = device_list.splitlines()
+
+        for line in lines[1:]:  # Skip the first line (header)
+            if line.strip() and 'device' in line:
+                device_id = line.split('\t')[0]
+                if device_id.startswith('emulator'):
+                    result = subprocess.run(['adb', '-s', device_id, 'emu', 'avd', 'name'],
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE,
+                                            text=True)
+                    if result.returncode == 0:
+                        result = result.stdout.split('\n')[0]
+                        script_logger.log('device name matched', result)
+                        devices[result] = device_id
+                    else:
+                        script_logger.log('device name fetch failed: ', result)
+        return devices
+
+    def detect_adb_port(self):
+        og_port = self.adb_port
+        if not self.auto_detect_adb_port:
+            self.full_ip = self.adb_ip + ':' + self.adb_port
+            return
+
+        if self.emulator_type == 'bluestacks':
+            bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
+            self.adb_port = bluestacks_config['bst.instance.{}.status.adb_port'.format(
+                self.device_name
+            )]
+            self.full_ip = self.adb_ip + ':' + self.adb_port
+        elif self.emulator_type == 'avd':
+            devices = self.get_device_name_to_emulator_name_mapping()
+            if self.device_name in devices:
+                self.full_ip = devices[self.device_name]
+                self.adb_port = self.full_ip.split('-')[1]
+            else:
+                self.full_ip = self.adb_ip + ':' + self.adb_port
+        else:
+            raise Exception('Unsupported emulator type: ' + self.emulator_type)
+        if self.adb_port != 'auto':
+            script_logger.log('ADB CONTROLLER: changed adb port from {} to auto detected port {}'.format(
+                og_port,
+                self.adb_port
+            ))
+
+
+
+
 
     def start_device(self):
         # check if window is open
         if self.emulator_type == 'bluestacks':
-            start_device_command = subprocess.Popen('"{}" --instance "{}"'.format(
+            start_device_command = '"{}" --instance "{}"'.format(
                 self.emulator_path,
                 self.device_name
-            ), cwd="/", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            script_logger.log('ADB CONTROLLER: started device', self.device_name, 'PID:', start_device_command.pid)
+            )
+            start_device_process = subprocess.Popen(
+                start_device_command,
+                cwd="/",
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+        elif self.emulator_type == 'avd':
+            start_device_command = '"{}" -avd "{}"'.format(self.emulator_path, self.device_name)
+            # Start the emulator using subprocess.Popen
+            os_name = platform.system()
+            if os_name == 'Windows':
+                DETACHED_PROCESS = 0x00000008
+                start_device_process = subprocess.Popen(
+                    start_device_command,
+                    cwd="/",  # You can change this to the actual working directory if needed
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    creationflags=DETACHED_PROCESS
+                )
+            elif os_name == 'Darwin' or os_name == 'Linux':
+                start_device_process = subprocess.Popen(
+                    '"/Users/takhogan/Library/Android/sdk/emulator/emulator" -avd "Small_Phone_API_34"',
+                    cwd="/",  # You can change this to the actual working directory if needed
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    preexec_fn=os.setsid
+                )
+            else:
+                raise Exception('Unsupported OS ' + os_name)
+            timeout = 120
+            start_time = time.time()
+            while True:
+                output = start_device_process.stdout.readline().decode().strip()  # Read the output line-by-line
+                if output:
+                    script_logger.log(output)  # Optionally print each line for logging purposes
+
+                if "boot completed" in output.lower():
+                    script_logger.log("Emulator started successfully!")
+                    break
+
+                if time.time() - start_time > timeout:
+                    print("Emulator start timed out.")
+                    break
+
+                # Check if the process has exited (i.e., poll() returns a non-None value)
+                if start_device_process.poll() is not None:
+                    script_logger.log("Emulator process exited prematurely.")
+                    break
         else:
             script_logger.log('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
+            return
+        script_logger.log(
+            'ADB CONTROLLER: started device',
+            self.device_name, 'with command',
+            start_device_command,
+            'PID:', start_device_process.pid
+        )
 
     def stop_device(self):
-        if platform.system() == 'Windows':
-            if self.emulator_type == 'bluestacks':
+        if self.emulator_type == 'bluestacks':
+            if platform.system() == 'Windows':
                 init_bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
                 instance_window_name = init_bluestacks_config['bst.instance.{}.display_name'.format(
                     self.device_name
@@ -277,21 +436,55 @@ class adb_host:
                     self.device_name
                 ))
                 self.window_name = instance_window_name
-                stop_device_command = subprocess.run('taskkill /fi "WINDOWTITLE eq {}" /IM "HD-Player.exe" /F'.format(
+                stop_device_command = 'taskkill /fi "WINDOWTITLE eq {}" /IM "HD-Player.exe" /F'.format(
                     self.window_name
-                ), cwd="/", shell=True, capture_output=True, timeout=15)
-                script_logger.log('ADB CONTROLLER: stopped device', self.device_name, 'with result',
-                      stop_device_command.returncode, stop_device_command)
+                )
+                stop_device_process = subprocess.run(
+                    stop_device_command,
+                    cwd="/",
+                    shell=True,
+                    capture_output=True,
+                    timeout=15
+                )
             else:
-                script_logger.log('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
+                raise Exception('OS and emulator type combination not supported ' + platform.system() + '-' + self.emulator_type)
+        elif self.emulator_type == 'avd':
+            devices = self.get_device_name_to_emulator_name_mapping()
+            if self.device_name in devices:
+                self.full_ip = devices[self.device_name]
+                stop_device_command = 'adb -s {} emu kill'.format(
+                    self.full_ip
+                )
+                stop_device_process = subprocess.run(
+                    stop_device_command,
+                    cwd="/",
+                    shell=True,
+                    capture_output=True,
+                    timeout=15
+                )
+            else:
+                raise Exception('unable to run command, device not active' + self.device_name)
+        else:
+            raise Exception('ADB CONTROLLER: emulator type ' + self.emulator_type + ' not supported')
+        script_logger.log(
+            'ADB CONTROLLER: stopped device',
+            self.device_name,
+            'with command',
+            stop_device_command,
+            'with result',
+            stop_device_process.returncode,
+            stop_device_process
+        )
 
     def get_status(self):
+        if self.adb_port == 'auto':
+            self.detect_adb_port()
         try:
             devices_output = self.get_device_list_output()
         except subprocess.TimeoutExpired as t:
             script_logger.log('ADB CONTROLLER: get devices timed out ', t)
             devices_output = ''
-        if not self.full_ip in devices_output:
+        if self.full_ip not in devices_output:
             self.run_connect_command()
             time.sleep(3)
             try:
@@ -300,7 +493,7 @@ class adb_host:
                 script_logger.log('ADB CONTROLLER: get devices timed out ', t)
                 devices_output = ''
         emulator_active = (
-            (self.full_ip in devices_output) and 'offline' not in devices_output
+            self.full_ip in devices_output and 'offline' not in devices_output
         )
         if emulator_active:
             return 'online'
@@ -365,16 +558,9 @@ class adb_host:
                         if window_attempts > max_window_attempts:
                             script_logger.log('ADB CONTROLLER: window {} not found and exceeded max attempts'.format(instance_window_name))
                             exit(478)
-                    bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
-                    og_port = self.adb_port
-                    self.adb_port = bluestacks_config['bst.instance.{}.status.adb_port'.format(
-                        self.device_name
-                    )]
-                    script_logger.log('ADB CONTROLLER: changed adb port from {} to auto detected port {}'.format(
-                        og_port,
-                        self.adb_port
-                    ))
-                    self.full_ip = self.adb_ip + ':' + self.adb_port
+
+                    self.detect_adb_port()
+
                     # state['ADB_PORT'] = self.adb_port
             script_logger.log('ADB CONTROLLER: initializing/reinitializing adb')
             script_logger.log('ADB PATH : ', self.adb_path)
@@ -502,6 +688,7 @@ class adb_host:
         return source_im
 
     def run_connect_command(self):
+        script_logger.log('connecting to device', self.full_ip)
         return subprocess.run(
             self.adb_path + ' connect ' + self.full_ip, cwd="/", shell=True, timeout=30
         )
@@ -549,7 +736,7 @@ class adb_host:
                 if 'add device' in line:
                     device_line = True  # Next line should have the device name
                 elif device_line:
-                    if "BlueStacks Virtual Touch" in line:
+                    if "BlueStacks Virtual Touch" in line or "\"virtio_input_multi_touch_1\"" in line:
                         # Extract the device path from the previous 'add device' line
                         device_path = output[-2].split()[3].strip(':')
                         break
@@ -594,9 +781,10 @@ class adb_host:
         if self.dummy_mode:
             script_logger.log('ADB CONTROLLER: script running in dummy mode, returning screenshot of input source')
             return self.input_source['screenshot']()
-        script_logger.log('ADB CONTROLLER', 'taking screenshot')
+        screenshot_command = self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip)
+        script_logger.log('ADB CONTROLLER', 'taking screenshot', 'with command', screenshot_command)
         get_im_command = subprocess.run(
-            self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip),
+            screenshot_command,
             cwd="/",
             shell=True,
             capture_output=True,
@@ -892,7 +1080,17 @@ class adb_host:
             self.full_ip,
             'shell'
         ], stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        script_logger.log('ADB CONTROLLER : sending click command ',''.join(click_command), shell_process.communicate((''.join(click_command)).encode('utf-8')))
+        script_logger.log(
+            'ADB CONTROLLER : sending click command ',
+            [
+              self.adb_path,
+              '-s',
+              self.full_ip,
+              'shell'
+            ],
+            ''.join(click_command),
+            shell_process.communicate((''.join(click_command)).encode('utf-8'))
+        )
         # script_logger.log((''.join(click_command)).encode('utf-8'))
         self.event_counter += 1
 
@@ -1434,8 +1632,13 @@ def set_adb_args(device_key):
 def parse_inputs(process_adb_host, inputs):
     device_action = inputs[2]
     if device_action == 'check_status':
+        status = process_adb_host.get_status()
+        script_logger.log('device {} returned status {}'.format(
+            process_adb_host.device_name,
+            status
+        ))
         return {
-            "data": process_adb_host.get_status()
+            "data": status
         }
     elif device_action == 'screen_capture':
         if process_adb_host.get_status() == 'offline':
@@ -1528,8 +1731,8 @@ async def adb_controller_main():
     await asyncio.gather(read_input())
 
 if __name__ == '__main__':
-    os.makedirs('/logs', exist_ok=True)
-    script_logger.set_log_file_path('/logs/' + formatted_today + '-adb-host-controller-main.txt')
+    os.makedirs('./logs', exist_ok=True)
+    script_logger.set_log_file_path('./logs/' + formatted_today + '-adb-host-controller-main.txt')
     script_logger.set_log_header('')
 
 
