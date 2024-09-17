@@ -198,6 +198,7 @@ class ImageMatcher:
         match_img_index = 1
         checkpoint_1 = datetime.datetime.now()
         script_logger.log('checkpoint 1', checkpoint_1)
+        initial_matches = len(thresholded_match_results)
         for pt in zip(*thresholded_match_results[::-1]):
             redundant = False
             match_score = match_result[pt[1], pt[0]]
@@ -256,7 +257,11 @@ class ImageMatcher:
             result_log = 'Matches found.'
         else:
             result_log = 'No valid match points.'
-        result_log += '{} matches total. Best Match: {}'.format(len(matches), str(best_match_pt))
+        result_log += '{} initial matches meeting threshold. {} matches after pruning. Highest valid match: {} '.format(
+            initial_matches,
+            len(matches),
+            str(best_match_pt)
+        )
         checkpoint_2 = datetime.datetime.now()
         script_logger.log('checkpoint_2', checkpoint_2, checkpoint_2 - checkpoint_1)
         script_logger.log(result_log)
@@ -276,12 +281,13 @@ class ImageMatcher:
                 max(0, box_height - y_overshoot if y_overshoot > 0 else box_height)
             )
         box_w = box_h = -1
-        for pt in zip(*thresholded_match_results[::-1]):
+        for match_obj in matches:
+            pt = match_obj[0]
             box_w, box_h = adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
             cv2.rectangle(result_im_bgr, pt, (pt[0] + box_w, pt[1] + box_h), (0, 0, 255), 2)
         if thresholded_match_results[0].size == 0 and best_match_pt is not None:
             box_w, box_h = adjust_box_to_bounds(best_match_pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-            cv2.rectangle(result_im_bgr, best_match_pt, (best_match_pt[0] + box_w, best_match_pt[1] + box_h), (0, 0, 128), 2)
+            cv2.rectangle(result_im_bgr, best_match_pt, (best_match_pt[0] + box_w, best_match_pt[1] + box_h), (255, 0, 0), 2)
         return matches, match_result, result_im_bgr
 
     # def produce_logistic_matches(self, screencap_im, screencap_search, screencap_mask, logs_path, assets_folder, threshold=0.7):

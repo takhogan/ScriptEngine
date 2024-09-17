@@ -721,6 +721,70 @@ class SystemHostController:
                 pre_log + '\n' + 'Code Block completed successfully'
             )
             status = ScriptExecutionState.SUCCESS
+        elif action["actionName"] == "fileIOAction":
+            pre_log = 'FileIOAction\n' + \
+                (
+                    'Writing to' if
+                    action["actionData"]["fileActionType"] in ["w", "wb", "a"]
+                    else 'Reading from'
+                ) + ' file: ' + action["actionData"]["filePath"] + '\n'
+            pre_log += 'Contents of type: ' + action["actionData"]["fileType"] +\
+                       ' with mode ' + action["actionData"]["fileActionType"] + '\n'
+            pre_log += 'Input expression: ' + action["actionData"]["inputExpression"] + '\n'
+            pre_log += 'Writing inputs to variable: ' + action["actionData"]["outputVarName"]
+            script_logger.get_action_log().add_pre_file('text', 'inputs.txt', pre_log)
+            script_logger.log(pre_log)
+            file_path = state_eval(action["actionData"]["filePath"], {}, state)
+            output_var_name = action["actionData"]["outputVarName"]
+            file_properties = ''
+            if action["actionData"]["fileActionType"] in ["w", "wb", "a"]:
+                input_value = state_eval(action["actionData"]["inputExpression"], {}, state)
+                if action["actionData"]["fileType"] == "image":
+                    file_properties = 'shape: ' + str(input_value["matched_area"].shape)
+                    cv2.imwrite(file_path, input_value["matched_area"])
+                elif action["actionData"]["fileType"] == "json":
+                    file_properties = 'key: ' + str(list(input_value))
+                    with open(file_path, action["actionData"]["fileActionType"]) as json_file:
+                        json.dump(input_value, json_file)
+                elif action["actionData"]["fileType"] == "text":
+                    file_properties = 'n characters:  ' + str(len(input_value))
+                    with open(file_path, action["actionData"]["fileActionType"]) as text_file:
+                        text_file.write(input_value)
+                state[output_var_name] = input_value
+            elif action["actionData"]["fileActionType"] in ["r", "rb"]:
+                if action["actionData"]["fileType"] == "image":
+                    image = cv2.imread(file_path)
+                    state[output_var_name] = {
+                        'input_type': 'shape',
+                        'point': (0, 0),
+                        'shape': np.full((image.shape[0], image.shape[1]), 255, dtype=np.uint8),
+                        'matched_area': image,
+                        'height': image.shape[0],
+                        'width': image.shape[1],
+                        'score': 0.99999,
+                        'n_matches': 1
+                    }
+                    file_properties = 'shape: ' + str(state[output_var_name].shape)
+
+                elif action["actionData"]["fileType"] == "json":
+                    with open(file_path, action["actionData"]["fileActionType"]) as json_file:
+                        state[output_var_name] = json.load(json_file)
+                    file_properties = 'keys: ' + str(list(state[output_var_name]))
+                elif action["actionData"]["fileType"] == "text":
+                    with open(file_path, action["actionData"]["fileActionType"]) as text_file:
+                        state[output_var_name] = text_file.read()
+                    file_properties = 'n characters:  ' + str(len(state[output_var_name]))
+            post_log = (
+                'Wrote to' if
+                action["actionData"]["fileActionType"] in ["w", "wb", "a"]
+                else 'Read from'
+            ) + file_path + '\n'
+            post_log += 'Contents of type: ' + action["actionData"]["fileType"] +\
+                       ' with mode ' + action["actionData"]["fileActionType"] + '\n'
+            post_log += 'File properties: ' + file_properties + '\n'
+            post_log += 'Input expression: ' + action["actionData"]["inputExpression"] + '\n'
+            post_log += 'Wrote inputs to variable: ' + action["actionData"]["outputVarName"]
+            script_logger.get_action_log().add_post_file('text', 'post.txt', post_log)
         #TODO : unsupported for now
         elif action["actionName"] == "databaseCRUD":
             if action["actionData"]["databaseType"] == "mongoDB":
