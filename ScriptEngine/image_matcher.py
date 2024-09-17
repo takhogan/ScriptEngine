@@ -196,10 +196,9 @@ class ImageMatcher:
         dist_threshold = max(min(w, h) * 0.2, MINIMUM_MATCH_PIXEL_SPACING)
         matches = []
         match_img_index = 1
-        checkpoint_1 = datetime.datetime.now()
-        script_logger.log('checkpoint 1', checkpoint_1)
-        initial_matches = len(thresholded_match_results)
-        for pt in zip(*thresholded_match_results[::-1]):
+        unpacked_results = list(zip(*thresholded_match_results[::-1]))
+        initial_matches = len(unpacked_results)
+        for pt in unpacked_results:
             redundant = False
             match_score = match_result[pt[1], pt[0]]
             match_img_bgr = cv2.bitwise_and(screencap_im_bgr[pt[1]:pt[1] + h, pt[0]:pt[0] + w].copy(),
@@ -249,30 +248,12 @@ class ImageMatcher:
                     # cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(
                     #     match_result[pt[1], pt[0]]) + '-img.png', match_img_bgr)
                 match_img_index += 1
-        best_match_pt = None
-
-        valid_matched_points = match_result[np.where(np.inf > match_result)]
-        if valid_matched_points.size > 0:
-            best_match_pt = np.unravel_index(np.argmax(valid_matched_points), match_result.shape)
-            result_log = 'Matches found.'
-        else:
-            result_log = 'No valid match points.'
-        result_log += '{} initial matches meeting threshold. {} matches after pruning. Highest valid match: {} '.format(
-            initial_matches,
-            len(matches),
-            str(best_match_pt)
-        )
-        checkpoint_2 = datetime.datetime.now()
-        script_logger.log('checkpoint_2', checkpoint_2, checkpoint_2 - checkpoint_1)
-        script_logger.log(result_log)
-        script_logger.get_action_log().append_supporting_file(
-            'text',
-            'detect_result.txt',
-            result_log
-        )
-
-        result_im_bgr = screencap_im_bgr.copy()
         matches.sort(reverse=True, key=lambda match: match[1])
+        result_log = '{} initial matches meeting threshold. {} matches after pruning.\n'.format(
+            initial_matches,
+            len(matches)
+        )
+
         def adjust_box_to_bounds(pt, box_width, box_height, screen_width, screen_height, box_thickness):
             x_overshoot = pt[0] + box_width + box_thickness - screen_width
             y_overshoot = pt[1] + box_height + box_thickness - screen_height
@@ -280,14 +261,74 @@ class ImageMatcher:
                 max(0, box_width - x_overshoot if x_overshoot > 0 else box_width),
                 max(0, box_height - y_overshoot if y_overshoot > 0 else box_height)
             )
+
+        best_point = 'None'
+        best_point_score = 0
+        result_im_bgr = screencap_im_bgr.copy()
         box_w = box_h = -1
+        if len(matches) > 0:
+            best_point = matches[0][0]
+            best_point_score = matches[0][1]
+
+        else:
+            valid_matched_points = match_result[np.where(np.inf > match_result)]
+            if valid_matched_points.size > 0:
+                best_point = np.unravel_index(np.argmax(valid_matched_points), match_result.shape)
+                best_point_score = float(match_result[best_point[1], best_point[0]])
+                box_w, box_h = adjust_box_to_bounds(best_point, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+                cv2.rectangle(
+                    result_im_bgr,
+                    best_point,
+                    (best_point[0] + box_w,
+                     best_point[1] + box_h),
+                    (0, 0, int(255 * best_point_score)),
+                    2
+                )
+        result_log += 'Best valid match: {} with score {}\n'.format(
+            str(best_point),
+            str(best_point_score)
+        )
+
+        script_logger.log(result_log)
+        script_logger.get_action_log().append_supporting_file(
+            'text',
+            'detect_result.txt',
+            result_log
+        )
+
+
+
+        overlay = result_im_bgr.copy()
+
+        if str(detectObject['actionData']['maxMatches']).isdigit():
+            max_matches = int(detectObject['actionData']['maxMatches'])
+        else:
+            max_matches = 1 # state_eval(detectObject['actionData']['maxMatches'], {}, state)
+        alpha = 0.5  # 0.0 fully transparent, 1.0 fully opaque
         for match_obj in matches:
             pt = match_obj[0]
             box_w, box_h = adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-            cv2.rectangle(result_im_bgr, pt, (pt[0] + box_w, pt[1] + box_h), (0, 0, 255), 2)
-        if thresholded_match_results[0].size == 0 and best_match_pt is not None:
-            box_w, box_h = adjust_box_to_bounds(best_match_pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-            cv2.rectangle(result_im_bgr, best_match_pt, (best_match_pt[0] + box_w, best_match_pt[1] + box_h), (255, 0, 0), 2)
+            cv2.rectangle(
+                overlay,
+                pt,
+                (pt[0] + box_w, pt[1] + box_h),
+                color=(0, 0, 255),
+                thickness=-1
+            )
+        result_im_bgr = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
+        for match_index in range(0, min(max_matches, len(matches))):
+            pt = matches[match_index][0]
+            cv2.rectangle(
+                result_im_bgr,
+                pt,
+                (pt[0] + box_w, pt[1] + box_h),
+                (int((255 * best_point_score + 255) / 2), 0, 0),
+                2
+            )
+
+        # if thresholded_match_results[0].size == 0 and best_match_pt is not None:
+        #     box_w, box_h = adjust_box_to_bounds(best_match_pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+        #     cv2.rectangle(result_im_bgr, best_match_pt, (best_match_pt[0] + box_w, best_match_pt[1] + box_h), (255, 0, 0), 2)
         return matches, match_result, result_im_bgr
 
     # def produce_logistic_matches(self, screencap_im, screencap_search, screencap_mask, logs_path, assets_folder, threshold=0.7):
