@@ -269,12 +269,12 @@ class ImageMatcher:
         if len(matches) > 0:
             best_point = matches[0][0]
             best_point_score = matches[0][1]
-
         else:
-            valid_matched_points = match_result[np.where(np.inf > match_result)]
-            if valid_matched_points.size > 0:
-                best_point = np.unravel_index(np.argmax(valid_matched_points), match_result.shape)
-                best_point_score = float(match_result[best_point[1], best_point[0]])
+            valid_matched_points = np.where(np.isinf(match_result) | np.isnan(match_result), -np.inf, match_result)
+            max_valid_point = np.max(valid_matched_points)
+            if max_valid_point != -np.inf:
+                best_point = np.unravel_index(np.argmax(valid_matched_points), valid_matched_points.shape)
+                best_point_score = float(match_result[best_point])
                 box_w, box_h = adjust_box_to_bounds(best_point, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
                 cv2.rectangle(
                     result_im_bgr,
@@ -306,23 +306,26 @@ class ImageMatcher:
             max_matches = 1 # state_eval(detectObject['actionData']['maxMatches'], {}, state)
         alpha = 0.5  # 0.0 fully transparent, 1.0 fully opaque
         for match_obj in matches:
-            pt = match_obj[0]
+            pt = tuple(map(int, match_obj[0]))
+
             box_w, box_h = adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+            script_logger.log('pt', pt, (pt[0] + box_w, pt[1] + box_h))
             cv2.rectangle(
                 overlay,
                 pt,
                 (pt[0] + box_w, pt[1] + box_h),
-                color=(0, 0, 255),
+                (0, 0, 255),
                 thickness=-1
             )
         result_im_bgr = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
         for match_index in range(0, min(max_matches, len(matches))):
-            pt = matches[match_index][0]
+            pt = tuple(map(int, matches[match_index][0]))
+            box_w, box_h = adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
             cv2.rectangle(
                 result_im_bgr,
                 pt,
                 (pt[0] + box_w, pt[1] + box_h),
-                (int((255 * best_point_score + 255) / 2), 0, 0),
+                (int((255 * matches[match_index][1] + 255) / 2), 0, 0),
                 2
             )
 
