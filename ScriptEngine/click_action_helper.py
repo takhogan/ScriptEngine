@@ -96,7 +96,7 @@ class ClickActionHelper:
         return point_choice, point_list, state, context
 
     @staticmethod
-    def draw_click(screenshot_bgr, point_choice, point_list):
+    def draw_click(screenshot_bgr, point_choice, point_list, click_path=None):
         overlay = screenshot_bgr.copy()
         if point_list['input_type'] == 'point_list':
             for point in point_list['point_list']:
@@ -128,6 +128,11 @@ class ClickActionHelper:
         screenshot_bgr = cv2.addWeighted(overlay, alpha, screenshot_bgr, 1 - alpha, 0)
 
         cv2.circle(screenshot_bgr, list(map(int,point_choice)), radius=5, color=(255, 0, 0), thickness=-1)
+
+        # if click_path is not None:
+        #     for click_point in click_path:
+        #         cv2.line(screenshot_bgr, start_point, end_point, color, thickness)
+
         output_image_relative_path = 'clickLocation.png'
         cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
         script_logger.get_action_log().set_post_file(

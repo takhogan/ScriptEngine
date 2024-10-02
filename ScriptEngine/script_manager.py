@@ -1,6 +1,4 @@
 import sys
-import random
-import time
 from dateutil import tz
 import os
 import cv2
@@ -70,7 +68,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
           datetime_to_local_str(str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')),
           'actual script start time: ', datetime.datetime.now(), ' scheduled end time: ',
           datetime_to_local_str(timeout))
-    script_logger.log('constants : ', constants)
+    script_logger.log('constants : ', ', '.join(constants))
     script_object = parse_zip(script_name, system_script)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
@@ -101,6 +99,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
                     script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
     device_manager = DeviceManager(script_name, script_object['props'], device_params)
+
+    # TODO: might need fixing
     logger = multiprocessing.log_to_stderr()
     logger.setLevel(multiprocessing.SUBDEBUG)
 
@@ -109,17 +109,26 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         if handle_result == "return":
             return
 
+    base_script_object = script_object.copy()
+    base_script_object['inputs'] = constants
     main_script = ScriptExecutor(
-        script_object,
+        base_script_object,
         timeout,
         script_name,
         start_time_str,
         script_id,
         device_manager,
-        state=constants,
         script_start_time=start_time
     )
     try:
+        main_script.configure_action_logger({
+            "actionName" : "inputsParser",
+            "actionGroup" : -1,
+            "actionData" : {
+                "targetSystem" : "none"
+            }
+        })
+        main_script.parse_inputs({})
         main_script.handle_action(
             script_object['props']['scriptReference']
         )
@@ -166,11 +175,12 @@ if __name__=='__main__':
     else:
         system_script = False
 
+    constants = []
     args_index = 8
     if n_args > args_index:
         for arg_index in range(args_index, n_args):
             arg_split = sys.argv[arg_index].strip().split(':')
-            constants[arg_split[0]] = arg_split[1]
+            constants.append([arg_split[0], arg_split[1], False])
 
     log_folder = './logs/' + str(0).zfill(5) + '-' +\
                  script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/stdout.txt'

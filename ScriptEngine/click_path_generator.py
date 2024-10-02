@@ -158,6 +158,70 @@ class ClickPathGenerator:
             # plt.show()
         return delta_path
 
+    def generate_click_tail_sequence(self, n_events):
+        tail_type = np.random.choice(['x', 'y', 'm'], p=[0.4526, 0.21, 0.3374])
+        tail_sequence_x = []
+        tail_sequence_y = []
+        if tail_type == 'm':
+            action_to_index = {
+                'x': 0,
+                'xy': 1,
+                'y': 2
+            }
+            transition_matrix = np.array([[0.13333333, 0.14285714, 0.36],
+                                          [0.46666667, 0.5, 0.44],
+                                          [0.4, 0.35714286, 0.2]])
+            last_action = np.random.choice(['x', 'xy', 'y'], p=[2 / 18, 13 / 18, 3 / 18])
+            if last_action == 'x' or last_action == 'xy':
+                tail_sequence_x.append(last_action)
+                if last_action == 'x':
+                    tail_sequence_y.append(0)
+            if last_action == 'y' or last_action == 'xy':
+                tail_sequence_y.append(last_action)
+                if last_action == 'y':
+                    tail_sequence_x.append(0)
+            # click_command += ['(', ]
+            for tail_event in range(1, n_events - 1):
+                event_action = np.random.choice(['x', 'xy', 'y'],
+                                                p=transition_matrix[:, action_to_index[last_action]])
+                # gen_event_sequence.append(event_action)
+                last_action = event_action
+                if last_action == 'x' or last_action == 'xy':
+                    tail_sequence_x.append(last_action)
+                    if last_action == 'x':
+                        tail_sequence_y.append(0)
+                if last_action == 'y' or last_action == 'xy':
+                    tail_sequence_y.append(last_action)
+                    if last_action == 'y':
+                        tail_sequence_x.append(0)
+        elif tail_type == 'x':
+            tail_sequence_x += ['x'] * (n_events - 2)
+            tail_end = np.random.choice(['x', 'xy'], p=[42 / 43, 1 / 43])
+            tail_sequence_x += [tail_end]
+            tail_sequence_y += [0] * (n_events - 2)
+            if tail_end == 'xy':
+                tail_sequence_y += [tail_end]
+            else:
+                tail_sequence_y += [0]
+        elif tail_type == 'y':
+            tail_sequence_y += ['y'] * (n_events - 2)
+            tail_end = np.random.choice(['y', 'xy'], p=[20 / 21, 1 / 21])
+            tail_sequence_y += [tail_end]
+            tail_sequence_x += [0] * (n_events - 2)
+            if tail_end == 'xy':
+                tail_sequence_x += [tail_end]
+            else:
+                tail_sequence_x += [0]
+            # examine distribution of distances for different tail types (in particular 0 distance moves)
+        sign_x = random.randint(0, 1) * 2 - 1
+        sign_y = random.randint(0, 1) * 2 - 1
+        return self.generate_path_from_sequence(
+            tail_sequence_x,
+            tail_sequence_y,
+            sign_x,
+            sign_y
+        )
+
     # TODO: not sure if program in general works with negative numbers
     # TODO : when you discretize make sure it cannot go off the edge
     # TODO : discretize returning -1 / -30 when things are 0
@@ -295,32 +359,6 @@ class ClickPathGenerator:
         deltalist_x,deltalist_y = self.generate_raw_path(source_x,source_y,target_x,target_y, self.deviation_degree, self.deviation_probability)
         refitted_path_x,refitted_path_y = self.refit_delta_path(deltalist_x, self.x_max, self.x_increment),self.refit_delta_path(deltalist_y, self.y_max, self.y_increment)
         discretized_delta_x,discretized_delta_y = self.discretize_deltalist(refitted_path_x, self.x_max, self.x_increment, is_delta_x=True), self.discretize_deltalist(refitted_path_y, self.y_max, self.y_increment, is_delta_x=False)
-        # script_logger.log(len(discretized_delta_x))
-        # script_logger.log(sum(discretized_delta_x))
-        # script_logger.log(len(discretized_delta_y))
-        # script_logger.log(sum(discretized_delta_y))
-        # script_logger.log(len(refitted_path_x))
-        # script_logger.log(len(refitted_path_y))
-        # exit(0)
-        # global last_val
-        # last_val = 0
-        #
-        # def undeltize(val):
-        #     global last_val
-        #     val = val + last_val
-        #     last_val = val
-        #     return val
-        #
-        # script_logger.log(sum(discretized_delta_x))
-        # script_logger.log(sum(discretized_delta_y))
-        # script_logger.log(len(discretized_delta_x))
-        # script_logger.log(len(discretized_delta_y))
-        # pointized_x = list(map(undeltize, discretized_delta_x))
-        # last_val = 0
-        # pointized_y = list(map(undeltize, discretized_delta_y))
-        # plt.plot(pointized_x, pointized_y)
-        # plt.show()
-        # exit(0)
         return discretized_delta_x, discretized_delta_y
 
 if __name__=='__main__':
