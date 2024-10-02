@@ -68,7 +68,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
           datetime_to_local_str(str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')),
           'actual script start time: ', datetime.datetime.now(), ' scheduled end time: ',
           datetime_to_local_str(timeout))
-    script_logger.log('constants : ', ', '.join(constants))
+    script_logger.log('constants : ', constants)
     script_object = parse_zip(script_name, system_script)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
