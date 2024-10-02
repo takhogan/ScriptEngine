@@ -174,7 +174,7 @@ class ScriptExecutor:
                     script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Input: ', var_name,
                                       " Value: ", input_state[var_name] if var_name in input_state else 'None'
                     )
-                    input_log_file.write(str(var_name) + ': ' + str(self.state[var_name]) + '\n')
+                    input_log_file.write(str(type(self.state[var_name])) + ' ' + str(var_name) + ': ' + str(self.state[var_name]) + '\n')
                     continue
                 globs = {
                     'glob' : glob,
@@ -190,7 +190,7 @@ class ScriptExecutor:
                 self.state[var_name] = eval_result
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Input: ', var_name,
                                     " Value: ", eval_result)
-                input_log_file.write(str(var_name) + ': ' + str(self.state[var_name]) + '\n')
+                input_log_file.write(str(type(self.state[var_name])) + ' ' + str(var_name) + ': ' + str(self.state[var_name]) + '\n')
         script_logger.get_action_log().set_pre_file(
             'text',
             self.log_folder + 'inputs.txt',
@@ -220,7 +220,7 @@ class ScriptExecutor:
                     script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Output: ', var_name,
                                       " Value: ", outputState[var_name] if var_name in outputState else 'None'
                     )
-                    outputs_log_file.write(str(var_name) + ': ' + str(outputState[var_name]) + '\n')
+                    outputs_log_file.write(str(type(outputState[var_name])) + ' ' + str(var_name) + ': ' + str(outputState[var_name]) + '\n')
                     continue
                 globs = {
                     'glob': glob,
@@ -237,7 +237,7 @@ class ScriptExecutor:
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Output: ', var_name,
                                   " Value: ", eval_result)
                 outputs_log_file.write(
-                    str(var_name) + ': ' + str(outputState[var_name]) + '\n'
+                    str(type(outputState[var_name])) + ' ' + str(var_name) + ': ' + str(outputState[var_name]) + '\n'
                 )
         script_logger.get_action_log().set_post_file(
             'text',
