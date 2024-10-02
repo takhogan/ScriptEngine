@@ -1,8 +1,6 @@
-import sys
 import json
 import os
 import glob
-import datetime
 import cv2
 import numpy as np
 

@@ -278,15 +278,14 @@ class python_host:
         #TODO: deprecated
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
-                # script_logger.log(np.array(pyautogui.screenshot()).shape)
-                # exit(0)
                 log_image = self.screenshot()
                 cv2.imwrite(script_logger.get_log_path_prefix() + '-logImage.png', log_image)
                 return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
             else:
-                script_logger.log('log type unimplemented ' + action["actionData"]["logType"])
-                exit(0)
-        # TODO: dprecated
+                exception_text = 'log type unimplemented ' + action["actionData"]["logType"]
+                script_logger.log(exception_text)
+                raise Exception(exception_text)
+        # TODO: deprecated
         elif action["actionName"] == "timeAction":
             time_val = None
             if action["actionData"]["timezone"] == "local":
@@ -296,8 +295,9 @@ class python_host:
             state[action["actionData"]["outputVarName"]] = time_val
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         else:
-            script_logger.log('unimplemented method! ' + action["actionName"])
-            exit(0)
+            exception_text = "action unimplemented on python/desktop " + action["actionName"]
+            script_logger.log(exception_text)
+            raise Exception(exception_text)
 
 
 @staticmethod

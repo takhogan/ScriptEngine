@@ -263,7 +263,7 @@ class SystemHostController:
             # transformationType : 'blur' | 'binarize' | 'antialias' | 'resize' | 'erode' | 'dilate'
             if len(action['actionData']['inputExpression']) == 0:
                 script_logger.log('Error: input expression was blank')
-                exit(1)
+                raise Exception(action["actionName"] + ' input expression was blank')
 
             transform_im = state[action['actionData']['inputExpression']]['matched_area']
             pre_image_relative_path = 'imageTransformationAction-input.png'
@@ -619,7 +619,7 @@ class SystemHostController:
                 exit(0)
             else:
                 script_logger.log('return statement type not implemented', action["actionData"]["returnStatementType"])
-                exit(1)
+                raise Exception('return statement type not implemented')
             post_log = 'Setting Status: {}'.format(status_name)
             script_logger.log(post_log)
             script_logger.get_action_log().add_post_file(
@@ -833,12 +833,12 @@ class SystemHostController:
                 # to insert variables user SQL variable substitution
             else:
                 script_logger.log("DB provider unimplemented")
-                exit(1)
+                raise Exception(action["actionName"] + ' DB provider unimplemented')
         else:
             status = ScriptExecutionState.ERROR
             script_logger.log("action unimplemented ")
             script_logger.log(action)
-            exit(1)
+            raise Exception(action["actionName"] + ' not implemented for targetsystem none')
         return action, status, state, context, run_queue, []
 
 

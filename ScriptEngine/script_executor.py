@@ -1,23 +1,17 @@
-import copy
-import concurrent.futures
-import json
-import shlex
+
 import sys
 import datetime
 from dateutil import tz
-from PIL import Image
-import tesserocr
+
 import random
 import re
 import glob
-
-
-import cv2
 
 sys.path.append("..")
 from parallelized_script_executor import ParallelizedScriptExecutor
 from script_engine_constants import *
 from script_execution_state import ScriptExecutionState
+from script_execution_status_detail import ScriptExecutionStatusDetail
 from script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str, state_eval
 from script_loader import parse_zip
 from system_script_handler import SystemScriptHandler
@@ -121,6 +115,7 @@ class ScriptExecutor:
             self.context.update(context)
         # script_logger.log('context (1) : ', self.context["action_attempts"])
         self.status = ScriptExecutionState.FINISHED
+        self.status_detail = None
         if create_log_folders:
             self.create_log_folders(parent_folder)
             self.set_log_paths()
@@ -152,6 +147,7 @@ class ScriptExecutor:
         # script_logger.log('state (1.5) ', self.state)
         self.actions = self.action_rows[0]["actions"]
         self.status = ScriptExecutionState.FINISHED
+        self.status_detail = None
         self.context["action_attempts"] = [0] * len(self.actions)
         self.context["success_states"] = None
         self.context["run_queue"] = None
@@ -160,8 +156,8 @@ class ScriptExecutor:
             self.state.update(input_vars)
         # script_logger.log('state (2) : ', self.state)
 
-    def parse_inputs(self, input_state, input_log_file_path):
-        with open(input_log_file_path, 'w') as input_log_file:
+    def parse_inputs(self, input_state):
+        with open(self.log_folder + 'inputs.txt', 'w') as input_log_file:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing_inputs ', self.inputs)
             for [var_name, input_expression, default_value] in self.inputs:
                 var_name = var_name.strip()
@@ -197,7 +193,7 @@ class ScriptExecutor:
                 input_log_file.write(str(var_name) + ': ' + str(self.state[var_name]) + '\n')
         script_logger.get_action_log().set_pre_file(
             'text',
-            input_log_file_path,
+            self.log_folder + 'inputs.txt',
             log_header=False,
             absolute_path = True
         )
@@ -285,6 +281,7 @@ class ScriptExecutor:
                 if target_system == 'adb':
                     self.device_manager.adb_host.init_system()
                     screenshot = self.device_manager.adb_host.screenshot()
+                    script_logger.log('ADB CONTROLLER', 'converted screenshot color')
                     for [action_index,action] in actions:
                         self.log_action_details(action)
                         action['actionData']['screencap_im_bgr'] = screenshot
@@ -337,18 +334,25 @@ class ScriptExecutor:
                 else:
                     handle_action_result = self.device_manager.system_host.handle_action(action, self.state, self.context, self.run_queue)
             else:
-                status = ScriptExecutionState.ERROR
-                script_logger.log("target system " + action["actionData"]["targetSystem"] + " unimplemented!")
-                exit(0)
+                exception_text = "target system " + action["actionData"]["targetSystem"] + " unimplemented!"
+                script_logger.log(exception_text)
+                raise Exception(exception_text)
         else:
-            status = ScriptExecutionState.ERROR
-            script_logger.log("script formatting error, targetSystem not present!")
-            exit(0)
+            exception_text = "script formatting error, targetSystem not present!"
+            raise Exception(exception_text)
         if 'postActionDelay' in action['actionData'] and len(action['actionData']['postActionDelay']) > 0:
             RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], self.state)
 
-        _, status, _, _, _, _ = handle_action_result
-        script_logger.get_action_log().set_status(status.name)
+        _, status, _, context, _, _ = handle_action_result
+        if "status_detail" in context:
+            status_detail = context["status_detail"]
+            del context["status_detail"]
+        else:
+            status_detail = None
+        if status_detail is not None:
+            script_logger.get_action_log().set_status(status_detail)
+        else:
+            script_logger.get_action_log().set_status(status.name)
         return handle_action_result
 
     def handle_script_reference(self, action, state, context, run_queue):
@@ -458,7 +462,7 @@ class ScriptExecutor:
                 refresh_start_time=True
             )
             self.script_action_log.set_script_log_folder(child_log_folder)
-            ref_script_executor.parse_inputs(state, child_log_folder + 'inputs.txt')
+            ref_script_executor.parse_inputs(state)
 
             # I don't know what this does anymore
             if 'searchAreaObjectHandler' in child_context["script_attributes"]:
@@ -474,19 +478,16 @@ class ScriptExecutor:
                     status = ScriptExecutionState.RETURN
                     return action, status, state, context, run_queue, []
 
-            # script_logger.log('runMode: ', action["actionData"]["runMode"])
-
             ref_script_executor.set_log_paths()
-            
 
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing child script', action['actionData']['scriptName'])
 
             if action["actionData"]["runMode"] == "run":
-                ref_script_executor.run(parse_inputs=False)
+                ref_script_executor.run()
             elif action["actionData"]["runMode"] == "runOne":
-                ref_script_executor.run_one(parse_inputs=False)
+                ref_script_executor.run_one()
             elif action["actionData"]["runMode"] == "runToFailure":
-                ref_script_executor.run_to_failure(parse_inputs=False)
+                ref_script_executor.run_to_failure()
 
             if 'paused_script' in ref_script_executor.context:
                 self.context['paused_script'] = ''#paused script file name
@@ -502,8 +503,11 @@ class ScriptExecutor:
 
             ref_script_executor.parse_outputs(state, child_log_folder + 'outputs.txt')
 
+            # context is a reference to self.context so setting context is the same as setting self.context
             self.context["script_counter"] = ref_script_executor.context["script_counter"]
+            context["script_counter"] = ref_script_executor.context["script_counter"]
             self.context["script_timer"] = ref_script_executor.context["script_timer"]
+            context["script_timer"] = ref_script_executor.context["script_timer"]
 
             if is_object_handler:
                 status = ScriptExecutionState.RETURN
@@ -522,9 +526,10 @@ class ScriptExecutor:
                 else:
                     status = ScriptExecutionState.ERROR
             action["actionData"]["initializedScript"] = ref_script_executor
+            context["status_detail"] = self.status_detail
             script_logger.log(action["actionData"][
                       "scriptName"] + " returning with status " + ref_script_executor.status.name + "/" + status.name)
-        return action, status, state, context, run_queue, []
+            return action, status, state, context, run_queue, []
 
     def get_out_of_attempts_handler(self, action):
         if action is None:
@@ -574,6 +579,7 @@ class ScriptExecutor:
         script_logger.log('-----' + self.props['script_name'] + ' CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches" + '-----')
         if datetime.datetime.now().astimezone(tz=tz.tzutc()) > self.timeout:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script timeout - ', datetime.datetime.now())
+            self.status_detail = ScriptExecutionStatusDetail.TIMED_OUT
             return end_branch,True
         running_scripts = get_running_scripts()
 
@@ -609,6 +615,7 @@ class ScriptExecutor:
 
         if terminate_request:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: received terminate request')
+            self.status_detail = ScriptExecutionStatusDetail.CANCELLED
             return end_branch,True
 
         if "scriptMaxActionAttempts" in self.context and\
@@ -617,6 +624,7 @@ class ScriptExecutor:
                 max(self.context["action_attempts"]) > int(self.context["scriptMaxActionAttempts"]):
             self.status = ScriptExecutionState.FAILURE
             script_logger.log(self.props['script_name'] + " CONTROL FLOW: Action attempts", self.context["action_attempts"], "exceeded scriptMaxActionAttempts of", self.context["scriptMaxActionAttempts"])
+            self.status_detail = ScriptExecutionStatusDetail.MAX_ATTEMPTS
             return end_branch,True
         if len(self.actions) == 0 and len(self.run_queue) == 0:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Reached end of script with status', self.status)
@@ -693,8 +701,8 @@ class ScriptExecutor:
                         'srcRowIndex': None,
                         'srcActionIndex': None,
                         'destGroup': action['actionGroup'],
-                        'destRowIndex': action['rowIndex'],
-                        'destActionIndex': action['actionIndex'],
+                        'destRowIndex': action['actionRowRowIndex'],
+                        'destActionIndex': action['actionRowActionIndex'],
                         'coords': None,
                         'long': None,
                         'isPipeLink': None,
@@ -814,9 +822,7 @@ class ScriptExecutor:
             self.status = ScriptExecutionState.RETURN
 
 
-    def run_to_failure(self, parse_inputs=True):
-        if parse_inputs:
-            self.parse_inputs(self.state)
+    def run_to_failure(self):
         script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: runToFailure ", "branchingBehavior: ", self.context["branching_behavior"])
         self.status = ScriptExecutionState.STARTING
         overall_status = ScriptExecutionState.FAILURE
@@ -857,9 +863,7 @@ class ScriptExecutor:
 
 
 
-    def run_one(self, parse_inputs=True):
-        if parse_inputs:
-            self.parse_inputs(self.state)
+    def run_one(self):
         script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: runOne ", "branchingBehavior: ", self.context["branching_behavior"])
         self.status = ScriptExecutionState.STARTING
         branches = []
@@ -898,7 +902,7 @@ class ScriptExecutor:
             self.execute_actions()
             if self.status == ScriptExecutionState.STARTING and len(self.actions) > 0:
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Running script with runOne, first pass successful, switching to run mode run')
-                self.run(parse_inputs=False)
+                self.run()
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: returned from run in runOne with status', self.status)
 
                 if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_BRANCH:
@@ -923,7 +927,7 @@ class ScriptExecutor:
                         break
                     # because the first action will be a context switch action
                     self.execute_actions()
-                    self.run_one(parse_inputs=False)
+                    self.run_one()
                     if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_BRANCH:
                         # remember the final state is FINISHED/FINISHED_FAILURE
                         overall_status = ScriptExecutionState.SUCCESS
@@ -941,9 +945,7 @@ class ScriptExecutor:
         self.on_script_completion()
         #TODO In theory you should load in the state and context of the successful branch
 
-    def run(self, parse_inputs=True):
-        if parse_inputs:
-            self.parse_inputs(self.state)
+    def run(self):
         script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: run ", "branchingBehavior: ", self.context["branching_behavior"])
         self.status = ScriptExecutionState.STARTING
         overall_status = ScriptExecutionState.FAILURE
