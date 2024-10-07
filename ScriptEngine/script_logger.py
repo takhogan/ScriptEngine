@@ -1,5 +1,9 @@
+import copy
 import datetime
+import threading
 from script_action_log import ScriptActionLog
+
+thread_local_storage = threading.local()
 
 
 class ScriptLogger:
@@ -9,15 +13,50 @@ class ScriptLogger:
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super(ScriptLogger, cls).__new__(cls, *args, **kwargs)
+            cls._instance.action_log = None
+            cls._instance.log_file_path = None
+            cls._instance.log_path_prefix = None
+            cls._instance.log_folder_path = None
+            cls._instance.log_header = None
+            cls._instance.log_level = 'info'
         return cls._instance
 
-    def __init__(self):
-        self.action_log = None
-        self.log_file_path = None
-        self.log_path_prefix = None
-        self.log_folder_path = None
-        self.log_header = None
-        self.log_level = 'info'
+    @classmethod
+    def get_instance(cls):
+        """Ensure that the singleton instance is returned."""
+        return cls._instance
+
+    @staticmethod
+    def get_logger():
+        """
+        Check if thread-local logger exists, otherwise return the global singleton logger.
+        """
+        return getattr(thread_local_storage, 'script_logger', ScriptLogger.get_instance())
+
+    def copy(self):
+        """
+        Return a shallow copy of the current instance, including a shallow copy of the action_log attribute.
+        """
+        # Create a shallow copy of the current instance
+        new_copy = copy.copy(self)
+
+        return new_copy
+
+    def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True):
+        text = str(datetime.datetime.now()) + ': ' + (
+            self.log_header if log_header else ''
+        ) + ' ' + sep.join(map(str, args)) + end
+        if file is None:
+            with open(self.log_file_path, 'a') as log_file:
+                log_file.write(text)
+                if flush:
+                    log_file.flush()
+        else:
+            file.write(text)
+            if flush:
+                file.flush()
+
+        print(*args, sep=sep, end=end, flush=flush)
 
     def set_log_file_path(self, log_file_path):
         self.log_file_path = log_file_path
@@ -39,22 +78,6 @@ class ScriptLogger:
 
     def get_log_folder(self) -> str:
         return self.log_folder_path
-
-    def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True):
-        text = str(datetime.datetime.now()) + ': ' + (
-            self.log_header if log_header else ''
-        ) + ' ' + sep.join(map(str, args)) + end
-        if file is None:
-            with open(self.log_file_path, 'a') as log_file:
-                log_file.write(text)
-                if flush:
-                    log_file.flush()
-        else:
-            file.write(text)
-            if flush:
-                file.flush()
-
-        print(*args, sep=sep, end=end, flush=flush)
 
     def set_action_log(self, action_log : ScriptActionLog):
         self.action_log = action_log

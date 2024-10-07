@@ -26,9 +26,10 @@ script_logger = ScriptLogger()
 
 
 class SystemHostController:
-    def __init__(self, base_script_name, props):
+    def __init__(self, base_script_name, props, io_executor):
         self.base_script_name = base_script_name
         self.props = props
+        self.io_executor = io_executor
         self.messaging_helper = MessagingHelper()
 
     def handle_action(self, action, state, context, run_queue):
@@ -231,14 +232,14 @@ class SystemHostController:
             state[action["actionData"]["outputVarName"]] = time_val
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "randomVariable":
-            delays = RandomVariableHelper.get_rv_val(action)
-            state[action["actionData"]["outputVarName"]] = delays
+            rv_vals = RandomVariableHelper.get_rv_val(action)
+            state[action["actionData"]["outputVarName"]] = rv_vals[0]
             status = ScriptExecutionState.SUCCESS
-            script_logger.log('created random values', delays)
+            script_logger.log('created random values', rv_vals[0])
             script_logger.get_action_log().add_post_file(
                 'text',
                 'randomVariable-log.txt',
-                'Created random values: ' + str(delays)
+                'Created random values: ' + str(rv_vals[0])
             )
         #TODO: will be removed, need a new file io type action
         elif action["actionName"] == "jsonFileAction":

@@ -123,13 +123,15 @@ KEY_TO_KEYCODE = {
     "up": "KEYCODE_DPAD_UP"
 }
 
-from script_logger import ScriptLogger
+from script_logger import ScriptLogger,thread_local_storage
 script_logger = ScriptLogger()
+
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
 class adb_host:
-    def __init__(self, props, host_os, adb_args, input_source=None):
+    def __init__(self, props, host_os, adb_args, io_executor, input_source=None):
         script_logger.log('Configuring ADB with adb_args', adb_args)
+        self.io_executor = io_executor
         self.stop_command_gather = False
         self.host_os = host_os
         self.image_matcher = ImageMatcher()
@@ -190,7 +192,6 @@ class adb_host:
             if status == ScriptExecutionState.FAILURE:
                 script_logger.log('ADB HOST CONTROLLER: adb configuration failed')
                 raise Exception('ADB configuration failed')
-
 
     def configure_adb(self, configurationAction, state, context):
         emulator_type = state_eval(configurationAction['actionData']['emulatorType'], {}, state)
@@ -304,6 +305,7 @@ class adb_host:
         return ScriptExecutionState.SUCCESS, state, context
 
     def get_device_name_to_emulator_name_mapping(self):
+        script_logger = ScriptLogger.get_logger()
         device_list = self.get_device_list_output()
         script_logger.log('device_list', device_list)
         devices = {}
@@ -325,6 +327,7 @@ class adb_host:
         return devices
 
     def detect_adb_port(self):
+        script_logger = ScriptLogger.get_logger()
         og_port = self.adb_port
         if not self.auto_detect_adb_port:
             self.full_ip = self.adb_ip + ':' + self.adb_port
@@ -498,6 +501,7 @@ class adb_host:
             return 'offline'
 
     def get_screen_orientation(self):
+        script_logger = ScriptLogger.get_logger()
         shell_process = subprocess.Popen([
             self.adb_path,
             '-s',
@@ -526,6 +530,7 @@ class adb_host:
 
 
     def restart_adb(self):
+        script_logger = ScriptLogger.get_logger()
         script_logger.log('ADB CONTROLLER restarting adb server')
         self.run_kill_command()
         self.run_start_command()
@@ -536,6 +541,7 @@ class adb_host:
         time.sleep(3)
 
     def init_system(self, reinitialize=False):
+        script_logger = ScriptLogger.get_logger()
         if self.dummy_mode:
             script_logger.log('skipping adb init system. script running in mock mode')
             return
@@ -674,12 +680,14 @@ class adb_host:
         return source_im
 
     def run_connect_command(self):
+        script_logger = ScriptLogger.get_logger()
         script_logger.log('connecting to device', self.full_ip)
         return subprocess.run(
             self.adb_path + ' connect ' + self.full_ip, cwd="/", shell=True, timeout=30
         )
 
     def get_device_list_output(self):
+        script_logger = ScriptLogger.get_logger()
         try:
             device_list = subprocess.run(
                 self.adb_path + ' devices ',
@@ -699,6 +707,7 @@ class adb_host:
         out.close()
 
     def set_commands(self, timeout=1):
+        script_logger = ScriptLogger.get_logger()
         # Run the adb getevent command
         process = subprocess.Popen(['adb','-s', self.full_ip ,'shell' ,'getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                    bufsize=1)
@@ -769,6 +778,7 @@ class adb_host:
             return None
 
     def get_screencap(self, compressed):
+        script_logger = ScriptLogger.get_logger()
         if compressed:
             screenshot_command = self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip)
             get_im_command = subprocess.run(
@@ -830,6 +840,7 @@ class adb_host:
         return img
 
     def screenshot(self, compress_png=False):
+        script_logger = ScriptLogger.get_logger()
         if self.dummy_mode:
             script_logger.log('ADB CONTROLLER: script running in dummy mode, returning screenshot of input source')
             return self.input_source['screenshot']()
@@ -1136,6 +1147,14 @@ class adb_host:
         )
         self.event_counter += 1
 
+    def draw_click(self, point_choice, point_list):
+        script_logger.log('ADB CONTROLLER: logging using original script logger')
+        thread_local_storage.script_logger = script_logger.copy()
+        ClickActionHelper.draw_click(
+            self.screenshot(), point_choice, point_list
+        )
+
+
     def handle_action(self, action, state, context, run_queue, lazy_eval=False):
         #initialize
         if action["actionName"] == "ADBConfigurationAction":
@@ -1194,20 +1213,11 @@ class adb_host:
                 action, var_name, state, context,
                 self.width, self.height
             )
-            delays = []
+            delays = [0] * action["actionData"]["clickCount"]
             if action["actionData"]["delayState"] == "active":
-                if action["actionData"]["distType"] == 'normal':
-                    mean = action["actionData"]["mean"]
-                    stddev = action["actionData"]["stddev"]
-                    mins = (np.repeat(action["actionData"]["min"], action["actionData"]["clickCount"]) - mean) / stddev
-                    maxes = (np.repeat(action["actionData"]["max"], action["actionData"]["clickCount"]) - mean) / stddev
-                    delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev) if action["actionData"][
-                                                                                       "clickCount"] > 1 else [
-                        truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]
-
-            ClickActionHelper.draw_click(
-                self.screenshot(), point_choice, point_list
-            )
+                delays = RandomVariableHelper.get_rv_val(action, action["actionData"]["clickCount"])
+            script_logger.log('ADB CONTROLLER: starting draw click thread')
+            self.io_executor.submit(self.draw_click, point_choice, point_list)
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1])
                 time.sleep(delays[click_count])
