@@ -357,7 +357,7 @@ async def read_input():
                 "width" : None,
                 "height" : None,
                 "scriptMode" : 'train'
-            })
+            }, None)
         if len(inputs) > 1:
             try:
                 script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_python_host, inputs)) + '<--{}-->'.format(inputs[0]) , file=DummyFile(),flush=True)

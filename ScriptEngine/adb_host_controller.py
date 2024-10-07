@@ -1220,7 +1220,7 @@ class adb_host:
             self.io_executor.submit(self.draw_click, point_choice, point_list)
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1])
-                time.sleep(delays[click_count])
+                time.sleep(delays[click_count] if click_count > 1 else delays)
 
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
 
@@ -1664,7 +1664,7 @@ async def read_input():
                 "dir_path": "./",
                 "width" : None,
                 "height" : None
-            }, None, adb_args)
+            }, None, adb_args, None)
         if len(inputs) > 2:
             script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_adb_host, inputs)) + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
             script_logger.log('ADB CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)

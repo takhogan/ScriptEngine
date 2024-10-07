@@ -23,14 +23,15 @@ class RandomVariableHelper:
 
     @staticmethod
     def get_rv_val(action, repeats: int = None) -> List[float]:
+        script_logger.log('action', action)
         if action["actionData"]["distributionType"] == 'normal':
             mean = action["actionData"]["normalDistMean"]
             stddev = action["actionData"]["normalDistStdDev"]
             mins = ((
-                        action["actionData"]["normalDistMin"] if repeats is None else np.repeat(action["actionData"]["normalDistMin"])
+                        action["actionData"]["normalDistMin"] if repeats is None else np.repeat(action["actionData"]["normalDistMin"], repeats)
                     ) - mean) / stddev
             maxes = ((
-                action["actionData"]["normalDistMax"] if repeats is None else np.repeat(action["actionData"]["normalDistMax"])
+                action["actionData"]["normalDistMax"] if repeats is None else np.repeat(action["actionData"]["normalDistMax"], repeats)
             ) - mean) / stddev
             rv_vals = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)
             rv_vals = [rv_vals] if repeats is None else rv_vals
