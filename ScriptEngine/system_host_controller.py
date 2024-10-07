@@ -512,7 +512,7 @@ class SystemHostController:
                     'imageToText-results.txt',
                     pre_log + '\n' + inputs_log + '\n' + post_log
                 )
-                state[action["actionData"]["outputVarName"]] = outputs[0]
+                state[action["actionData"]["outputVarName"]] = outputs[0].strip()
                 status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "contextSwitchAction":
             success_states = context["success_states"] if "success_states" in context else None
