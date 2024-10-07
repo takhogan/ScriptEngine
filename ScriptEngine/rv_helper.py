@@ -23,21 +23,21 @@ class RandomVariableHelper:
 
     @staticmethod
     def get_rv_val(action, repeats: int = None) -> List[float]:
-        if action["actionData"]["distType"] == 'normal':
-            mean = action["actionData"]["mean"]
-            stddev = action["actionData"]["stddev"]
+        if action["actionData"]["distributionType"] == 'normal':
+            mean = action["actionData"]["normalDistMean"]
+            stddev = action["actionData"]["normalDistStdDev"]
             mins = ((
-                        action["actionData"]["min"] if repeats is None else np.repeat(action["actionData"]["min"])
+                        action["actionData"]["normalDistMin"] if repeats is None else np.repeat(action["actionData"]["normalDistMin"])
                     ) - mean) / stddev
             maxes = ((
-                action["actionData"]["max"] if repeats is None else np.repeat(action["actionData"]["max"])
+                action["actionData"]["normalDistMax"] if repeats is None else np.repeat(action["actionData"]["normalDistMax"])
             ) - mean) / stddev
             rv_vals = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)
             rv_vals = [rv_vals] if repeats is None else rv_vals
             return rv_vals
-        elif action["actionData"]["distType"] == "uniform":
-            min_val = action["actionData"]["min"]
-            max_val = action["actionData"]["max"]
+        elif action["actionData"]["distributionType"] == "uniform":
+            min_val = action["actionData"]["uniformDistMin"]
+            max_val = action["actionData"]["uniformDistMax"]
             dist_range = max_val - min_val
             if repeats is None:
                 rv_vals = [random.random() * dist_range + min_val]
@@ -45,5 +45,5 @@ class RandomVariableHelper:
                 rv_vals = [(random.random() * dist_range + min_val) for _ in range(0, repeats)]
             return rv_vals
         else:
-            script_logger.log('random variable unimplemented: ' + action["actionData"]["distType"])
+            script_logger.log('random variable unimplemented: ' + action["actionData"]["distributionType"])
             exit(0)
