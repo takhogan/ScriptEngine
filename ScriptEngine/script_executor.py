@@ -204,8 +204,9 @@ class ScriptExecutor:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing outputs ', self.outputs)
             for [var_name, input_expression, default_value] in self.outputs:
                 var_name = var_name.strip()
-                if (len(input_expression) == 0) or \
-                        ((default_value or default_value == "true") and (
+                if len(input_expression.strip()) == 0:
+                    input_expression = 'None'
+                if ((default_value or default_value == "true") and (
                                 var_name in self.state and self.state[var_name] is not None)):
                     script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Output: ', var_name,
                                       " Default Parameter? ", default_value,
