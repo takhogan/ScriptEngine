@@ -24,17 +24,18 @@ from click_action_helper import ClickActionHelper
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
 from forward_detect_peek_helper import ForwardDetectPeekHelper
-from script_logger import ScriptLogger
+from script_logger import ScriptLogger,thread_local_storage
 
 script_logger = ScriptLogger()
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
 class python_host:
-    def __init__(self, props, input_source=None):
+    def __init__(self, props, io_executor, input_source=None):
         script_logger.log('Initializing Python Host')
         self.width = None
         self.height = None
         self.props = props
+        self.io_executor = io_executor
         self.image_matcher = ImageMatcher()
 
         if input_source is not None:
@@ -83,6 +84,13 @@ class python_host:
     def hotkey(self, keys):
         script_logger.log('keys : ', keys)
         pyautogui.hotkey(*keys)
+
+    def draw_click(self, point_choice, point_list):
+        script_logger.log('ADB CONTROLLER: logging using original script logger')
+        thread_local_storage.script_logger = script_logger.copy()
+        ClickActionHelper.draw_click(
+            self.screenshot(), point_choice, point_list
+        )
 
     def click(self, x, y, button):
         if self.dummy_mode:
@@ -160,18 +168,11 @@ class python_host:
             action["actionData"]["clickCount"] = int(action["actionData"]["clickCount"])
             var_name = action["actionData"]["inputExpression"]
             point_choice, point_list, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
-            delays = []
+            delays = [0] * action["actionData"]["clickCount"]
             if action["actionData"]["delayState"] == "active":
-                if action["actionData"]["distType"] == 'normal':
-                    mean = action["actionData"]["mean"]
-                    stddev = action["actionData"]["stddev"]
-                    mins = (np.repeat(action["actionData"]["min"], action["actionData"]["clickCount"]) - mean) / stddev
-                    maxes = (np.repeat(action["actionData"]["max"], action["actionData"]["clickCount"]) - mean) / stddev
-                    delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev) if action["actionData"]["clickCount"] > 1 else [truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]
-            if script_logger.get_log_level() == 'info':
-                ClickActionHelper.draw_click(
-                    self.screenshot(), point_choice, point_list
-                )
+                delays = RandomVariableHelper.get_rv_val(action, action["actionData"]["clickCount"])
+            script_logger.log('ADB CONTROLLER: starting draw click thread')
+            self.io_executor.submit(self.draw_click, point_choice, point_list)
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1], button=action['actionData']['mouseButton'])
                 time.sleep(delays[click_count])
@@ -271,10 +272,6 @@ class python_host:
                     )
                 )
                 return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
-        elif action["actionName"] == "randomVariable":
-            delays = RandomVariableHelper.get_rv_val(action)
-            state[action["actionData"]["outputVarName"]] = delays
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         #TODO: deprecated
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":

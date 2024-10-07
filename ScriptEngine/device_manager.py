@@ -5,12 +5,12 @@ from script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
 class DeviceManager:
-    def __init__(self, base_script_name, props, device_params):
+    def __init__(self, base_script_name, props, device_params, io_executor):
         script_logger.log('Intializing Device Manager')
         if 'script-engine-device-type' in device_params and device_params['script-engine-device-type'] == 'file':
             input_source = device_params
         else:
             input_source = None
-        self.python_host = python_host(props.copy(), input_source)
-        self.adb_host = adb_host(props.copy(), self.python_host, device_params, input_source)
-        self.system_host = SystemHostController(base_script_name, props.copy())
+        self.python_host = python_host(props.copy(), io_executor, input_source=input_source)
+        self.adb_host = adb_host(props.copy(), self.python_host, device_params, io_executor, input_source=input_source)
+        self.system_host = SystemHostController(base_script_name, props.copy(), io_executor)

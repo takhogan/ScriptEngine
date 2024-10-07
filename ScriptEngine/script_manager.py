@@ -1,4 +1,6 @@
 import sys
+from concurrent.futures import ThreadPoolExecutor
+
 from dateutil import tz
 import os
 import cv2
@@ -98,43 +100,48 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
                 else:
                     script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
-    device_manager = DeviceManager(script_name, script_object['props'], device_params)
+    with ThreadPoolExecutor(max_workers=50) as io_executor:
+        device_manager = DeviceManager(script_name, script_object['props'], device_params, io_executor)
 
-    # TODO: might need fixing
-    logger = multiprocessing.log_to_stderr()
-    logger.setLevel(multiprocessing.SUBDEBUG)
+        # TODO: might need fixing
+        logger = multiprocessing.log_to_stderr()
+        logger.setLevel(multiprocessing.SUBDEBUG)
 
-    if system_script:
-        handle_result = SystemScriptHandler.handle_system_script(device_manager, script_name, {})
-        if handle_result == "return":
-            return
+        if system_script:
+            handle_result = SystemScriptHandler.handle_system_script(device_manager, script_name, {})
+            if handle_result == "return":
+                return
 
-    base_script_object = script_object.copy()
-    base_script_object['inputs'] = constants
-    main_script = ScriptExecutor(
-        base_script_object,
-        timeout,
-        script_name,
-        start_time_str,
-        script_id,
-        device_manager,
-        script_start_time=start_time
-    )
-    try:
-        main_script.configure_action_logger({
-            "actionName" : "inputsParser",
-            "actionGroup" : -1,
-            "actionData" : {
-                "targetSystem" : "none"
-            }
-        })
-        main_script.parse_inputs({})
-        main_script.handle_action(
-            script_object['props']['scriptReference']
+        base_script_object = script_object.copy()
+        base_script_object['inputs'] = constants
+
+        main_script = ScriptExecutor(
+            base_script_object,
+            timeout,
+            script_name,
+            start_time_str,
+            script_id,
+            device_manager,
+            script_start_time=start_time
         )
-    except:
-        traceback.print_exc()
-        exit(1)
+        try:
+            main_script.configure_action_logger({
+                "actionName": "inputsParser",
+                "actionGroup": -1,
+                "actionData": {
+                    "targetSystem": "none"
+                }
+            })
+            main_script.parse_inputs({})
+            main_script.handle_action(
+                script_object['props']['scriptReference']
+            )
+        except:
+            io_executor.shutdown(wait=True)
+            traceback.print_exc()
+            exit(1)
+        else:
+            io_executor.shutdown(wait=True)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())
     # update_running_scripts_file(script_name, 'pop')
 

@@ -161,8 +161,9 @@ class ScriptExecutor:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing_inputs ', self.inputs)
             for [var_name, input_expression, default_value] in self.inputs:
                 var_name = var_name.strip()
-                if (len(input_expression) == 0) or \
-                   ((default_value or default_value == "true") and (var_name in input_state and input_state[var_name] is not None)):
+                if len(input_expression.strip()) == 0:
+                    input_expression = 'None'
+                if (default_value or default_value == "true") and (var_name in input_state and input_state[var_name] is not None):
                     script_logger.log(self.props['script_name'],' CONTROL FLOW: Parsing Input: ', var_name,
                           " Default Parameter? ", default_value,
                           " Overwriting Default? True" if default_value else "Reading from input state")
@@ -881,8 +882,8 @@ class ScriptExecutor:
                         'srcRowIndex': None,
                         'srcActionIndex': None,
                         'destGroup': action['actionGroup'],
-                        'destRowIndex': action['rowIndex'],
-                        'destActionIndex': action['actionIndex'],
+                        'destRowIndex': action['actionRowRowIndex'],
+                        'destActionIndex': action['actionRowActionIndex'],
                         'coords': None,
                         'long': None,
                         'isPipeLink': None,

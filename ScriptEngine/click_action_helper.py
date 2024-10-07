@@ -97,6 +97,8 @@ class ClickActionHelper:
 
     @staticmethod
     def draw_click(screenshot_bgr, point_choice, point_list, click_path=None):
+        script_logger = ScriptLogger.get_logger()
+        script_logger.log('logging with the new threaded script logger')
         overlay = screenshot_bgr.copy()
         if point_list['input_type'] == 'point_list':
             for point in point_list['point_list']:
@@ -135,6 +137,7 @@ class ClickActionHelper:
 
         output_image_relative_path = 'clickLocation.png'
         cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
+        # script_logger.log()
         script_logger.get_action_log().set_post_file(
             'image',
             output_image_relative_path
