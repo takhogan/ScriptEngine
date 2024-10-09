@@ -90,7 +90,12 @@ class ScriptActionLog:
             raise Exception('Unsupported File Type')
 
     def append_pre_file(self, file_type, file_contents, end='\n'):
-        assert self.pre_file[0] == file_type
+        if self.pre_file[0] != file_type:
+            raise Exception(
+                'Attempting to append contents of type ' + file_type +\
+                ' to file ' + str(self.pre_file) + ' of type ' + self.pre_file[0] +\
+                ' contents: ', + str(file_contents)
+            )
         if file_type == 'text':
             with open(self.pre_file[1], 'a') as pre_file:
                 pre_file.write(file_contents + end)
@@ -119,7 +124,12 @@ class ScriptActionLog:
             raise Exception('Unsupported File Type')
 
     def append_post_file(self, file_type, file_contents, end='\n'):
-        assert self.post_file[0] == file_type
+        if self.post_file[0] != file_type:
+            raise Exception(
+                'Attempting to append contents of type ' + file_type + \
+                ' to file ' + str(self.post_file) + ' of type ' + self.post_file[0] +\
+                ' contents: ', + str(file_contents)
+            )
         if file_type == 'text':
             with open(self.post_file[1], 'a') as post_file:
                 post_file.write(file_contents + end)
@@ -157,7 +167,12 @@ class ScriptActionLog:
         for supporting_file_type, supporting_file_path in self.supporting_files:
             if supporting_file_path == existing_supporting_file_path:
                 file_exists = True
-                assert supporting_file_type == file_type
+                if supporting_file_type != file_type:
+                    raise Exception(
+                        'Attempting to append contents of type ' + file_type + \
+                        ' to file ' + str(supporting_file_path) + ' of type ' + supporting_file_type + \
+                        ' contents: ', + str(file_contents)
+                    )
         assert file_exists
         if file_type == 'text':
             with open(existing_supporting_file_path, 'a') as supporting_file:

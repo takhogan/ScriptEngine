@@ -1147,9 +1147,9 @@ class adb_host:
         )
         self.event_counter += 1
 
-    def draw_click(self, point_choice, point_list):
-        script_logger.log('ADB CONTROLLER: logging using original script logger')
-        thread_local_storage.script_logger = script_logger.copy()
+    def draw_click(self, thread_script_logger, point_choice, point_list):
+        thread_local_storage.script_logger = thread_script_logger
+        thread_script_logger.log('started draw click thread')
         ClickActionHelper.draw_click(
             self.screenshot(), point_choice, point_list
         )
@@ -1217,7 +1217,8 @@ class adb_host:
             if action["actionData"]["delayState"] == "active":
                 delays = RandomVariableHelper.get_rv_val(action, action["actionData"]["clickCount"])
             script_logger.log('ADB CONTROLLER: starting draw click thread')
-            self.io_executor.submit(self.draw_click, point_choice, point_list)
+            thread_script_logger = script_logger.copy()
+            self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1])
                 time.sleep(delays[click_count] if click_count > 1 else delays)

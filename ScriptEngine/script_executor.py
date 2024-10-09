@@ -185,8 +185,8 @@ class ScriptExecutor:
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Input: ', var_name,
                                   " Default Parameter? ", default_value,
                                   " Overwriting Default? False" if default_value else "")
-                state_copy = input_state.copy()
-                state_copy.update(self.state)
+                state_copy = self.state.copy()
+                state_copy.update(input_state)
                 eval_result = state_eval(input_expression, globs, state_copy)
                 self.state[var_name] = eval_result
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Input: ', var_name,
@@ -233,7 +233,6 @@ class ScriptExecutor:
                                   " Default Parameter? ", default_value,
                                   " Overwriting Default? False" if default_value else "")
                 state_copy = self.state.copy()
-                state_copy.update(outputState)
                 eval_result = state_eval(input_expression, globs, state_copy, crashonerror=self.status !=ScriptExecutionState.FINISHED_FAILURE)
                 outputState[var_name] = eval_result
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Output: ', var_name,
