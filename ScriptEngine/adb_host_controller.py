@@ -781,27 +781,61 @@ class adb_host:
         script_logger = ScriptLogger.get_logger()
         if compressed:
             screenshot_command = self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip)
-            get_im_command = subprocess.run(
-                screenshot_command,
-                cwd="/",
-                shell=True,
-                capture_output=True,
-                timeout=15
-            )
-            bytes_im = BytesIO(get_im_command.stdout)
+            script_logger.log('ADB CONTROLLER', 'taking screenshot', 'with command', screenshot_command)
+
+            try:
+                process = subprocess.Popen(
+                    screenshot_command,
+                    cwd="/",
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                stdout, stderr = process.communicate(timeout=15)
+
+                if process.returncode != 0:
+                    script_logger.log(f"Command failed with return code {process.returncode}")
+                    script_logger.log(f"Error output: {stderr.decode('utf-8')}")
+                    raise
+                else:
+                    script_logger.log("Command executed successfully.")
+
+            except subprocess.TimeoutExpired:
+                script_logger.log('screencap command timed out')
+                process.kill()
+                stdout, stderr = process.communicate()
+                script_logger.log(stdout.decode('utf-8'))
+                raise
+            bytes_im = BytesIO(stdout)
             source_im = Image.open(bytes_im)
             img = cv2.cvtColor(np.array(source_im), cv2.COLOR_RGB2BGR)
         else:
             screenshot_command = self.adb_path + ' -s {} exec-out screencap'.format(self.full_ip)
             script_logger.log('ADB CONTROLLER', 'taking screenshot', 'with command', screenshot_command)
-            get_im_command = subprocess.run(
-                screenshot_command,
-                cwd="/",
-                shell=True,
-                capture_output=True,
-                timeout=15
-            )
-            raw_data = get_im_command.stdout
+            try:
+                process = subprocess.Popen(
+                    screenshot_command,
+                    cwd="/",
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                stdout, stderr = process.communicate(timeout=15)
+
+                if process.returncode != 0:
+                    script_logger.log(f"Command failed with return code {process.returncode}")
+                    script_logger.log(f"Error output: {stderr.decode('utf-8')}")
+                    raise
+                else:
+                    script_logger.log("Command executed successfully.")
+
+            except subprocess.TimeoutExpired:
+                script_logger.log('screencap command timed out')
+                process.kill()
+                stdout, stderr = process.communicate()
+                script_logger.log(stdout.decode('utf-8'))
+                raise
+            raw_data = stdout
             header_size = 16
             header_format = '<4I'  # Little-endian, 4 unsigned integers
             script_logger.log('raw data size', len(raw_data))
