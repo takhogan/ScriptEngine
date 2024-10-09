@@ -85,9 +85,9 @@ class python_host:
         script_logger.log('keys : ', keys)
         pyautogui.hotkey(*keys)
 
-    def draw_click(self, point_choice, point_list):
-        script_logger.log('ADB CONTROLLER: logging using original script logger')
-        thread_local_storage.script_logger = script_logger.copy()
+    def draw_click(self, thread_script_logger, point_choice, point_list):
+        thread_local_storage.script_logger = thread_script_logger
+        thread_script_logger.log('started draw click thread')
         ClickActionHelper.draw_click(
             self.screenshot(), point_choice, point_list
         )
@@ -167,15 +167,18 @@ class python_host:
         elif action["actionName"] == "clickAction":
             action["actionData"]["clickCount"] = int(action["actionData"]["clickCount"])
             var_name = action["actionData"]["inputExpression"]
-            point_choice, point_list, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context, self.width, self.height)
+            point_choice, point_list, state, context = ClickActionHelper.get_point_choice(
+                action, var_name, state, context,
+                self.width, self.height
+            )
             delays = [0] * action["actionData"]["clickCount"]
             if action["actionData"]["delayState"] == "active":
                 delays = RandomVariableHelper.get_rv_val(action, action["actionData"]["clickCount"])
-            script_logger.log('ADB CONTROLLER: starting draw click thread')
-            self.io_executor.submit(self.draw_click, point_choice, point_list)
+            thread_script_logger = script_logger.copy()
+            self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
             for click_count in range(0, action["actionData"]["clickCount"]):
-                self.click(point_choice[0], point_choice[1], button=action['actionData']['mouseButton'])
-                time.sleep(delays[click_count])
+                self.click(point_choice[0], point_choice[1])
+                time.sleep(delays[click_count] if click_count > 1 else delays)
 
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "mouseScrollAction":
@@ -362,7 +365,6 @@ async def read_input():
             try:
                 script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_python_host, inputs)) + '<--{}-->'.format(inputs[0]) , file=DummyFile(),flush=True)
                 script_logger.log('ADB CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
-
             except pyautogui.FailSafeException as e:
                 script_logger.log('PYTHON CONTROLLER PROCESS: fail safe exception triggered', e)
 

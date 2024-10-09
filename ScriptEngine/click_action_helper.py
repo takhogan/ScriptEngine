@@ -24,7 +24,7 @@ class ClickActionHelper:
     def get_point_choice(action, var_name, state, context, screen_width, screen_height):
         point_choice = (None, None)
         point_list = []
-        if action["actionData"]["pointList"]:
+        if "pointList" in action["actionData"] and len(action["actionData"]["pointList"]) > 0:
             pre_log = 'pointList in actionData, choosing point from pointlist'
             point_choice = random.choice(action["actionData"]["pointList"])
             input_params_valid = len(str(action["actionData"]["sourceScreenWidth"])) > 0 and\
