@@ -177,7 +177,7 @@ class python_host:
             thread_script_logger = script_logger.copy()
             self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
             for click_count in range(0, action["actionData"]["clickCount"]):
-                self.click(point_choice[0], point_choice[1])
+                self.click(point_choice[0], point_choice[1], 'left')
                 time.sleep(delays[click_count] if click_count > 1 else delays)
 
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
