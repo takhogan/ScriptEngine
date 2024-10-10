@@ -796,7 +796,7 @@ class adb_host:
                 if process.returncode != 0:
                     script_logger.log(f"Command failed with return code {process.returncode}")
                     script_logger.log(f"Error output: {stderr.decode('utf-8')}")
-                    raise
+                    raise UnidentifiedImageError()
                 else:
                     script_logger.log("Command executed successfully.")
 
@@ -805,7 +805,7 @@ class adb_host:
                 process.kill()
                 stdout, stderr = process.communicate()
                 script_logger.log(stdout.decode('utf-8'))
-                raise
+                raise UnidentifiedImageError()
             bytes_im = BytesIO(stdout)
             source_im = Image.open(bytes_im)
             img = cv2.cvtColor(np.array(source_im), cv2.COLOR_RGB2BGR)
@@ -825,7 +825,7 @@ class adb_host:
                 if process.returncode != 0:
                     script_logger.log(f"Command failed with return code {process.returncode}")
                     script_logger.log(f"Error output: {stderr.decode('utf-8')}")
-                    raise
+                    raise UnidentifiedImageError()
                 else:
                     script_logger.log("Command executed successfully.")
 
@@ -834,7 +834,7 @@ class adb_host:
                 process.kill()
                 stdout, stderr = process.communicate()
                 script_logger.log(stdout.decode('utf-8'))
-                raise
+                raise UnidentifiedImageError()
             raw_data = stdout
             header_size = 16
             header_format = '<4I'  # Little-endian, 4 unsigned integers
