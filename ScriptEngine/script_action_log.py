@@ -92,9 +92,9 @@ class ScriptActionLog:
     def append_pre_file(self, file_type, file_contents, end='\n'):
         if self.pre_file[0] != file_type:
             raise Exception(
-                'Attempting to append contents of type ' + file_type +\
-                ' to file ' + str(self.pre_file) + ' of type ' + self.pre_file[0] +\
-                ' contents: ', + str(file_contents)
+                'Attempting to append contents of type ' + file_type +
+                ' to file ' + str(self.pre_file) + ' of type ' + self.pre_file[0] +
+                ' contents: ' + str(file_contents)
             )
         if file_type == 'text':
             with open(self.pre_file[1], 'a') as pre_file:
@@ -126,9 +126,9 @@ class ScriptActionLog:
     def append_post_file(self, file_type, file_contents, end='\n'):
         if self.post_file[0] != file_type:
             raise Exception(
-                'Attempting to append contents of type ' + file_type + \
-                ' to file ' + str(self.post_file) + ' of type ' + self.post_file[0] +\
-                ' contents: ', + str(file_contents)
+                'Attempting to append contents of type ' + file_type +
+                ' to file ' + str(self.post_file) + ' of type ' + self.post_file[0] +
+                ' contents: ' + str(file_contents)
             )
         if file_type == 'text':
             with open(self.post_file[1], 'a') as post_file:
@@ -169,9 +169,9 @@ class ScriptActionLog:
                 file_exists = True
                 if supporting_file_type != file_type:
                     raise Exception(
-                        'Attempting to append contents of type ' + file_type + \
-                        ' to file ' + str(supporting_file_path) + ' of type ' + supporting_file_type + \
-                        ' contents: ', + str(file_contents)
+                        'Attempting to append contents of type ' + file_type +
+                        ' to file ' + str(supporting_file_path) + ' of type ' + supporting_file_type +
+                        ' contents: ' + str(file_contents)
                     )
         assert file_exists
         if file_type == 'text':
