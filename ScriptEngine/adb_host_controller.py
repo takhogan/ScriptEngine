@@ -433,10 +433,12 @@ class adb_host:
     def stop_device(self):
         if self.emulator_type == 'bluestacks':
             if platform.system() == 'Windows':
+                self.detect_adb_port()
                 init_bluestacks_config = ConfigObj('C:\\ProgramData\\BlueStacks_nxt\\bluestacks.conf', file_error=True)
                 instance_window_name = init_bluestacks_config['bst.instance.{}.display_name'.format(
                     self.device_name
                 )]
+
                 script_logger.log('ADB CONTROLLER: detected window name {} for device {}'.format(
                     instance_window_name,
                     self.device_name
@@ -445,6 +447,18 @@ class adb_host:
                 stop_device_command = 'taskkill /fi "WINDOWTITLE eq {}" /IM "HD-Player.exe" /F'.format(
                     self.window_name
                 )
+                stop_device_process = subprocess.run(
+                    stop_device_command,
+                    cwd="/",
+                    shell=True,
+                    capture_output=True,
+                    timeout=15
+                )
+
+                stop_device_command = 'adb -s emulator-{} emu kill'.format(
+                    self.adb_port
+                )
+
                 stop_device_process = subprocess.run(
                     stop_device_command,
                     cwd="/",
