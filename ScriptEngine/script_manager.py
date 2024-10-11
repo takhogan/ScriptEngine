@@ -104,8 +104,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         device_manager = DeviceManager(script_name, script_object['props'], device_params, io_executor)
 
         # TODO: might need fixing
-        logger = multiprocessing.log_to_stderr()
-        logger.setLevel(multiprocessing.SUBDEBUG)
+        # logger = multiprocessing.log_to_stderr()
+        # logger.setLevel(multiprocessing.SUBDEBUG)
 
         if system_script:
             handle_result = SystemScriptHandler.handle_system_script(device_manager, script_name, {})

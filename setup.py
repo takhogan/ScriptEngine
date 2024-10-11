@@ -1,6 +1,7 @@
 from cx_Freeze import setup, Executable
 import sys
 import os
+os.environ['CX_FREEZE_LOG_LEVEL'] = 'ERROR'
 sys.path.append(os.path.join(os.path.dirname(__file__), 'ScriptEngine'))
 
 
