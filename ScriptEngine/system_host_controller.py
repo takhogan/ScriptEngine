@@ -26,7 +26,8 @@ script_logger = ScriptLogger()
 
 
 class SystemHostController:
-    def __init__(self, base_script_name, props, io_executor):
+    def __init__(self, python_host, base_script_name, props, io_executor):
+        self.python_host = python_host
         self.base_script_name = base_script_name
         self.props = props
         self.io_executor = io_executor
@@ -836,10 +837,7 @@ class SystemHostController:
                 script_logger.log("DB provider unimplemented")
                 raise Exception(action["actionName"] + ' DB provider unimplemented')
         else:
-            status = ScriptExecutionState.ERROR
-            script_logger.log("action unimplemented ")
-            script_logger.log(action)
-            raise Exception(action["actionName"] + ' not implemented for targetsystem none')
+            return self.python_host.handle_action(action, state, context, run_queue)
         return action, status, state, context, run_queue, []
 
 
