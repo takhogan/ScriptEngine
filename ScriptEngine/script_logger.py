@@ -1,6 +1,8 @@
 import copy
 import datetime
 import threading
+import uuid
+
 from script_action_log import ScriptActionLog
 
 thread_local_storage = threading.local()
@@ -13,6 +15,7 @@ class ScriptLogger:
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super(ScriptLogger, cls).__new__(cls, *args, **kwargs)
+            cls._instance.id = uuid.uuid4()
             cls._instance.action_log = None
             cls._instance.log_file_path = None
             cls._instance.log_path_prefix = None
@@ -31,7 +34,12 @@ class ScriptLogger:
         """
         Check if thread-local logger exists, otherwise return the global singleton logger.
         """
-        return getattr(thread_local_storage, 'script_logger', ScriptLogger.get_instance())
+        if hasattr(thread_local_storage, 'script_logger'):
+            print("Using thread-local logger")
+            return thread_local_storage.script_logger
+        else:
+            print("Using global singleton logger")
+            return ScriptLogger.get_instance()
 
     def copy(self):
         """
@@ -39,6 +47,7 @@ class ScriptLogger:
         """
         # Create a shallow copy of the current instance
         new_copy = copy.copy(self)
+        new_copy.id = uuid.uuid4()
 
         return new_copy
 
@@ -80,9 +89,11 @@ class ScriptLogger:
         return self.log_folder_path
 
     def set_action_log(self, action_log : ScriptActionLog):
+        print("setting action log", self.id)
         self.action_log = action_log
 
     def get_action_log(self) -> ScriptActionLog:
+        print("getting action log", self.id)
         return self.action_log
 
     def set_log_level(self, log_level : str):
