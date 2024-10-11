@@ -35,21 +35,24 @@ class ScriptLogger:
         Check if thread-local logger exists, otherwise return the global singleton logger.
         """
         if hasattr(thread_local_storage, 'script_logger'):
-            print("Using thread-local logger")
             return thread_local_storage.script_logger
         else:
-            print("Using global singleton logger")
             return ScriptLogger.get_instance()
 
     def copy(self):
-        """
-        Return a shallow copy of the current instance, including a shallow copy of the action_log attribute.
-        """
-        # Create a shallow copy of the current instance
-        new_copy = copy.copy(self)
-        new_copy.id = uuid.uuid4()
+        return self.__copy__()
 
-        return new_copy
+    def __copy__(self):
+        cls = self.__class__
+        new_instance = object.__new__(cls)
+        new_instance.id = uuid.uuid4()
+        new_instance.action_log = self.action_log  # Deep copy if necessary
+        new_instance.log_file_path = self.log_file_path
+        new_instance.log_path_prefix = self.log_path_prefix
+        new_instance.log_folder_path = self.log_folder_path
+        new_instance.log_header = self.log_header
+        new_instance.log_level = self.log_level
+        return new_instance
 
     def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True):
         text = str(datetime.datetime.now()) + ': ' + (
@@ -89,11 +92,9 @@ class ScriptLogger:
         return self.log_folder_path
 
     def set_action_log(self, action_log : ScriptActionLog):
-        print("setting action log", self.id)
         self.action_log = action_log
 
     def get_action_log(self) -> ScriptActionLog:
-        print("getting action log", self.id)
         return self.action_log
 
     def set_log_level(self, log_level : str):
