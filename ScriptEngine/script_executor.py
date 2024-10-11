@@ -132,13 +132,15 @@ class ScriptExecutor:
 
         os.makedirs(self.log_folder + '/search_patterns', exist_ok=True)
         self.log_folder += '/'
+        if self.parent_action_log is not None:
+            self.parent_action_log.add_supporting_file_reference('text', 'stdout.txt', log_header=False)
         return self.log_folder
 
     def set_log_paths(self):
         script_logger.set_log_file_path(self.log_folder + 'stdout.txt')
         script_logger.set_log_folder(self.log_folder)
 
-    def set_parent_action_log(self, script_action_log):
+    def set_parent_action_log(self, script_action_log : ScriptActionLog):
         self.parent_action_log = script_action_log
 
     def rewind(self, input_vars):

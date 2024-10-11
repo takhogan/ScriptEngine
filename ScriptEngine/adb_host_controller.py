@@ -1283,7 +1283,8 @@ class adb_host:
                 self.width, self.height
             )
             context["dragLocationSource"] = point_choice
-            ClickActionHelper.draw_click(self.screenshot(), point_choice, point_list)
+            thread_script_logger = script_logger.copy()
+            self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationTarget":
             source_point = context["dragLocationSource"]
@@ -1297,7 +1298,8 @@ class adb_host:
             )
             script_logger.log(drag_log)
             self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
-            ClickActionHelper.draw_click(self.screenshot(), target_point, point_list)
+            thread_script_logger = script_logger.copy()
+            self.io_executor.submit(self.draw_click, thread_script_logger, target_point, point_list)
             script_logger.get_action_log().add_supporting_file(
                 'text',
                 'drag-log.txt',
