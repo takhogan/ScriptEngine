@@ -308,7 +308,6 @@ class ImageMatcher:
         alpha = 0.5  # 0.0 fully transparent, 1.0 fully opaque
         for match_obj in matches:
             pt = tuple(map(int, match_obj[0]))
-            script_logger.log('pt', pt)
             box_w, box_h = adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
             overlay[pt[1]:pt[1] + box_h, pt[0]:pt[0] + box_w] = screencap_search_bgr
         overlay = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
