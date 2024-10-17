@@ -97,6 +97,8 @@ class ClickActionHelper:
 
     @staticmethod
     def draw_point_choice(screenshot_bgr, point_choice, point_list):
+        script_logger = ScriptLogger.get_logger()
+        script_logger.log('draw point choice', point_choice, point_list)
         overlay = screenshot_bgr.copy()
         if point_list['input_type'] == 'point_list':
             for point in point_list['point_list']:
@@ -132,9 +134,8 @@ class ClickActionHelper:
     @staticmethod
     def draw_click(screenshot_bgr, point_choice, point_list):
         script_logger = ScriptLogger.get_logger()
-        script_logger.log('logging with the new threaded script logger')
 
-        ClickActionHelper.draw_point_choice(screenshot_bgr, point_choice, point_list)
+        screenshot_bgr = ClickActionHelper.draw_point_choice(screenshot_bgr, point_choice, point_list)
         output_image_relative_path = 'clickLocation.png'
         cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
         # script_logger.log()
@@ -149,17 +150,18 @@ class ClickActionHelper:
                             target_point_choice, target_point_list,
                             deltas):
         script_logger = ScriptLogger.get_logger()
-        ClickActionHelper.draw_point_choice(screenshot_bgr, source_point_choice, source_point_list)
-        ClickActionHelper.draw_point_choice(screenshot_bgr, target_point_choice, target_point_list)
+        screenshot_bgr = ClickActionHelper.draw_point_choice(screenshot_bgr, source_point_choice, source_point_list)
+        screenshot_bgr = ClickActionHelper.draw_point_choice(screenshot_bgr, target_point_choice, target_point_list)
         traverse_x = source_point_choice[0]
         traverse_y = source_point_choice[1]
+
         for delta_pair in deltas:
             cv2.line(
                 screenshot_bgr,
-                (traverse_x, traverse_y),
-                (traverse_x + delta_pair[0], traverse_y + delta_pair[1]),
+                (int(traverse_x), int(traverse_y)),
+                (int(traverse_x + delta_pair[0]), int(traverse_y + delta_pair[1])),
                 (255, 0, 0),
-                1
+                3
             )
             traverse_x += delta_pair[0]
             traverse_y += delta_pair[1]

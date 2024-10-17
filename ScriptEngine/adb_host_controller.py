@@ -1222,11 +1222,10 @@ class adb_host:
                             source_point, source_point_list,
                             target_point, target_point_list,
                             delta_x, delta_y):
-        thread_local_storage.script_logger = thread_script_logger
-        thread_script_logger.log('started draw click thread')
+        # thread_local_storage.script_logger = thread_script_logger
+        # thread_script_logger.log('started draw click thread')
         delta_x = list(map(lambda x: (x / self.xmax) * self.width, delta_x))
         delta_y = list(map(lambda y: (y / self.ymax) * self.height, delta_y))
-
         ClickActionHelper.draw_click_and_drag(
             self.screenshot(),
             source_point, source_point_list,
@@ -1335,6 +1334,15 @@ class adb_host:
             script_logger.log(drag_log)
             delta_x, delta_y = self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
             thread_script_logger = script_logger.copy()
+            # self.draw_click_and_drag(
+            #     thread_script_logger,
+            #     source_point,
+            #     source_point_list,
+            #     target_point,
+            #     target_point_list,
+            #     delta_x,
+            #     delta_y
+            # )
             self.io_executor.submit(
                 self.draw_click_and_drag,
                 thread_script_logger,
