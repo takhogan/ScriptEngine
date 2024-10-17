@@ -96,9 +96,7 @@ class ClickActionHelper:
         return point_choice, point_list, state, context
 
     @staticmethod
-    def draw_click(screenshot_bgr, point_choice, point_list, click_path=None):
-        script_logger = ScriptLogger.get_logger()
-        script_logger.log('logging with the new threaded script logger')
+    def draw_point_choice(screenshot_bgr, point_choice, point_list):
         overlay = screenshot_bgr.copy()
         if point_list['input_type'] == 'point_list':
             for point in point_list['point_list']:
@@ -109,7 +107,7 @@ class ClickActionHelper:
                 point_list["point"],
                 (int(point_list["point"][0] + point_list["width"]),
                  int(point_list["point"][1] + point_list["height"])),
-                color=(0,0,255),
+                color=(0, 0, 255),
                 thickness=-1
             )
         elif point_list['input_type'] == 'shape':
@@ -128,16 +126,46 @@ class ClickActionHelper:
 
         alpha = 0.5  # 0.0 fully transparent, 1.0 fully opaque
         screenshot_bgr = cv2.addWeighted(overlay, alpha, screenshot_bgr, 1 - alpha, 0)
+        cv2.circle(screenshot_bgr, list(map(int, point_choice)), radius=5, color=(255, 0, 0), thickness=-1)
+        return screenshot_bgr
 
-        cv2.circle(screenshot_bgr, list(map(int,point_choice)), radius=5, color=(255, 0, 0), thickness=-1)
+    @staticmethod
+    def draw_click(screenshot_bgr, point_choice, point_list):
+        script_logger = ScriptLogger.get_logger()
+        script_logger.log('logging with the new threaded script logger')
 
-        # if click_path is not None:
-        #     for click_point in click_path:
-        #         cv2.line(screenshot_bgr, start_point, end_point, color, thickness)
-
+        ClickActionHelper.draw_point_choice(screenshot_bgr, point_choice, point_list)
         output_image_relative_path = 'clickLocation.png'
         cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
         # script_logger.log()
+        script_logger.get_action_log().set_post_file(
+            'image',
+            output_image_relative_path
+        )
+
+    @staticmethod
+    def draw_click_and_drag(screenshot_bgr,
+                            source_point_choice, source_point_list,
+                            target_point_choice, target_point_list,
+                            deltas):
+        ClickActionHelper.draw_point_choice(screenshot_bgr, source_point_choice, source_point_list)
+        ClickActionHelper.draw_point_choice(screenshot_bgr, target_point_choice, target_point_list)
+        traverse_x = source_point_choice[0]
+        traverse_y = source_point_choice[1]
+        for delta_pair in deltas:
+            cv2.line(
+                screenshot_bgr,
+                (traverse_x, traverse_y),
+                (traverse_x + delta_pair[0], traverse_y + delta_pair[1]),
+                (255, 0, 0),
+                1
+            )
+            traverse_x += delta_pair[0]
+            traverse_y += delta_pair[1]
+
+        output_image_relative_path = 'dragPath.png'
+        cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
+        script_logger.log('Saving dragPath.png')
         script_logger.get_action_log().set_post_file(
             'image',
             output_image_relative_path
