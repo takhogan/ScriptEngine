@@ -12,11 +12,13 @@ sys.path.append("..")
 import numpy as np
 import pyautogui
 import cv2
+import re
 from image_matcher import ImageMatcher
 from script_engine_utils import is_null, apply_state_to_cmd_str, DummyFile
 
 import time
 from color_compare_helper import ColorCompareHelper
+from click_path_generator import ClickPathGenerator
 from device_action_interpeter import DeviceActionInterpreter
 from script_execution_state import ScriptExecutionState
 from scipy.stats import truncnorm
@@ -25,6 +27,8 @@ from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
 from forward_detect_peek_helper import ForwardDetectPeekHelper
 from script_logger import ScriptLogger,thread_local_storage
+from script_action_log import ScriptActionLog
+
 
 script_logger = ScriptLogger()
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
@@ -37,6 +41,7 @@ class python_host:
         self.props = props
         self.io_executor = io_executor
         self.image_matcher = ImageMatcher()
+        self.click_path_generator = None
 
         if input_source is not None:
             self.dummy_mode = True
@@ -65,6 +70,7 @@ class python_host:
                                   'observed :', height, width)
             self.props['width'] = width
             self.props['height'] = height
+            self.click_path_generator = ClickPathGenerator(2, 3, self.width, self.height, 45, 0.4)
 
     def screenshot(self):
         if self.dummy_mode:
@@ -101,6 +107,58 @@ class python_host:
             y = (self.height / self.props['height']) * y
             script_logger.log('clickAction: adjusted coords for pyautogui', x, y, flush=True)
         pyautogui.click(x=x, y=y, button=button)
+
+    def smooth_move(self, source_x, source_y, target_x, target_y):
+        frac_source_x = (source_x / self.width)
+        frac_target_x = (target_x / self.width)
+        frac_source_y = (source_y / self.height)
+        frac_target_y = (target_y / self.height)
+        # script_logger.log('({},{}),({},{})'.format(frac_source_x, frac_source_y, frac_target_x, frac_target_y))
+        delta_x, delta_y = self.click_path_generator.generate_click_path(
+            frac_source_x, frac_source_y,
+            frac_target_x, frac_target_y
+        )
+        traverse_x = source_x
+        traverse_y = source_y
+        for delta_pair in zip(delta_x, delta_y):
+            pyautogui.moveTo(traverse_x + delta_pair[0], traverse_y + delta_pair[1])
+            traverse_x += delta_pair[0]
+            traverse_y += delta_pair[1]
+        return delta_x, delta_y
+
+    def click_and_drag(self, source_x, source_y, target_x, target_y):
+        if self.dummy_mode:
+            frac_source_x = (source_x / self.width)
+            frac_target_x = (target_x / self.width)
+            frac_source_y = (source_y / self.height)
+            frac_target_y = (target_y / self.height)
+            delta_x, delta_y = self.click_path_generator.generate_click_path(
+                frac_source_x, frac_source_y,
+                frac_target_x, frac_target_y
+            )
+            script_logger.log('ADB CONTROLLER: script running in dummy mode, adb click and drag returning')
+            return delta_x, delta_y
+        intial_delta_x, initial_delta_y = self.smooth_move(*pyautogui.position(), source_x, source_y)
+        pyautogui.mouseDown(button='left')
+        delta_x, delta_y = self.smooth_move(source_x, source_y, target_x, target_y)
+        pyautogui.mouseUp(button='left')
+        return delta_x, delta_y
+
+    def draw_click_and_drag(self, thread_script_logger,
+                            source_point, source_point_list,
+                            target_point, target_point_list,
+                            delta_x, delta_y):
+        thread_local_storage.script_logger = thread_script_logger
+        thread_script_logger.log('started draw click thread')
+        delta_x = list(map(lambda x: (x / self.xmax) * self.width, delta_x))
+        delta_y = list(map(lambda y: (y / self.ymax) * self.height, delta_y))
+
+        ClickActionHelper.draw_click_and_drag(
+            self.screenshot(),
+            source_point, source_point_list,
+            target_point, target_point_list,
+            zip(delta_x, delta_y)
+        )
 
     def run_shell_script(self, action, state):
         pre_log = 'Running Shell Script: {}'.format(action["actionData"]["shellScript"])
@@ -275,6 +333,48 @@ class python_host:
                     )
                 )
                 return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
+        elif action["actionName"] == "dragLocationSource":
+            point_choice, point_list, state, context = ClickActionHelper.get_point_choice(
+                action, action['actionData']['inputExpression'], state, context,
+                self.width, self.height
+            )
+            context["dragLocationSource"] = {
+                'point_choice' : point_choice,
+                'point_list' : point_list
+            }
+            thread_script_logger = script_logger.copy()
+            self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
+            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+        elif action["actionName"] == "dragLocationTarget":
+            source_point = context["dragLocationSource"]["point_choice"]
+            source_point_list = context["dragLocationSource"]["point_list"]
+            target_point, target_point_list, state, context = ClickActionHelper.get_point_choice(
+                action, action['actionData']['inputExpression'], state, context,
+                self.width, self.height
+            )
+            drag_log = 'Dragging from {} to {}'.format(
+                str(source_point),
+                str(target_point)
+            )
+            script_logger.log(drag_log)
+            delta_x, delta_y = self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
+            thread_script_logger = script_logger.copy()
+            self.io_executor.submit(
+                self.draw_click_and_drag,
+                thread_script_logger,
+                source_point,
+                source_point_list,
+                target_point,
+                target_point_list,
+                delta_x,
+                delta_y
+            )
+            script_logger.get_action_log().add_supporting_file(
+                'text',
+                'drag-log.txt',
+                drag_log
+            )
+            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         #TODO: deprecated
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
@@ -326,8 +426,9 @@ def parse_inputs(process_host, inputs):
             "data" : "failure"
         }
     elif device_action == "send_keys":
-        for c in inputs[3]:
-            process_host.press(c)
+        DeviceActionInterpreter.parse_keyboard_action(
+            process_host, json.loads(inputs[3]), {}, {}
+        )
         return {
             "data": "success"
         }
@@ -343,7 +444,8 @@ async def read_input():
         # Process the input
         if not input_line:  # EOF, if the pipe is closed
             break
-        inputs = shlex.split(input_line)
+        inputs = input_line.strip().split('###')
+        inputs = inputs[0:2] + inputs[2].split(' ')
         script_logger.log('PYTHON CONTROLLER PROCESS: received inputs ', inputs)
         if device_key is None:
             device_key = inputs[1]
@@ -352,9 +454,21 @@ async def read_input():
             continue
         if process_python_host is None:
             script_logger.set_log_file_path('./logs/{}-python-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
-            script_logger.set_log_header('')
             script_logger.log('PYTHON CONTROLLER PROCESS: starting process for device {}'.format(device_key))
             script_logger.log('PYTHON CONTROLLER PROCESS: processing inputs ', inputs)
+            script_logger.set_log_header('{}-python-host-controller-{}-process'.format(formatted_today, device_key.replace(':', '-')))
+            script_logger.set_action_log(ScriptActionLog(
+                {
+                    'actionName' : 'configurationAction',
+                    'actionGroup' : 0,
+                    'actionData' : {
+                        'targetSystem': 'python'
+                    }
+                },
+                script_logger.get_log_folder(),
+                script_logger.get_log_header(),
+                0
+            ))
             process_python_host = python_host({
                 "dir_path": "./",
                 "width" : None,
@@ -363,8 +477,8 @@ async def read_input():
             }, None)
         if len(inputs) > 1:
             try:
-                script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_python_host, inputs)) + '<--{}-->'.format(inputs[0]) , file=DummyFile(),flush=True)
-                script_logger.log('ADB CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
+                script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_python_host, inputs)) + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
+                script_logger.log('PYTHON CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
             except pyautogui.FailSafeException as e:
                 script_logger.log('PYTHON CONTROLLER PROCESS: fail safe exception triggered', e)
 
@@ -373,6 +487,7 @@ async def python_controller_main():
 
 if __name__ == '__main__':
     script_logger.set_log_file_path('./logs/{}-python-host-main.txt'.format(formatted_today))
-    script_logger.set_log_header('')
+    script_logger.set_log_header('{}-python-host-main-'.format(formatted_today))
+    script_logger.set_log_folder('./logs/')
     os.makedirs('./logs', exist_ok=True)
     asyncio.run(python_controller_main())
