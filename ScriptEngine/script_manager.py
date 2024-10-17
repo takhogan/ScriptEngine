@@ -16,6 +16,7 @@ from script_engine_constants import *
 from device_manager import DeviceManager
 from script_engine_utils import datetime_to_local_str, imageFileExtensions
 from system_script_handler import SystemScriptHandler
+from script_log_preview_generator import ScriptLogPreviewGenerator
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
@@ -100,6 +101,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
                 else:
                     script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
+    errored = False
     with ThreadPoolExecutor(max_workers=50) as io_executor:
         device_manager = DeviceManager(script_name, script_object['props'], device_params, io_executor)
 
@@ -139,9 +141,12 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         except:
             io_executor.shutdown(wait=True)
             traceback.print_exc()
-            exit(1)
+            errored = True
         else:
             io_executor.shutdown(wait=True)
+        ScriptLogPreviewGenerator.assemble_script_log_preview(main_script.script_action_log.get_action_log_path(), main_script.log_folder + 'script-log-preview')
+    if errored:
+        exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())
     # update_running_scripts_file(script_name, 'pop')
 

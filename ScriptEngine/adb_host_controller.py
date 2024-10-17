@@ -39,6 +39,7 @@ from detect_object_helper import DetectObjectHelper
 from forward_detect_peek_helper import ForwardDetectPeekHelper
 from rv_helper import RandomVariableHelper
 from color_compare_helper import ColorCompareHelper
+from script_action_log import ScriptActionLog
 
 
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
@@ -852,7 +853,6 @@ class adb_host:
             raw_data = stdout
             header_size = 16
             header_format = '<4I'  # Little-endian, 4 unsigned integers
-            script_logger.log('raw data size', len(raw_data))
             w, h, f, c = struct.unpack(header_format, raw_data[:header_size])
 
             script_logger.log(f"Width: {w}, Height: {h}, Format: {f}, Colorspace: {c}")
@@ -947,6 +947,7 @@ class adb_host:
 
     def click(self, x, y, important=False):
         # 1st point always the og x,y
+        script_logger.log('clicking')
         if self.dummy_mode:
             script_logger.log('ADB CONTROLLER: script running in dummy mode, adb click returning')
             return
@@ -1031,6 +1032,8 @@ class adb_host:
             # delta_xs = [mapped_x_val] + click_tail_x
             # delta_ys = [mapped_y_val] + click_tail_y
             # click_command += self.delta_sequence_to_commands(mapped_x_val,mapped_y_val,delta_xs,delta_ys)
+        else:
+            raise Exception('Unrecognized emulator type: ' + self.emulator_type)
 
         shell_process = subprocess.Popen([
             self.adb_path,
@@ -1101,8 +1104,16 @@ class adb_host:
 
     def click_and_drag(self, source_x, source_y, target_x, target_y):
         if self.dummy_mode:
+            frac_source_x = (source_x / self.width)
+            frac_target_x = (target_x / self.width)
+            frac_source_y = (source_y / self.height)
+            frac_target_y = (target_y / self.height)
+            delta_x, delta_y = self.click_path_generator.generate_click_path(
+                frac_source_x, frac_source_y,
+                frac_target_x, frac_target_y
+            )
             script_logger.log('ADB CONTROLLER: script running in dummy mode, adb click and drag returning')
-            return
+            return delta_x, delta_y
         command_strings = []
         if self.emulator_type == 'bluestacks':
             # yes x and y are flipped on purpouse
@@ -1166,16 +1177,20 @@ class adb_host:
             #     frac_source_x, frac_source_y,
             #     frac_target_x, frac_target_y
             # )
-            # mapped_source_x = int(frac_source_x * self.xmax)
-            # mapped_source_y = int(frac_source_y * self.ymax)
+            mapped_source_x = int((source_x / self.width) * self.xmax)
+            mapped_source_y = int((source_y / self.height) * self.ymax)
             # x_pos = mapped_source_x
             # y_pos = mapped_source_y
+            delta_x = [int(self.xmax * (source_x - target_x) / self.width)]
+            delta_y = [int(self.ymax * (source_y - target_y) / self.height)]
             command_strings.append('input swipe {} {} {} {} {};'.format(
                 source_x, source_y,
                 target_x, target_y,
                 int(np.clip(np.random.normal(1500, 500, 1)[0], 500, 3000))
             ))
             # command_strings += self.delta_sequence_to_commands(x_pos,y_pos,delta_x,delta_y, unmap=True, split=False)
+        else:
+            raise Exception('Unrecognized emulator type ' + self.emulator_type)
         shell_process = subprocess.Popen([
             self.adb_path,
             '-s',
@@ -1194,12 +1209,29 @@ class adb_host:
             shell_process.communicate((''.join(command_strings)).encode('utf-8'))
         )
         self.event_counter += 1
+        return delta_x, delta_y
 
     def draw_click(self, thread_script_logger, point_choice, point_list):
         thread_local_storage.script_logger = thread_script_logger
         thread_script_logger.log('started draw click thread')
         ClickActionHelper.draw_click(
             self.screenshot(), point_choice, point_list
+        )
+
+    def draw_click_and_drag(self, thread_script_logger,
+                            source_point, source_point_list,
+                            target_point, target_point_list,
+                            delta_x, delta_y):
+        thread_local_storage.script_logger = thread_script_logger
+        thread_script_logger.log('started draw click thread')
+        delta_x = list(map(lambda x: (x / self.xmax) * self.width, delta_x))
+        delta_y = list(map(lambda y: (y / self.ymax) * self.height, delta_y))
+
+        ClickActionHelper.draw_click_and_drag(
+            self.screenshot(),
+            source_point, source_point_list,
+            target_point, target_point_list,
+            zip(delta_x, delta_y)
         )
 
 
@@ -1282,13 +1314,17 @@ class adb_host:
                 action, action['actionData']['inputExpression'], state, context,
                 self.width, self.height
             )
-            context["dragLocationSource"] = point_choice
+            context["dragLocationSource"] = {
+                'point_choice' : point_choice,
+                'point_list' : point_list
+            }
             thread_script_logger = script_logger.copy()
             self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "dragLocationTarget":
-            source_point = context["dragLocationSource"]
-            target_point, point_list, state, context = ClickActionHelper.get_point_choice(
+            source_point = context["dragLocationSource"]["point_choice"]
+            source_point_list = context["dragLocationSource"]["point_list"]
+            target_point, target_point_list, state, context = ClickActionHelper.get_point_choice(
                 action, action['actionData']['inputExpression'], state, context,
                 self.width, self.height
             )
@@ -1297,15 +1333,23 @@ class adb_host:
                 str(target_point)
             )
             script_logger.log(drag_log)
-            self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
+            delta_x, delta_y = self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
             thread_script_logger = script_logger.copy()
-            self.io_executor.submit(self.draw_click, thread_script_logger, target_point, point_list)
+            self.io_executor.submit(
+                self.draw_click_and_drag,
+                thread_script_logger,
+                source_point,
+                source_point_list,
+                target_point,
+                target_point_list,
+                delta_x,
+                delta_y
+            )
             script_logger.get_action_log().add_supporting_file(
                 'text',
                 'drag-log.txt',
                 drag_log
             )
-            del context["dragLocationSource"]
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "colorCompareAction":
             screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(
@@ -1675,13 +1719,10 @@ def parse_inputs(process_adb_host, inputs):
             "data" : "success"
         }
     elif device_action == "send_keys":
-        if process_adb_host.get_status() == 'offline':
-            return {
-
-            }
         process_adb_host.init_system()
-        for c in inputs[3]:
-            process_adb_host.press(c)
+        DeviceActionInterpreter.parse_keyboard_action(
+            process_adb_host, json.loads(inputs[3]), {}, {}
+        )
         return {
             "data": "success"
         }
@@ -1697,7 +1738,8 @@ async def read_input():
         # Process the input
         if not input_line:  # EOF, if the pipe is closed
             break
-        inputs = shlex.split(input_line)
+        inputs = input_line.strip().split('###')
+        inputs = inputs[0:2] + inputs[2].split(' ')
         script_logger.log('ADB CONTROLLER PROCESS: received inputs ', inputs)
         if device_key is None:
             device_key = inputs[1]
@@ -1706,9 +1748,21 @@ async def read_input():
             continue
         if process_adb_host is None:
             script_logger.set_log_file_path('./logs/{}-adb-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
-            script_logger.set_log_header('')
             script_logger.log('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
             script_logger.log('ADB CONTROLLER PROCESS: processing inputs ', inputs)
+            script_logger.set_log_header('{}-adb-host-controller-{}-process-'.format(formatted_today, device_key.replace(':', '-')))
+            script_logger.set_action_log(ScriptActionLog(
+                {
+                    'actionName': 'configurationAction',
+                    'actionGroup': 0,
+                    'actionData': {
+                        'targetSystem': 'adb'
+                    }
+                },
+                script_logger.get_log_folder(),
+                script_logger.get_log_header(),
+                0
+            ))
                 # process_file.write(json.dumps(adb_args) + '\n')
             adb_args = set_adb_args(inputs[1])
             process_adb_host = adb_host({
@@ -1717,7 +1771,9 @@ async def read_input():
                 "height" : None
             }, None, adb_args, None)
         if len(inputs) > 2:
-            script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_adb_host, inputs)) + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
+            input_response = json.dumps(parse_inputs(process_adb_host, inputs))
+            script_logger.log('ADB CONTROLLER: Sending response for {}'.format(inputs[0]), flush=True)
+            script_logger.log('<--{}-->'.format(inputs[0]) + input_response + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
             script_logger.log('ADB CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
 
 async def adb_controller_main():
@@ -1725,8 +1781,9 @@ async def adb_controller_main():
 
 if __name__ == '__main__':
     os.makedirs('./logs', exist_ok=True)
-    script_logger.set_log_file_path('./logs/' + formatted_today + '-adb-host-controller-main.txt')
-    script_logger.set_log_header('')
+    script_logger.set_log_file_path('./logs/{}-adb-host-controller-main.txt'.format(formatted_today))
+    script_logger.set_log_header('{}-adb-host-controller-main-'.format(formatted_today))
+    script_logger.set_log_folder('./logs/')
 
 
     asyncio.run(adb_controller_main())
