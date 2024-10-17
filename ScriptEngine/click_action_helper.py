@@ -148,6 +148,7 @@ class ClickActionHelper:
                             source_point_choice, source_point_list,
                             target_point_choice, target_point_list,
                             deltas):
+        script_logger = ScriptLogger.get_logger()
         ClickActionHelper.draw_point_choice(screenshot_bgr, source_point_choice, source_point_list)
         ClickActionHelper.draw_point_choice(screenshot_bgr, target_point_choice, target_point_list)
         traverse_x = source_point_choice[0]
