@@ -254,6 +254,7 @@ class ImageMatcher:
             len(matches)
         )
 
+        #pt = (x, y)
         def adjust_box_to_bounds(pt, box_width, box_height, screen_width, screen_height, box_thickness):
             x_overshoot = pt[0] + box_width + box_thickness - screen_width
             y_overshoot = pt[1] + box_height + box_thickness - screen_height
@@ -275,14 +276,22 @@ class ImageMatcher:
             if max_valid_point != -np.inf:
                 best_point = np.unravel_index(np.argmax(valid_matched_points), valid_matched_points.shape)
                 best_point_score = float(match_result[best_point])
-                box_w, box_h = adjust_box_to_bounds(best_point, w, h, screencap_im_bgr.shape[1],
-                                                    screencap_im_bgr.shape[0], 2)
+                best_point = (best_point[1], best_point[0])
+                box_w, box_h = adjust_box_to_bounds(best_point, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+                end_y = min(best_point[1] + box_h, result_im_bgr.shape[0])
+                end_x = min(best_point[0] + box_w, result_im_bgr.shape[1])
+                slice_h = end_y - best_point[1]
+                slice_w = end_x - best_point[0]
+                result_im_bgr[
+                    best_point[1]:best_point[1] + box_h, best_point[0]:best_point[0] + box_w
+                ] = screencap_search_bgr[:slice_h,:slice_w]
+                result_im_bgr = cv2.addWeighted(result_im_bgr, 0.3, screencap_im_bgr, 0.7, 0)
                 cv2.rectangle(
                     result_im_bgr,
                     best_point,
                     (best_point[0] + box_w,
                      best_point[1] + box_h),
-                    (0, 0, int(255 * best_point_score)),
+                    (0, 0, 255),#int((255 * best_point_score + 255) / 2)),
                     2
                 )
         result_log += 'Best valid match: {} with score {}\n'.format(
@@ -309,7 +318,14 @@ class ImageMatcher:
         for match_obj in matches:
             pt = tuple(map(int, match_obj[0]))
             box_w, box_h = adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-            overlay[pt[1]:pt[1] + box_h, pt[0]:pt[0] + box_w] = screencap_search_bgr
+            end_y = min(pt[1] + box_h, result_im_bgr.shape[0])
+            end_x = min(pt[0] + box_w, result_im_bgr.shape[1])
+            slice_h = end_y - pt[1]
+            slice_w = end_x - pt[0]
+            result_im_bgr[
+                pt[1]:pt[1] + box_h, pt[0]:pt[0] + box_w
+            ] = screencap_search_bgr[:slice_h, :slice_w]
+
         overlay = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
         for match_obj in matches:
             pt = tuple(map(int, match_obj[0]))
