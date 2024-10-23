@@ -1,6 +1,7 @@
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
+from contextlib import redirect_stderr
 from dateutil import tz
 import os
 import cv2
@@ -9,6 +10,7 @@ import traceback
 import multiprocessing, logging
 import uuid
 import datetime
+import sys
 
 from script_loader import parse_zip
 from script_executor import ScriptExecutor
@@ -144,7 +146,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
             errored = True
         else:
             io_executor.shutdown(wait=True)
-        ScriptLogPreviewGenerator.assemble_script_log_preview(main_script.script_action_log.get_action_log_path(), main_script.log_folder + 'script-log-preview')
+        with redirect_stderr(sys.stdout):
+            ScriptLogPreviewGenerator.assemble_script_log_preview(main_script.script_action_log.get_action_log_path(), main_script.log_folder + 'script-log-preview')
     if errored:
         exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())
