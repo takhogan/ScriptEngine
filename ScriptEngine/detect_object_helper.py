@@ -17,7 +17,11 @@ class DetectObjectHelper:
     @staticmethod
     def get_detect_area(action, state, output_type='matched_area'):
         screencap_im_bgr = None
-        match_point = None
+        original_image = None
+        match_point = (0,0)
+        original_width = 0
+        original_height = 0
+        fixed_scale = False
         var_name = action["actionData"]["inputExpression"]
         mid_log = ''
         if var_name is not None and len(var_name) > 0:
@@ -38,6 +42,11 @@ class DetectObjectHelper:
                             input_area["point"][0],
                             input_area["point"][1]
                         )
+                        original_height = input_area["original_height"]
+                        original_width = input_area["original_width"]
+                        original_image = input_area["original_image"]
+                        fixed_scale = True
+
                         mid_log = 'parsed inputExpression, found matched area and match point {}'.format(
                             str(match_point)
                         )
@@ -47,6 +56,10 @@ class DetectObjectHelper:
                             input_area["point"][0],
                             input_area["point"][1]
                         )
+                        original_height = input_area["original_height"]
+                        original_width = input_area["original_width"]
+                        original_image = input_area["original_image"]
+                        fixed_scale = True
                         mid_log = 'parsed inputExpression, found matched pixels and match point {}'.format(
                             str(match_point)
                         )
@@ -65,7 +78,14 @@ class DetectObjectHelper:
             'inputExpression-log.txt',
             pre_log + '\n' +(mid_log if mid_log != '' else '')
         )
-        return screencap_im_bgr, match_point
+        return {
+            "screencap_im_bgr" : screencap_im_bgr,
+            "match_point" : match_point,
+            "original_height" : original_height,
+            "original_width" : original_width,
+            "original_image" : original_image,
+            "fixed_scale" : fixed_scale
+        }
 
     @staticmethod
     def update_update_queue(action, state, context, matches, update_queue):
@@ -139,15 +159,23 @@ class DetectObjectHelper:
     @staticmethod
     def handle_detect_object(
             action,
-            screencap_im_bgr,
             state,
             context,
             run_queue,
-            match_point=None,
-            check_image_scale=False,
-            script_mode='train',
-            lazy_eval=False
+            script_mode='train'
     ):
+        screencap_im_bgr = action['input_obj']['screencap_im_bgr']
+        match_point = action['input_obj']['match_point']
+        check_image_scale = not action['input_obj']['fixed_scale']
+        script_logger.log('Starting handle detect object')
+        if script_logger.get_log_level() == 'info':
+            input_image_relative_path = 'detectObject-inputImage.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
+            script_logger.get_action_log().set_pre_file(
+                'image',
+                input_image_relative_path
+            )
+
         script_logger.get_action_log().add_supporting_file(
             'text',
             'detect_result.txt',
@@ -250,8 +278,5 @@ class DetectObjectHelper:
             (detect_scene_result_log + '\n' if detect_scene_result_log != '' else '') + \
             detect_object_result_log
         )
-
-        if lazy_eval:
-            return status, update_queue
-        else:
-            return action, status, state, context, run_queue, update_queue
+        script_logger.log('Completed handle detect object')
+        return action, status, state, context, run_queue, update_queue

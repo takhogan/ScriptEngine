@@ -88,7 +88,7 @@ class ClickActionHelper:
             pre_log += '\n' + input_expression_point_choice_log
             script_logger.log(input_expression_point_choice_log)
             point_list = input_point
-        script_logger.get_action_log().add_pre_file(
+        script_logger.get_action_log().add_supporting_file(
             'text',
             'clickActionPointChoice-log.txt',
             pre_log
@@ -98,7 +98,7 @@ class ClickActionHelper:
     @staticmethod
     def draw_point_choice(screenshot_bgr, point_choice, point_list):
         script_logger = ScriptLogger.get_logger()
-        script_logger.log('draw point choice', point_choice, point_list)
+        script_logger.log('draw point choice', point_choice)
         overlay = screenshot_bgr.copy()
         if point_list['input_type'] == 'point_list':
             for point in point_list['point_list']:
@@ -135,6 +135,14 @@ class ClickActionHelper:
     def draw_click(screenshot_bgr, point_choice, point_list):
         script_logger = ScriptLogger.get_logger()
 
+        if script_logger.get_log_level() == 'info':
+            input_image_relative_path = 'drawClick-inputImage.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screenshot_bgr)
+            script_logger.get_action_log().set_pre_file(
+                'image',
+                input_image_relative_path
+            )
+
         screenshot_bgr = ClickActionHelper.draw_point_choice(screenshot_bgr, point_choice, point_list)
         output_image_relative_path = 'clickLocation.png'
         cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
@@ -150,6 +158,15 @@ class ClickActionHelper:
                             target_point_choice, target_point_list,
                             deltas):
         script_logger = ScriptLogger.get_logger()
+
+        if script_logger.get_log_level() == 'info':
+            input_image_relative_path = 'drawClick-inputImage.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screenshot_bgr)
+            script_logger.get_action_log().set_pre_file(
+                'image',
+                input_image_relative_path
+            )
+
         screenshot_bgr = ClickActionHelper.draw_point_choice(screenshot_bgr, source_point_choice, source_point_list)
         screenshot_bgr = ClickActionHelper.draw_point_choice(screenshot_bgr, target_point_choice, target_point_list)
         traverse_x = source_point_choice[0]

@@ -39,6 +39,34 @@ class ScriptLogger:
         else:
             return ScriptLogger.get_instance()
 
+    @staticmethod
+    def configure_action_logger(action, script_counter, parent_action_log):
+        script_logger = ScriptLogger.get_logger()
+        script_logger.set_log_header(
+            str(script_counter).zfill(5) + '-' + \
+            action["actionName"] + '-' + str(action["actionGroup"])
+        )
+        script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
+        script_logger.set_action_log(ScriptActionLog(
+            action,
+            script_logger.get_log_folder(),
+            script_logger.get_log_header(),
+            script_counter
+        ))
+        if parent_action_log is not None:
+            parent_action_log.add_child(script_logger.get_action_log())
+        return script_logger.get_action_log()
+
+    @staticmethod
+    def configure_action_logger_from_strs(log_header, log_folder, log_level, action_log):
+        script_logger = ScriptLogger.get_logger()
+        script_logger.set_action_log(action_log)
+        script_logger.set_log_file_path(log_folder + 'stdout.txt')
+        script_logger.set_log_path_prefix(log_folder + log_header + '-')
+        script_logger.set_log_folder(log_folder)
+        script_logger.set_log_header(log_header)
+        script_logger.set_log_level(log_level)
+
     def copy(self):
         return self.__copy__()
 

@@ -63,6 +63,9 @@ class ImageMatcher:
                 'matched_area': match_area,
                 'height': h,
                 'width': w,
+                'original_image': detectObject['input_obj']['original_image'],
+                'original_height': detectObject['input_obj']['original_height'],
+                'original_width': detectObject['input_obj']['original_width'],
                 'score': score,
                 'n_matches': n_matches
         } for match, score, match_area in matches]
@@ -146,12 +149,15 @@ class ImageMatcher:
                     'detect_result.txt',
                     '\n' + mid_log
                 )
+                script_logger.log('Starting match template')
                 match_result_resized = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr_resized.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr_resized,
                     cv2.cvtColor(screencap_search_bgr.copy(),
                                  cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
                     cv2.TM_CCOEFF_NORMED, result=None,
                     mask=screencap_mask_gray if use_mask else None)
+                script_logger.log('Finished match template')
+
                 # script_logger.log('match_result_resize ', threshold_match_results(match_result_resized))
                 # exit(0)
             except cv2.error as e:
@@ -204,8 +210,10 @@ class ImageMatcher:
             match_img_bgr = cv2.bitwise_and(screencap_im_bgr[pt[1]:pt[1] + h, pt[0]:pt[0] + w].copy(),
                                             screencap_outputmask_bgr)
             if output_cropping is not None:
-                match_img_bgr = match_img_bgr[output_cropping[0][1]:output_cropping[1][1],
-                                output_cropping[0][0]:output_cropping[1][0]].copy()
+                match_img_bgr = match_img_bgr[
+                                    output_cropping[0][1]:output_cropping[1][1],
+                                    output_cropping[0][0]:output_cropping[1][0]
+                                ].copy()
             if match_score == np.inf:
                 continue
             adjusted_pt_x = pt[0] * width_translation
@@ -291,7 +299,7 @@ class ImageMatcher:
                     best_point,
                     (best_point[0] + box_w,
                      best_point[1] + box_h),
-                    (0, 0, 255),#int((255 * best_point_score + 255) / 2)),
+                    (0, 0, int((255 * best_point_score + 255) / 2)),
                     2
                 )
         result_log += 'Best valid match: {} with score {}\n'.format(
@@ -305,8 +313,6 @@ class ImageMatcher:
             'detect_result.txt',
             result_log
         )
-
-
 
         overlay = result_im_bgr.copy()
 
@@ -352,10 +358,29 @@ class ImageMatcher:
                 2
             )
 
+        if detectObject['input_obj']['fixed_scale']:
+            rescaled_result_im_bgr = detectObject['input_obj']['original_image'].copy()
+            match_point = detectObject['input_obj']['match_point']
+            rescaled_result_im_bgr[
+                match_point[1]:match_point[1] + screencap_im_bgr.shape[0],
+                match_point[0]:match_point[0] + screencap_im_bgr.shape[1]
+            ] = result_im_bgr
+
+            cv2.rectangle(
+                rescaled_result_im_bgr,
+                match_point,
+                (match_point[0] + screencap_im_bgr.shape[1], match_point[1] + screencap_im_bgr.shape[0]),
+                (255, 0, 0),
+                1
+            )
+        else:
+            rescaled_result_im_bgr = result_im_bgr
+
+
         # if thresholded_match_results[0].size == 0 and best_match_pt is not None:
         #     box_w, box_h = adjust_box_to_bounds(best_match_pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
         #     cv2.rectangle(result_im_bgr, best_match_pt, (best_match_pt[0] + box_w, best_match_pt[1] + box_h), (255, 0, 0), 2)
-        return matches, match_result, result_im_bgr
+        return matches, match_result, rescaled_result_im_bgr
 
     # def produce_logistic_matches(self, screencap_im, screencap_search, screencap_mask, logs_path, assets_folder, threshold=0.7):
     #     # https://towardsdatascience.com/logistic-regression-using-python-sklearn-numpy-mnist-handwriting-recognition-matplotlib-a6b31e2b166a

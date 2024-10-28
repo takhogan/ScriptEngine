@@ -1,6 +1,7 @@
 import cv2
 import sys
 import json
+import numpy as np
 
 sys.path.append("..")
 
@@ -27,11 +28,12 @@ class ScriptLogPreviewGenerator:
             log_tree['name'].startswith('dragLocationSource') or\
             log_tree['name'].startswith('dragLocationTarget') or\
             log_tree['name'].startswith('mouseScrollAction'):
-            image_list.append({
-                'script_name': log_tree['base_path'].split('/')[-2],
-                'action_name': log_tree['name'],
-                'post_file': log_tree['post_file']['file_path']
-            })
+            if "file_path" in log_tree['post_file']:
+                image_list.append({
+                    'script_name': log_tree['base_path'].split('/')[-2],
+                    'action_name': log_tree['name'],
+                    'post_file': log_tree['post_file']['file_path']
+                })
         for child in log_tree['children']:
             ScriptLogPreviewGenerator.log_tree_to_image_list(child, image_list)
 
@@ -40,6 +42,38 @@ class ScriptLogPreviewGenerator:
                      thickness=2):
         """Overlay text onto the image at the given position."""
         cv2.putText(image, text, position, font, font_scale, color, thickness)
+
+    @staticmethod
+    def resize_with_padding(image, target_width, target_height):
+        """
+        Resize an image while keeping the aspect ratio intact. Add padding if necessary to match the target dimensions.
+        """
+        height, width = image.shape[:2]
+
+        if target_width == width and target_height == height:
+            return image
+
+        aspect_ratio_image = width / height
+        aspect_ratio_target = target_width / target_height
+
+        if aspect_ratio_image > aspect_ratio_target:
+            # Image is wider than the target: resize based on width
+            new_width = target_width
+            new_height = int(target_width / aspect_ratio_image)
+        else:
+            # Image is taller than the target: resize based on height
+            new_height = target_height
+            new_width = int(target_height * aspect_ratio_image)
+
+        # Resize the image to the new dimensions
+        resized_image = cv2.resize(image, (new_width, new_height))
+
+        # Create a black canvas for the target size
+        canvas = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+
+        canvas[0:new_height, 0:new_width] = resized_image
+
+        return canvas
 
     @staticmethod
     def images_to_video(image_paths, output_path, fps=30, codec="H264"):
@@ -66,6 +100,7 @@ class ScriptLogPreviewGenerator:
             if img is None:
                 print(f"Error reading {image_path}. Skipping.")
                 continue
+            img = ScriptLogPreviewGenerator.resize_with_padding(img, width, height)
             video.write(img)
 
         # Release everything when job is finished

@@ -25,7 +25,6 @@ from scipy.stats import truncnorm
 from click_action_helper import ClickActionHelper
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
-from forward_detect_peek_helper import ForwardDetectPeekHelper
 from script_logger import ScriptLogger,thread_local_storage
 from script_action_log import ScriptActionLog
 
@@ -255,64 +254,56 @@ class python_host:
             )
             return action, status, state, context, run_queue, []
         elif action["actionName"] == "detectObject":
-            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
-            check_image_scale = screencap_im_bgr is None
-            screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, screencap_im_bgr)
-
-
-            if screencap_im_bgr is None:
-                script_logger.log('No cached screenshot or input expression, taking screenshot')
-                screencap_im_bgr = self.screenshot()
-
-            if script_logger.get_log_level() == 'info':
-                input_image_relative_path = 'detectObject-inputImage.png'
-                cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
-                script_logger.get_action_log().set_pre_file(
-                    'image',
-                    input_image_relative_path
-                )
+            if not lazy_eval:
+                input_obj = DetectObjectHelper.get_detect_area(action, state)
+                if input_obj['screencap_im_bgr'] is None:
+                    script_logger.log('No cached screenshot or input expression, taking screenshot')
+                    screencap_im_bgr = self.screenshot()
+                    script_logger.log('Storing original image')
+                    input_obj['screencap_im_bgr'] = screencap_im_bgr
+                    original_image = cv2.copyMakeBorder(screencap_im_bgr.copy(), 15, 15, 15, 15, cv2.BORDER_REPLICATE)
+                    original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
+                    input_obj["original_image"] = original_image[15:-15, 15:-15]
+                    input_obj['original_height'] = screencap_im_bgr.shape[0]
+                    input_obj['original_width'] = screencap_im_bgr.shape[1]
+                    input_obj['fixed_scale'] = False
+                action["input_obj"] = input_obj
 
             if lazy_eval:
                 return DetectObjectHelper.handle_detect_object, (
                     action,
-                    screencap_im_bgr,
                     state,
                     context,
                     run_queue,
-                    match_point,
-                    check_image_scale,
-                    self.props['scriptMode'],
-                    True
+                    self.props['scriptMode']
                 )
             else:
                 action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_object(
                     action,
-                    screencap_im_bgr,
                     state,
                     context,
                     run_queue,
-                    match_point=match_point,
-                    check_image_scale=check_image_scale,
-                    script_mode=self.props['scriptMode'],
+                    script_mode=self.props['scriptMode']
                 )
                 return action, status, state, context, run_queue, update_queue
         elif action["actionName"] == "colorCompareAction":
-            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(
+            input_obj = DetectObjectHelper.get_detect_area(
                 action, state, output_type='matched_pixels'
             )
-            if screencap_im_bgr is None:
+            if input_obj['screencap_im_bgr'] is None:
                 script_logger.log('No cached screenshot or input expression, taking screenshot')
                 screencap_im_bgr = self.screenshot()
+                input_obj['screencap_im_bgr'] = screencap_im_bgr
+                original_image = cv2.copyMakeBorder(screencap_im_bgr.copy(), 15, 15, 15, 15, cv2.BORDER_REPLICATE)
+                original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
+                input_obj["original_image"] = original_image[15:-15, 15:-15]
 
-            if script_logger.get_log_level() == 'info':
-                input_image_relative_path = script_logger.get_log_header() + '-colorCompareAction-inputImage.png'
-                cv2.imwrite(script_logger.get_log_folder() + input_image_relative_path, screencap_im_bgr)
-                script_logger.get_action_log().set_pre_file(
-                    'image',
-                    input_image_relative_path
-                )
+                input_obj['original_height'] = screencap_im_bgr.shape[0]
+                input_obj['original_width'] = screencap_im_bgr.shape[1]
+                input_obj['fixed_scale'] = False
+            action["input_obj"] = input_obj
 
-            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state)
+            color_score = ColorCompareHelper.handle_color_compare(action)
             if color_score > float(action['actionData']['threshold']):
                 script_logger.get_action_log().append_supporting_file(
                     'text',
