@@ -11,7 +11,16 @@ class ColorCompareHelper:
         pass
 
     @staticmethod
-    def handle_color_compare(screencap_im_bgr, action, state):
+    def handle_color_compare(action):
+
+        screencap_im_bgr = action['input_obj']['screencap_im_bgr'].copy()
+        if script_logger.get_log_level() == 'info':
+            input_image_relative_path = script_logger.get_log_header() + '-colorCompareAction-inputImage.png'
+            cv2.imwrite(script_logger.get_log_folder() + input_image_relative_path, screencap_im_bgr)
+            script_logger.get_action_log().set_pre_file(
+                'image',
+                input_image_relative_path
+            )
 
         pre_log_1 = 'Compare Mode: {}'.format(
             action["actionData"]["compareMode"]

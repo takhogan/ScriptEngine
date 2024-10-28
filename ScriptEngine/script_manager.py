@@ -1,5 +1,5 @@
 import sys
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
 
 from contextlib import redirect_stderr
 from dateutil import tz
@@ -11,7 +11,9 @@ import multiprocessing, logging
 import uuid
 import datetime
 import sys
+import warnings
 
+from parallelized_script_executor import ParallelizedScriptExecutor
 from script_loader import parse_zip
 from script_executor import ScriptExecutor
 from script_engine_constants import *
@@ -104,7 +106,9 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
                     script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
     errored = False
-    with ThreadPoolExecutor(max_workers=50) as io_executor:
+    multiprocessing.set_start_method('spawn')
+
+    with ThreadPoolExecutor(max_workers=50) as io_executor, ProcessPoolExecutor(max_workers=os.cpu_count()) as process_executor:
         device_manager = DeviceManager(script_name, script_object['props'], device_params, io_executor)
 
         # TODO: might need fixing
@@ -126,17 +130,19 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
             start_time_str,
             script_id,
             device_manager,
+            process_executor,
             script_start_time=start_time
         )
         try:
-            main_script.configure_action_logger({
+            script_logger.configure_action_logger({
                 "actionName": "inputsParser",
                 "actionGroup": -1,
                 "actionData": {
                     "targetSystem": "none"
                 }
-            })
+            }, 0, None)
             main_script.parse_inputs({})
+            script_logger.configure_action_logger(script_object['props']['scriptReference'], 1, None)
             main_script.handle_action(
                 script_object['props']['scriptReference']
             )
@@ -146,8 +152,17 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
             errored = True
         else:
             io_executor.shutdown(wait=True)
+
+        sys.stderr.write("<--IGNORE-OPENCV-VIDEO-ENCODING-SCRIPT-ENGINE-ERRORS-->")
+        sys.stderr.flush()
         with redirect_stderr(sys.stdout):
-            ScriptLogPreviewGenerator.assemble_script_log_preview(main_script.script_action_log.get_action_log_path(), main_script.log_folder + 'script-log-preview')
+            ScriptLogPreviewGenerator.assemble_script_log_preview(
+                main_script.script_action_log.get_action_log_path(),
+                main_script.log_folder + 'script-log-preview'
+            )
+            main_script.script_action_log.add_supporting_file_reference(
+                'video', 'script-log-preview.mp4', log_header=False
+            )
     if errored:
         exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())

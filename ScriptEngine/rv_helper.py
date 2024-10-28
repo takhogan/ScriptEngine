@@ -45,5 +45,6 @@ class RandomVariableHelper:
                 rv_vals = [(random.random() * dist_range + min_val) for _ in range(0, repeats)]
             return rv_vals
         else:
-            script_logger.log('random variable unimplemented: ' + action["actionData"]["distributionType"])
-            exit(0)
+            exception_message = 'random variable unimplemented: ' + action["actionData"]["distributionType"]
+            script_logger.log(exception_message)
+            raise Exception(exception_message)

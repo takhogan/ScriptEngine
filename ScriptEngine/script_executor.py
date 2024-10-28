@@ -17,8 +17,8 @@ from script_loader import parse_zip
 from system_script_handler import SystemScriptHandler
 from script_logger import ScriptLogger
 from script_action_log import ScriptActionLog
-
 from rv_helper import RandomVariableHelper
+
 script_logger = ScriptLogger()
 
 
@@ -57,6 +57,7 @@ class ScriptExecutor:
                  base_start_time_str,
                  script_id,
                  device_manager,
+                 process_executor,
                  parent_folder='',
                  script_start_time=None,
                  context=None,
@@ -66,6 +67,8 @@ class ScriptExecutor:
         self.base_script_name = base_script_name
         self.base_start_time_str = base_start_time_str
         self.device_manager = device_manager
+        self.process_executor = process_executor
+        self.parallelized_executor = ParallelizedScriptExecutor(self.process_executor)
         self.props = script_obj['props']
         if script_start_time is None:
             self.refresh_start_time()
@@ -264,68 +267,11 @@ class ScriptExecutor:
             ', elapsed: ,' + str(elapsed)
         )
 
-
-    def forward_detect_peek(self):
-        detect_types_by_target_system = {}
-        for action_index,action in enumerate(self.actions):
-            if action['actionName'] in DETECT_TYPES_SET:
-                # if len(action['actionData']['inputExpression']) > 0:
-                #     pass
-                # else:
-                target_system = action['actionData']['targetSystem']
-                if target_system in detect_types_by_target_system:
-                    detect_types_by_target_system[target_system].append([action_index,action])
-                else:
-                    detect_types_by_target_system[target_system] = [[action_index,action]]
-        detect_type_actions = detect_types_by_target_system.items()
-        if len(detect_type_actions) > 0:
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: performing forward peek')
-            for target_system,actions in detect_type_actions:
-                if target_system == 'adb':
-                    self.device_manager.adb_host.init_system()
-                    screenshot = self.device_manager.adb_host.screenshot()
-                    script_logger.log('ADB CONTROLLER', 'converted screenshot color')
-                    for [action_index,action] in actions:
-                        self.log_action_details(action)
-                        action['actionData']['screencap_im_bgr'] = screenshot
-                        action['actionData']['detect_run_type'] = 'result_precalculation'
-                        action['actionData']['results_precalculated'] = False
-                        # self.status, self.state, self.context = self.device_manager.adb_host.handle_action(
-                        #     action, self.state, self.context, self.log_level, self.log_folder
-                        # )
-                        # self.actions[action_index] = action
-                elif target_system == 'python':
-                    screenshot = self.device_manager.python_host.screenshot()
-                    for [action_index,action] in actions:
-                        self.log_action_details(action)
-                        action['actionData']['screencap_im_bgr'] = screenshot
-                        action['actionData']['detect_run_type'] = 'result_precalculation'
-                        action['actionData']['results_precalculated'] = False
-                        # self.status, self.state, self.context = self.device_manager.python_host.handle_action(
-                        #     action, self.state, self.context, self.log_level, self.log_folder
-                        # )
-                        # self.actions[action_index] = action
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Finished forward peek')
-
-    def configure_action_logger(self, action, create=True):
-        script_logger.set_log_header(
-            str(self.context['script_counter']).zfill(5) + '-' + \
-            action["actionName"] + '-' + str(action["actionGroup"])
-        )
-        script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
-        script_logger.set_action_log(ScriptActionLog(
-            action,
-            script_logger.get_log_folder(),
-            script_logger.get_log_header(),
-            self.context['script_counter']
-        ))
-
     def handle_action(self, action, lazy_eval=False):
-        self.context["script_counter"] += 1
-        self.configure_action_logger(action)
-        self.log_action_details(action)
-        if self.parent_action_log is not None:
-            self.parent_action_log.add_child(script_logger.get_action_log())
+        if lazy_eval:
+            script_logger.log('parallel handle action')
+        else:
+            script_logger.log('sequential handle action')
         if "targetSystem" in action["actionData"]:
             if action["actionData"]["targetSystem"] == "adb":
                 handle_action_result = self.device_manager.adb_host.handle_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
@@ -343,19 +289,20 @@ class ScriptExecutor:
         else:
             exception_text = "script formatting error, targetSystem not present!"
             raise Exception(exception_text)
-        if 'postActionDelay' in action['actionData'] and len(action['actionData']['postActionDelay']) > 0:
-            RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], self.state)
 
-        _, status, _, context, _, _ = handle_action_result
-        if "status_detail" in context:
-            status_detail = context["status_detail"]
-            del context["status_detail"]
-        else:
-            status_detail = None
-        if status_detail is not None:
-            script_logger.get_action_log().set_status(status_detail)
-        else:
-            script_logger.get_action_log().set_status(status.name)
+        if not lazy_eval:
+            _, status, _, context, _, _ = handle_action_result
+
+            if "status_detail" in context:
+                status_detail = context["status_detail"]
+                del context["status_detail"]
+            else:
+                status_detail = None
+            if status_detail is not None:
+                script_logger.get_action_log().set_status(status_detail)
+            else:
+                script_logger.get_action_log().set_status(status.name)
+
         return handle_action_result
 
     def handle_script_reference(self, action, state, context, run_queue):
@@ -434,6 +381,7 @@ class ScriptExecutor:
                         self.base_start_time_str,
                         self.script_id,
                         self.device_manager,
+                        self.process_executor,
                         parent_folder=self.log_folder,
                         context=child_context,
                         state=child_state,
@@ -447,6 +395,7 @@ class ScriptExecutor:
                         self.base_start_time_str,
                         self.script_id,
                         self.device_manager,
+                        self.process_executor,
                         parent_folder=self.log_folder,
                         context=child_context,
                         state=child_state,
@@ -680,17 +629,33 @@ class ScriptExecutor:
 
 
     #if it is handle all branches then you take the first branch and for the rest you create a context switch action
-    def execute_actions(self, forward_peek=True):
+    def execute_actions(self):
         script_logger.log('CONTROL FLOW: ', self.props['script_name'], 'starting next batch of actions')
         self.handle_out_of_attempts_check()
-        if forward_peek:
-            self.forward_detect_peek()
         n_actions = len(self.actions)
         is_return = False
         action_indices = list(range(0, len(self.actions)))
         if self.context["actionOrder"] == "random":
             script_logger.log("shuffling")
             random.shuffle(action_indices)
+
+        parallel_group = []
+        for action_index in range(0, n_actions):
+            action = self.actions[action_indices[action_index]]
+            parallellizeable = is_parallelizeable(action)
+            if parallellizeable:
+                parallel_group.append(action)
+            else:
+                if len(parallel_group) > 1:
+                    for parallel_action in parallel_group:
+                        parallel_action['parallel_group'] = parallel_group
+                parallel_group = []
+        if len(parallel_group) > 1:
+            for parallel_action in parallel_group:
+                parallel_action['parallel_group'] = parallel_group
+
+
+
         if self.context["branching_behavior"] == "firstMatch":
             pass
         elif self.context["branching_behavior"] == "attemptAllBranches" and n_actions > 1:
@@ -717,8 +682,7 @@ class ScriptExecutor:
             action_indices = [0]
             n_actions = 1
 
-
-        skip_indices = []
+        self.parallelized_executor.clear_processes()
         for action_index in range(0, n_actions):
             self.context["action_index"] = action_index
             action = self.actions[action_indices[action_index]]
@@ -730,58 +694,34 @@ class ScriptExecutor:
                     "searchAreaObjectHandler" in action["actionData"]["detectorAttributes"]:
                 self.context["object_handler_encountered"] = True
 
-            if action_index not in skip_indices:
+            if "parallel_group" in action:
+                self.parallelized_executor.start_processes(self, action["parallel_group"])
 
-                # TODO debug multiprocessing
-                parallellizeable = is_parallelizeable(action) and False
+            self.log_action_details(action)
+            if "parallel_process" in action:
+                process_index = action["parallel_process"]
+                del action["parallel_process"]
+                handle_action_result = self.parallelized_executor.processes[process_index].result()
+                self.action, self.status, self.state, self.context, self.run_queue, update_queue = handle_action_result
+            else:
+                self.context["script_counter"] += 1
+                script_logger.configure_action_logger(action, self.context["script_counter"], self.parent_action_log)
+                self.action, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
+                # post_handle_action((self.action, self.status, self.state, self.context, self.run_queue, update_queue))
 
-                if parallellizeable:
-                    start_index = action_index
-                    stop_index = action_index
-                    parallel_actions = []
-                    parallel_indices = []
-                    for parallel_index in range(action_index, n_actions):
-                        parallel_action = self.actions[parallel_index]
-                        if not is_parallelizeable(parallel_action):
-                            break
-                        parallel_actions.append([parallel_index, parallel_action])
-                        parallel_indices.append(parallel_index)
-                        stop_index = parallel_index
-                if parallellizeable and stop_index > start_index:
-                    for parallel_action in parallel_actions:
-                        parallel_action[1] = self.handle_action(parallel_action[1], lazy_eval=True)
-                        script_logger.set_log_header(self.props['script_name'] + '-CONTROL FLOW')
+            if 'postActionDelay' in action['actionData'] and len(action['actionData']['postActionDelay']) > 0:
+                RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], self.state)
 
-                    skip_indices += parallel_indices
-                    parallelized_executor = ParallelizedScriptExecutor()
-                    script_logger.log('CONTROL FLOW: ', self.props['script_name'], 'starting parallel execution')
-                    success_index, update_queue = parallelized_executor.parallelized_execute(parallel_actions, start_index, stop_index)
-                    self.parse_update_queue(update_queue)
-                    self.context["action_index"] = success_index
-                    action = self.actions[action_indices[success_index]]
-                    child_actions = self.get_children(action)
-                    self.context['child_actions'] = child_actions
-                    script_logger.log('CONTROL FLOW: ', self.props['script_name'],
-                          'completed parallel execution',
-                          ' and returned status ',
-                          self.status,
-                          ' assigned action ',
-                          action["actionGroup"])
-
-                else:
-                    self.action, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
-                    script_logger.set_log_header(self.props['script_name'] + '-CONTROL FLOW')
-
-                    self.parse_update_queue(update_queue)
-                    script_logger.log('CONTROL FLOW: ',
-                          self.props['script_name'],
-                          'completed action',
-                          action['actionName'],
-                          action["actionGroup"],
-                          'and returned status ',
-                          self.status
-                    )
-                # self.actions[action_indices[action_index]] =
+            script_logger.set_log_header(self.props['script_name'] + '-CONTROL FLOW')
+            self.parse_update_queue(update_queue)
+            script_logger.log('CONTROL FLOW: ',
+                  self.props['script_name'],
+                  'completed action',
+                  action['actionName'],
+                  action["actionGroup"],
+                  'and returned status ',
+                  self.status
+            )
 
             self.context["action_attempts"][action_index] += 1
             if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_FAILURE:
@@ -800,9 +740,10 @@ class ScriptExecutor:
                 return
             elif self.status == ScriptExecutionState.FAILURE:
                 self.context['child_actions'] = None
-                # if self.context["object_handler_encountered"]:
-                #     self.status = ScriptExecutionState.FINISHED_FAILURE
-                continue
+                if self.context["run_mode"] == "run_to_failure":
+                    return
+                else:
+                    continue
             elif self.status == ScriptExecutionState.RETURN:
                 self.context["child_actions"] = None
                 is_return = True
@@ -826,6 +767,7 @@ class ScriptExecutor:
 
 
     def run_to_failure(self):
+        self.context["run_mode"] = "run_to_failure"
         script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: runToFailure ", "branchingBehavior: ", self.context["branching_behavior"])
         self.status = ScriptExecutionState.STARTING
         overall_status = ScriptExecutionState.FAILURE
@@ -867,6 +809,7 @@ class ScriptExecutor:
 
 
     def run_one(self):
+        self.context["run_mode"] = "run_one"
         script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: runOne ", "branchingBehavior: ", self.context["branching_behavior"])
         self.status = ScriptExecutionState.STARTING
         branches = []
@@ -949,6 +892,7 @@ class ScriptExecutor:
         #TODO In theory you should load in the state and context of the successful branch
 
     def run(self):
+        self.context["run_mode"] = "run"
         script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: run ", "branchingBehavior: ", self.context["branching_behavior"])
         self.status = ScriptExecutionState.STARTING
         overall_status = ScriptExecutionState.FAILURE

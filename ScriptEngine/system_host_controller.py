@@ -3,6 +3,7 @@ import tesserocr
 import re
 import requests
 import cv2
+import easyocr
 import json
 import time
 import numpy as np
@@ -32,6 +33,7 @@ class SystemHostController:
         self.props = props
         self.io_executor = io_executor
         self.messaging_helper = MessagingHelper()
+        self.easy_ocr_reader = None
 
     def handle_action(self, action, state, context, run_queue):
         def sanitize_input(statement_input, state):
@@ -357,109 +359,114 @@ class SystemHostController:
                 state[action['actionData']['outputVarName']]['height'] = transform_im.shape[1]
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "imageToTextAction":
+            input_obj = DetectObjectHelper.get_detect_area(
+                action, state
+            )
+            pre_log = 'Image Transformations:\n'
+
+            search_im = input_obj['screencap_im_bgr']
+            pre_image_relative_path = 'imageToTextAction-raw-input.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, search_im)
+            script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
+
+            image_to_text_input = cv2.cvtColor(search_im.copy(), cv2.COLOR_BGR2GRAY)
+            conversion_log = 'converted to grayscale'
+            script_logger.log(conversion_log)
+            pre_log += conversion_log +'\n'
+
+            if action["actionData"]["increaseContrast"]:
+                image_to_text_input = cv2.equalizeHist(image_to_text_input)
+                conversion_log = 'increased contrast'
+                script_logger.log(conversion_log)
+                pre_log += conversion_log + '\n'
+
+            if action["actionData"]["invertColors"]:
+                image_to_text_input = cv2.bitwise_not(image_to_text_input)
+                conversion_log = 'inverted colors'
+                script_logger.log(conversion_log)
+                pre_log += conversion_log + '\n'
+
+            im_height = image_to_text_input.shape[0]
+            if im_height < 50:
+                image_to_text_input = cv2.resize(image_to_text_input, None, fx=int(100 / im_height), fy=int(100 / im_height), interpolation=cv2.INTER_CUBIC)
+                conversion_log = 'input too small, boosted size by factor of {}'.format(int(100 / im_height))
+                script_logger.log(conversion_log)
+                pre_log += conversion_log + '\n'
+            if 'blur' in action['actionData']:
+                if action["actionData"]["blur"] == 'bilateralFilter':
+                    image_to_text_input = cv2.bilateralFilter(image_to_text_input, 5, 75, 75)
+                    conversion_log = 'applied bilateral filter'
+                    script_logger.log(conversion_log)
+                    pre_log += conversion_log + '\n'
+                elif action["actionData"]["blur"] == 'medianBlur':
+                    image_to_text_input = cv2.medianBlur(image_to_text_input, 3)
+                    conversion_log = 'applied median blur'
+                    script_logger.log(conversion_log)
+                    pre_log += conversion_log + '\n'
+                elif action["actionData"]["blur"] == 'gaussianBlur':
+                    image_to_text_input = cv2.GaussianBlur(image_to_text_input, (5, 5), 0)
+                    conversion_log = 'applied gaussian blur'
+                    script_logger.log(conversion_log)
+                    pre_log += conversion_log + '\n'
+            if 'binarize' in action['actionData']:
+                if action["actionData"]["binarize"] == 'regular':
+                    image_to_text_input = cv2.threshold(
+                        image_to_text_input,
+                        0,
+                        255,
+                        cv2.THRESH_BINARY + cv2.THRESH_OTSU
+                    )[1]
+                    conversion_log = 'applied regular binarization'
+                    script_logger.log(conversion_log)
+                    pre_log += conversion_log + '\n'
+                elif action["actionData"]["binarize"] == 'adaptive':
+                    image_to_text_input = cv2.adaptiveThreshold(
+                        image_to_text_input,
+                        255,
+                        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                        cv2.THRESH_BINARY,
+                        31,
+                        2
+                    )
+                    conversion_log = 'applied adaptive binarization'
+                    script_logger.log(conversion_log)
+                    pre_log += conversion_log + '\n'
+            if 'makeBorder' in action['actionData'] and (
+                    action['actionData']['makeBorder'] == True or
+                    action['actionData']['makeBorder'] == 'true'
+                ):
+                if len(image_to_text_input.shape) == 2:
+                    border_color = int(image_to_text_input[0, 0])
+                else:
+                    border_color = list(map(int, image_to_text_input[0,0][::-1]))
+                # Add a 2-pixel border to the image
+                image_to_text_input = cv2.copyMakeBorder(
+                    image_to_text_input, 2, 2, 2, 2,
+                    cv2.BORDER_CONSTANT, value=border_color
+                )
+                conversion_log = 'added border'
+                script_logger.log(conversion_log)
+                pre_log += conversion_log + '\n'
+
+            mid_image_relative_path = 'imageToTextAction-parsed-input.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + mid_image_relative_path, image_to_text_input)
+            script_logger.get_action_log().add_supporting_file_reference('image', mid_image_relative_path)
+
+            is_image_to_text_debug_mode = "runMode" in action["actionData"] and action["actionData"][
+                "runMode"] == "debug"
+
             if action["actionData"]["conversionEngine"] == "tesseractOCR":
+
                 TARGET_TYPE_TO_PSM = {
                     'word': '8',
                     'sentence': '7',
                     'page': '3',
-                    'character' : '10',
-                    'rawLine' : '13'
+                    'character': '10',
+                    'rawLine': '13'
                 }
                 PSM_TO_TARGET_TYPE = {
-                    value:key for key,value in TARGET_TYPE_TO_PSM.items()
+                    value: key for key, value in TARGET_TYPE_TO_PSM.items()
                 }
-
-                search_im, match_pt = DetectObjectHelper.get_detect_area(
-                    action, state
-                )
-                pre_log = 'Image Transformations:\n'
-
-                pre_image_relative_path = 'imageToTextAction-raw-input.png'
-                cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, search_im)
-                script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
-
-                image_to_text_input = cv2.cvtColor(search_im.copy(), cv2.COLOR_BGR2GRAY)
-                conversion_log = 'converted to grayscale'
-                script_logger.log(conversion_log)
-                pre_log += conversion_log +'\n'
-
-                if action["actionData"]["increaseContrast"]:
-                    image_to_text_input = cv2.equalizeHist(image_to_text_input)
-                    conversion_log = 'increased contrast'
-                    script_logger.log(conversion_log)
-                    pre_log += conversion_log + '\n'
-
-                if action["actionData"]["invertColors"]:
-                    image_to_text_input = cv2.bitwise_not(image_to_text_input)
-                    conversion_log = 'inverted colors'
-                    script_logger.log(conversion_log)
-                    pre_log += conversion_log + '\n'
-
-                im_height = image_to_text_input.shape[0]
-                if im_height < 50:
-                    image_to_text_input = cv2.resize(image_to_text_input, None, fx=int(100 / im_height), fy=int(100 / im_height), interpolation=cv2.INTER_CUBIC)
-                    conversion_log = 'input too small, boosted size by factor of {}'.format(int(100 / im_height))
-                    script_logger.log(conversion_log)
-                    pre_log += conversion_log + '\n'
-                if 'blur' in action['actionData']:
-                    if action["actionData"]["blur"] == 'bilateralFilter':
-                        image_to_text_input = cv2.bilateralFilter(image_to_text_input, 5, 75, 75)
-                        conversion_log = 'applied bilateral filter'
-                        script_logger.log(conversion_log)
-                        pre_log += conversion_log + '\n'
-                    elif action["actionData"]["blur"] == 'medianBlur':
-                        image_to_text_input = cv2.medianBlur(image_to_text_input, 3)
-                        conversion_log = 'applied median blur'
-                        script_logger.log(conversion_log)
-                        pre_log += conversion_log + '\n'
-                    elif action["actionData"]["blur"] == 'gaussianBlur':
-                        image_to_text_input = cv2.GaussianBlur(image_to_text_input, (5, 5), 0)
-                        conversion_log = 'applied gaussian blur'
-                        script_logger.log(conversion_log)
-                        pre_log += conversion_log + '\n'
-                if 'binarize' in action['actionData']:
-                    if action["actionData"]["binarize"] == 'regular':
-                        image_to_text_input = cv2.threshold(
-                            image_to_text_input,
-                            0,
-                            255,
-                            cv2.THRESH_BINARY + cv2.THRESH_OTSU
-                        )[1]
-                        conversion_log = 'applied regular binarization'
-                        script_logger.log(conversion_log)
-                        pre_log += conversion_log + '\n'
-                    elif action["actionData"]["binarize"] == 'adaptive':
-                        image_to_text_input = cv2.adaptiveThreshold(
-                            image_to_text_input,
-                            255,
-                            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                            cv2.THRESH_BINARY,
-                            31,
-                            2
-                        )
-                        conversion_log = 'applied adaptive binarization'
-                        script_logger.log(conversion_log)
-                        pre_log += conversion_log + '\n'
-                if 'makeBorder' in action['actionData'] and (
-                        action['actionData']['makeBorder'] == True or
-                        action['actionData']['makeBorder'] == 'true'
-                    ):
-                    if len(image_to_text_input.shape) == 2:
-                        border_color = int(image_to_text_input[0, 0])
-                    else:
-                        border_color = list(map(int, image_to_text_input[0,0][::-1]))
-                    # Add a 2-pixel border to the image
-                    image_to_text_input = cv2.copyMakeBorder(
-                        image_to_text_input, 2, 2, 2, 2,
-                        cv2.BORDER_CONSTANT, value=border_color
-                    )
-                    conversion_log = 'added border'
-                    script_logger.log(conversion_log)
-                    pre_log += conversion_log + '\n'
-
-                mid_image_relative_path = 'imageToTextAction-parsed-input.png'
-                cv2.imwrite(script_logger.get_log_path_prefix() + mid_image_relative_path, image_to_text_input)
-                script_logger.get_action_log().add_supporting_file_reference('image', mid_image_relative_path)
 
                 tesseract_params = [
                     [
@@ -467,7 +474,6 @@ class SystemHostController:
                         str(action["actionData"]["characterWhiteList"])
                     ]
                 ]
-                is_image_to_text_debug_mode = "runMode" in action["actionData"] and action["actionData"]["runMode"] == "debug"
                 if is_image_to_text_debug_mode:
                     psm_values = list(TARGET_TYPE_TO_PSM.values())
                     psm_values.remove(TARGET_TYPE_TO_PSM[action['actionData']['targetType']])
@@ -497,24 +503,53 @@ class SystemHostController:
                         script_logger.log(input_result_log)
                         inputs_log += input_result_log +'\n'
 
-                post_log = 'final primary output was:{}'.format(
-                    outputs[0]
-                )
+                post_log = ''
+
                 if is_image_to_text_debug_mode:
-                    for output_index,debug_output in enumerate(outputs[1:]):
+                    for output_index, debug_output in enumerate(outputs[1:]):
                         post_log += '\n' + 'final debug output for psm {} was:{}'.format(
                             tesseract_params[output_index + 1][0],
                             debug_output
                         )
+            elif action["actionData"]["conversionEngine"] == "easyOCR":
+                post_log = ''
+                inputs_log = ''
 
-                script_logger.log(post_log)
-                script_logger.get_action_log().add_post_file(
-                    'text',
-                    'imageToText-results.txt',
-                    pre_log + '\n' + inputs_log + '\n' + post_log
-                )
-                state[action["actionData"]["outputVarName"]] = outputs[0].strip()
-                status = ScriptExecutionState.SUCCESS
+                if self.easy_ocr_reader is None:
+                    script_logger.log('initializing easyOCR model...')
+                    self.easy_ocr_reader = easyocr.Reader(['en'])
+
+                results = self.easy_ocr_reader.readtext(image_to_text_input)
+
+
+                outputs = [[]]
+
+                for bbox, text, confidence in results:
+                    if confidence < 0.75:
+                        continue
+                    script_logger.log(f"Detected word: {text}")
+                    script_logger.log(f"Bounding box: {bbox}")
+                    script_logger.log(f"Confidence: {confidence}\n")
+                    outputs[0].append(text)
+                outputs[0] = ' '.join(outputs[0])
+                input_results_log = 'Running easyOCR model with default params and output was ' + outputs[0]
+                inputs_log += input_results_log + '\n'
+
+            else:
+                raise Exception('Unsupported OCR engine' + action["actionData"]["conversionEngine"])
+            post_log += '\n final primary output was:{}'.format(
+                outputs[0]
+            )
+
+
+            script_logger.log(post_log)
+            script_logger.get_action_log().add_post_file(
+                'text',
+                'imageToText-results.txt',
+                pre_log + '\n' + inputs_log + '\n' + post_log
+            )
+            state[action["actionData"]["outputVarName"]] = outputs[0].strip()
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "contextSwitchAction":
             success_states = context["success_states"] if "success_states" in context else None
             script_counter = context["script_counter"]

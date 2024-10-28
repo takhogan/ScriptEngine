@@ -7,11 +7,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'ScriptEngine'))
 
 
 executables = [Executable("ScriptEngine/script_manager.py"),Executable("ScriptEngine/adb_host_controller.py"), Executable("ScriptEngine/python_host_controller.py")]
-
+model_path = os.path.join(os.path.expanduser("~"), ".EasyOCR")
+include_files = [(model_path, ".EasyOCR")]
 
 options = {
     'build_exe': {
-        'packages': ["ScriptEngine"]
+        'packages': ["ScriptEngine"],
+        "include_files": include_files
     }
 }
 

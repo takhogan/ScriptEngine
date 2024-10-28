@@ -7,7 +7,6 @@ import subprocess
 import os
 import json
 import platform
-import shlex
 import re
 
 
@@ -24,7 +23,6 @@ import random
 import time
 import sys
 import struct
-from scipy.stats import truncnorm
 from script_engine_utils import get_glob_digit_regex_string, is_null, masked_mse, state_eval, DummyFile
 import pyautogui
 
@@ -36,7 +34,6 @@ from image_matcher import ImageMatcher
 from search_pattern_helper import SearchPatternHelper
 from click_action_helper import ClickActionHelper
 from detect_object_helper import DetectObjectHelper
-from forward_detect_peek_helper import ForwardDetectPeekHelper
 from rv_helper import RandomVariableHelper
 from color_compare_helper import ColorCompareHelper
 from script_action_log import ScriptActionLog
@@ -315,7 +312,7 @@ class adb_host:
             if line.strip() and 'device' in line:
                 device_id = line.split('\t')[0]
                 if device_id.startswith('emulator'):
-                    result = subprocess.run(['adb', '-s', device_id, 'emu', 'avd', 'name'],
+                    result = subprocess.run([self.adb_path, '-s', device_id, 'emu', 'avd', 'name'],
                                             stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE,
                                             text=True)
@@ -393,7 +390,7 @@ class adb_host:
                 )
             elif os_name == 'Darwin' or os_name == 'Linux':
                 start_device_process = subprocess.Popen(
-                    '"/Users/takhogan/Library/Android/sdk/emulator/emulator" -avd "Small_Phone_API_34"',
+                    '"{}" -avd "{}"'.format(self.emulator_path, self.device_name),
                     cwd="/",  # You can change this to the actual working directory if needed
                     shell=True,
                     stdout=subprocess.PIPE,
@@ -405,11 +402,11 @@ class adb_host:
             timeout = 120
             start_time = time.time()
             while True:
-                output = start_device_process.stdout.readline().decode().strip()  # Read the output line-by-line
+                output = start_device_process.stdout.readline().decode().strip().lower()  # Read the output line-by-line
                 if output:
                     script_logger.log(output)  # Optionally print each line for logging purposes
 
-                if "boot completed" in output.lower():
+                if "boot completed" in output or "successfully loaded snapshot" in output:
                     script_logger.log("Emulator started successfully!")
                     break
 
@@ -724,7 +721,7 @@ class adb_host:
     def set_commands(self, timeout=1):
         script_logger = ScriptLogger.get_logger()
         # Run the adb getevent command
-        process = subprocess.Popen(['adb','-s', self.full_ip ,'shell' ,'getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        process = subprocess.Popen([self.adb_path, '-s', self.full_ip ,'shell' ,'getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                    bufsize=1)
         self.stop_command_gather = False
         # Use a selector to wait for I/O readiness without blocking
@@ -945,7 +942,7 @@ class adb_host:
     def y_command_func(self, y_val):
         return self.sendevent_command.format(3, int('36', 16), y_val)
 
-    def click(self, x, y, important=False):
+    def click(self, x, y, important=True):
         # 1st point always the og x,y
         script_logger.log('clicking')
         if self.dummy_mode:
@@ -1244,45 +1241,36 @@ class adb_host:
 
         #execute action
         if action["actionName"] == "detectObject":
+            if not lazy_eval:
+                input_obj = DetectObjectHelper.get_detect_area(action, state)
+                if input_obj['screencap_im_bgr'] is None:
+                    script_logger.log('No cached screenshot or input expression, taking screenshot')
+                    screencap_im_bgr = self.screenshot()
+                    input_obj['screencap_im_bgr'] = screencap_im_bgr
+                    original_image = cv2.copyMakeBorder(screencap_im_bgr.copy(), 15, 15, 15, 15, cv2.BORDER_REPLICATE)
+                    original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
+                    input_obj["original_image"] = original_image[15:-15, 15:-15]
 
-            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(action, state)
-            check_image_scale = screencap_im_bgr is None
-            screencap_im_bgr = ForwardDetectPeekHelper.load_screencap_im_bgr(action, screencap_im_bgr)
-
-            if screencap_im_bgr is None:
-                script_logger.log('No cached screenshot or input expression, taking screenshot')
-                screencap_im_bgr = self.screenshot()
-
-            if script_logger.get_log_level() == 'info':
-                input_image_relative_path = 'detectObject-inputImage.png'
-                cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
-                script_logger.get_action_log().set_pre_file(
-                    'image',
-                    input_image_relative_path
-                )
+                    input_obj['original_height'] = screencap_im_bgr.shape[0]
+                    input_obj['original_width'] = screencap_im_bgr.shape[1]
+                    input_obj['fixed_scale'] = False
+                action["input_obj"] = input_obj
 
             if lazy_eval:
                 return DetectObjectHelper.handle_detect_object, (
                     action,
-                    screencap_im_bgr,
                     state,
                     context,
                     run_queue,
-                    match_point,
-                    check_image_scale,
-                    self.props['scriptMode'],
-                    True
+                    self.props['scriptMode']
                 )
             else:
                 action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_object(
                     action,
-                    screencap_im_bgr,
                     state,
                     context,
                     run_queue,
-                    match_point=match_point,
-                    check_image_scale=check_image_scale,
-                    script_mode=self.props['scriptMode'],
+                    script_mode=self.props['scriptMode']
                 )
                 return action, status, state, context, run_queue, update_queue
         elif action["actionName"] == "clickAction":
@@ -1360,22 +1348,22 @@ class adb_host:
             )
             return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
         elif action["actionName"] == "colorCompareAction":
-            screencap_im_bgr, match_point = DetectObjectHelper.get_detect_area(
+            input_obj = DetectObjectHelper.get_detect_area(
                 action, state, output_type='matched_pixels'
             )
-            if screencap_im_bgr is None:
+            if input_obj['screencap_im_bgr'] is None:
                 script_logger.log('No cached screenshot or input expression, taking screenshot')
                 screencap_im_bgr = self.screenshot()
+                input_obj['screencap_im_bgr'] = screencap_im_bgr
+                original_image = cv2.copyMakeBorder(screencap_im_bgr.copy(), 15, 15, 15, 15, cv2.BORDER_REPLICATE)
+                original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
+                input_obj["original_image"] = original_image[15:-15, 15:-15]
+                input_obj['original_height'] = screencap_im_bgr.shape[0]
+                input_obj['original_width'] = screencap_im_bgr.shape[1]
+                input_obj['fixed_scale'] = False
+            action["input_obj"] = input_obj
 
-            if script_logger.get_log_level() == 'info':
-                input_image_relative_path = 'detectObject-inputImage.png'
-                cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
-                script_logger.get_action_log().set_pre_file(
-                    'image',
-                    input_image_relative_path
-                )
-
-            color_score = ColorCompareHelper.handle_color_compare(screencap_im_bgr, action, state)
+            color_score = ColorCompareHelper.handle_color_compare(action)
             if color_score > float(action['actionData']['threshold']):
                 script_logger.get_action_log().append_supporting_file(
                     'text',
