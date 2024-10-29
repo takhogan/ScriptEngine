@@ -268,14 +268,14 @@ class python_host:
                     input_obj['original_width'] = screencap_im_bgr.shape[1]
                     input_obj['fixed_scale'] = False
                 action["input_obj"] = input_obj
-
+            script_mode = self.props["scriptMode"]
             if lazy_eval:
                 return DetectObjectHelper.handle_detect_object, (
                     action,
                     state,
                     context,
                     run_queue,
-                    self.props['scriptMode']
+                    script_mode
                 )
             else:
                 action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_object(
@@ -283,7 +283,7 @@ class python_host:
                     state,
                     context,
                     run_queue,
-                    script_mode=self.props['scriptMode']
+                    script_mode=script_mode
                 )
                 return action, status, state, context, run_queue, update_queue
         elif action["actionName"] == "colorCompareAction":

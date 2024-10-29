@@ -1246,6 +1246,8 @@ class adb_host:
                 if input_obj['screencap_im_bgr'] is None:
                     script_logger.log('No cached screenshot or input expression, taking screenshot')
                     screencap_im_bgr = self.screenshot()
+                    script_logger.log('Storing original image')
+
                     input_obj['screencap_im_bgr'] = screencap_im_bgr
                     original_image = cv2.copyMakeBorder(screencap_im_bgr.copy(), 15, 15, 15, 15, cv2.BORDER_REPLICATE)
                     original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
@@ -1255,7 +1257,7 @@ class adb_host:
                     input_obj['original_width'] = screencap_im_bgr.shape[1]
                     input_obj['fixed_scale'] = False
                 action["input_obj"] = input_obj
-            script_mode = self.props["script_mode"]
+            script_mode = self.props["scriptMode"]
             if lazy_eval:
                 return DetectObjectHelper.handle_detect_object, (
                     action,
