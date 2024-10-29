@@ -11,8 +11,8 @@ class ParallelizedScriptExecutorHelper:
     def handle_parallel_action(self, log_header, log_folder, log_level, action_log, action_handler_args):
         script_logger = ScriptLogger()
         script_logger.configure_action_logger_from_strs(log_header, log_folder, log_level, action_log)
-
         script_logger.set_action_log(action_log)
+        script_logger.log('handling parallel action')
         handle_action_result = self.action_handler(*action_handler_args)
         _, status, _, context, _, _ = handle_action_result
 
