@@ -111,11 +111,14 @@ class ImageMatcher:
         resized_im_log = ''
         if not use_resized_im_only:
             try:
+                script_logger.log('Starting match template')
                 match_result = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr,
                     cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
                     cv2.TM_CCOEFF_NORMED,result=None,
-                    mask=screencap_mask_gray if use_mask else None)
+                    mask=screencap_mask_gray if use_mask else None
+                )
+                script_logger.log('Finished match template')
             except cv2.error as e:
                 is_match_error = True
 
@@ -155,7 +158,8 @@ class ImageMatcher:
                     cv2.cvtColor(screencap_search_bgr.copy(),
                                  cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
                     cv2.TM_CCOEFF_NORMED, result=None,
-                    mask=screencap_mask_gray if use_mask else None)
+                    mask=screencap_mask_gray if use_mask else None
+                )
                 script_logger.log('Finished match template')
 
                 # script_logger.log('match_result_resize ', threshold_match_results(match_result_resized))
