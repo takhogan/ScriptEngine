@@ -70,6 +70,7 @@ class ParallelizedScriptExecutor:
             (action_handler, action_handler_args) = script_executor.handle_action(parallel_action, lazy_eval=True)
             helper = ParallelizedScriptExecutorHelper(action_handler)
             script_logger.log('Started parallel process for ' + str(parallel_action["actionGroup"]))
+            context = 'undefined'
             try:
                 script_logger.log('helper')
                 pickle.dumps(helper)
@@ -106,7 +107,7 @@ class ParallelizedScriptExecutor:
                 pickle.dumps(script_logger.get_log_folder())
                 pickle.dumps(script_logger.get_log_level())
             except Exception as e:
-                script_logger.log('pickling error')
+                script_logger.log('pickling error', context)
                 script_logger.log(e)
 
             future = self.executor.submit(
