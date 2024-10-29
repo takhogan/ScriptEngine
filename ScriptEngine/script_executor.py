@@ -642,6 +642,8 @@ class ScriptExecutor:
         parallel_group = []
         for action_index in range(0, n_actions):
             action = self.actions[action_indices[action_index]]
+            if "parallel_process" in action:
+                del action["parallel_process"]
             parallellizeable = is_parallelizeable(action)
             if parallellizeable:
                 parallel_group.append(action)
