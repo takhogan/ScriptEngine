@@ -22,6 +22,7 @@ from script_engine_constants import *
 from script_engine_utils import generate_context_switch_action, state_eval
 from messaging_helper import MessagingHelper
 from script_logger import ScriptLogger
+from typing import Callable, Dict, List, Tuple
 script_logger = ScriptLogger()
 
 
@@ -35,7 +36,7 @@ class SystemHostController:
         self.messaging_helper = MessagingHelper()
         self.easy_ocr_reader = None
 
-    def handle_action(self, action, state, context, run_queue):
+    def handle_action(self, action, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
         def sanitize_input(statement_input, state):
             statement_input = statement_input.strip()
             statement_input = statement_input.replace('\n', ' ')
@@ -638,6 +639,8 @@ class SystemHostController:
                 elif action["actionData"]["returnStatus"] == 'success':
                     status = ScriptExecutionState.FINISHED_BRANCH
                     status_name = 'FINISHED_BRANCH'
+                else:
+                    raise Exception('invalid return status' + action["actionData"]["returnStatus"])
             elif action["actionData"]["returnStatementType"] == 'exitScript':
                 if action["actionData"]["returnStatus"] == 'failure':
                     status = ScriptExecutionState.FINISHED_FAILURE
@@ -645,6 +648,8 @@ class SystemHostController:
                 elif action["actionData"]["returnStatus"] == 'success':
                     status = ScriptExecutionState.FINISHED
                     status_name = 'FINISHED'
+                else:
+                    raise Exception('invalid return status' + action["actionData"]["returnStatus"])
             elif action["actionData"]["returnStatementType"] == 'exitProgram':
                 post_log = 'Exiting Program'
                 script_logger.log(post_log)
@@ -653,6 +658,7 @@ class SystemHostController:
                     'returnStatement-{}.txt'.format('exit-0'),
                     pre_log + '\n' + mid_log + '\n' + post_log
                 )
+                status = ScriptExecutionState.ERROR
                 exit(0)
             else:
                 script_logger.log('return statement type not implemented', action["actionData"]["returnStatementType"])
@@ -822,6 +828,7 @@ class SystemHostController:
             post_log += 'Input expression: ' + action["actionData"]["inputExpression"] + '\n'
             post_log += 'Wrote inputs to variable: ' + action["actionData"]["outputVarName"]
             script_logger.get_action_log().add_post_file('text', 'post.txt', post_log)
+            status = ScriptExecutionState.SUCCESS
         #TODO : unsupported for now
         elif action["actionName"] == "databaseCRUD":
             if action["actionData"]["databaseType"] == "mongoDB":
@@ -871,6 +878,7 @@ class SystemHostController:
             else:
                 script_logger.log("DB provider unimplemented")
                 raise Exception(action["actionName"] + ' DB provider unimplemented')
+            status = ScriptExecutionState.SUCCESS
         else:
             return self.python_host.handle_action(action, state, context, run_queue)
         return action, status, state, context, run_queue, []

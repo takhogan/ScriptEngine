@@ -173,7 +173,10 @@ class ScriptActionLog:
                         ' to file ' + str(supporting_file_path) + ' of type ' + supporting_file_type +
                         ' contents: ' + str(file_contents)
                     )
-        assert file_exists
+        if not file_exists:
+            raise Exception('Attempting to append to non-existent file, contents of type ' + file_type +
+                        ' to file ' + str(existing_supporting_file_path) +
+                        ' contents: ' + str(file_contents))
         if file_type == 'text':
             with open(existing_supporting_file_path, 'a') as supporting_file:
                 supporting_file.write(file_contents + end)

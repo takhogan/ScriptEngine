@@ -33,7 +33,12 @@ class ParallelizedScriptExecutor:
         for process_index,parallel_action in enumerate(parallel_actions):
             script_counter += 1
             action_log = script_logger.configure_action_logger(parallel_action, script_counter, parent_action_log)
-
+            parallel_action["script_logger"] = (
+                script_logger.get_log_header(),
+                script_logger.get_log_folder(),
+                script_logger.get_log_level(),
+                action_log
+            )
             input_obj = DetectObjectHelper.get_detect_area(parallel_action, script_executor.state)
             if input_obj['screencap_im_bgr'] is None:
                 script_logger.log('No input expression, using cached screenshot')
@@ -70,53 +75,11 @@ class ParallelizedScriptExecutor:
             (action_handler, action_handler_args) = script_executor.handle_action(parallel_action, lazy_eval=True)
             helper = ParallelizedScriptExecutorHelper(action_handler)
             script_logger.log('Started parallel process for ' + str(parallel_action["actionGroup"]))
-            context = 'undefined'
-            try:
-                script_logger.log('helper')
-                pickle.dumps(helper)
-                script_logger.log('args')
-                (
-                    action,
-                    state,
-                    context,
-                    run_queue,
-                    script_mode
-                ) = action_handler_args
-                script_logger.log('action args')
-
-                pickle.dumps(action)
-                script_logger.log('state args')
-
-                pickle.dumps(state)
-                script_logger.log('context args')
-
-                pickle.dumps(context)
-                script_logger.log('run_queue args')
-
-                pickle.dumps(run_queue)
-                script_logger.log('script_mode args')
-
-                pickle.dumps(script_mode)
-
-                pickle.dumps(action_handler_args)
-
-                script_logger.log('action_log')
-                pickle.dumps(action_log)
-                script_logger.log('logs')
-                pickle.dumps(script_logger.get_log_header())
-                pickle.dumps(script_logger.get_log_folder())
-                pickle.dumps(script_logger.get_log_level())
-            except Exception as e:
-                script_logger.log('pickling error', context)
-                script_logger.log(e)
 
             future = self.executor.submit(
                 helper.handle_parallel_action,
-                script_logger.get_log_header(),
-                script_logger.get_log_folder(),
-                script_logger.get_log_level(),
-                action_log,
                 action_handler_args
             )
             parallel_action["parallel_process"] = process_index
+
             self.processes.append(future)

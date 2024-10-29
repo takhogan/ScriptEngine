@@ -24,6 +24,7 @@ import time
 import sys
 import struct
 from script_engine_utils import get_glob_digit_regex_string, is_null, masked_mse, state_eval, DummyFile
+from typing import Callable, Dict, List, Tuple
 import pyautogui
 
 sys.path.append("..")
@@ -1230,8 +1231,8 @@ class adb_host:
             zip(delta_x, delta_y)
         )
 
-
-    def handle_action(self, action, state, context, run_queue, lazy_eval=False):
+    def handle_action(self, action, state, context, run_queue, lazy_eval=False) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
+        update_queue = []
         #initialize
         if action["actionName"] == "ADBConfigurationAction":
             status, state, context = self.configure_adb(action, state, context)
@@ -1261,20 +1262,16 @@ class adb_host:
             if lazy_eval:
                 return DetectObjectHelper.handle_detect_object, (
                     action,
-                    state,
-                    context,
-                    run_queue,
                     script_mode
                 )
             else:
-                action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_object(
+                handle_action_result = DetectObjectHelper.handle_detect_object(
                     action,
-                    state,
-                    context,
-                    run_queue,
                     script_mode=script_mode
                 )
-                return action, status, state, context, run_queue, update_queue
+                action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_action_result(
+                    handle_action_result, state, context, run_queue
+                )
         elif action["actionName"] == "clickAction":
             action["actionData"]["clickCount"] = int(action["actionData"]["clickCount"])
             var_name = action["actionData"]["inputExpression"]
@@ -1291,13 +1288,11 @@ class adb_host:
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1])
                 time.sleep(delays[click_count] if click_count > 1 else delays)
-
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
 
         elif action["actionName"] == "shellScript":
-            if self.host_os is not None:
-                state = self.host_os.run_shell_script(action, state)
-                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
+
         elif action["actionName"] == "dragLocationSource":
             point_choice, point_list, state, context = ClickActionHelper.get_point_choice(
                 action, action['actionData']['inputExpression'], state, context,
@@ -1309,7 +1304,8 @@ class adb_host:
             }
             thread_script_logger = script_logger.copy()
             self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
+
         elif action["actionName"] == "dragLocationTarget":
             source_point = context["dragLocationSource"]["point_choice"]
             source_point_list = context["dragLocationSource"]["point_list"]
@@ -1348,7 +1344,7 @@ class adb_host:
                 'drag-log.txt',
                 drag_log
             )
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "colorCompareAction":
             input_obj = DetectObjectHelper.get_detect_area(
                 action, state, output_type='matched_pixels'
@@ -1375,7 +1371,7 @@ class adb_host:
                         float(action['actionData']['threshold'])
                     )
                 )
-                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+                status = ScriptExecutionState.SUCCESS
             else:
                 script_logger.get_action_log().append_supporting_file(
                     'text',
@@ -1385,12 +1381,11 @@ class adb_host:
                         float(action['actionData']['threshold'])
                     )
                 )
-                return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
-
+                status = ScriptExecutionState.FAILURE
         elif action["actionName"] == "searchPatternStartAction":
             # context = self.search_pattern_helper.generate_pattern(action, context, log_folder, self.props['dir_path'])
             # script_logger.log(state)
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "searchPatternContinueAction":
             # search_pattern_id = action["actionData"]["searchPatternID"]
             # raw_source_pt, raw_target_pt, displacement, context = self.search_pattern_helper.execute_pattern(search_pattern_id, context)
@@ -1580,7 +1575,7 @@ class adb_host:
             #         break
             #
             # context["search_patterns"][search_pattern_id] = search_pattern_obj
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "searchPatternEndAction":
             # search_pattern_id = action["actionData"]["searchPatternID"]
             # if context["parent_action"] is not None and \
@@ -1626,13 +1621,13 @@ class adb_host:
             # generate_greater_pano(0, step_index)
             #
             # del context["search_patterns"][action["actionData"]["searchPatternID"]]
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
         #TODO: deprecated
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
                 log_image = self.screenshot()
                 cv2.imwrite(script_logger.get_log_path_prefix() + '-logImage.png', log_image)
-                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+                status = ScriptExecutionState.SUCCESS
             else:
                 exception_text = 'log type unimplemented ' + action["actionData"]["logType"]
                 script_logger.log(exception_text)
@@ -1640,16 +1635,16 @@ class adb_host:
         elif action["actionName"] == "timeAction":
             state[action["actionData"]["outputVarName"]] = datetime.datetime.now()
             # self.state[action["actionData"]["outputVarName"]] = expression
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "keyboardAction":
             status, state, context = DeviceActionInterpreter.parse_keyboard_action(
                 self, action, state, context
             )
-            return action, status, state, context, run_queue, []
         else:
             exception_text = "action uninplemented on adb " + action["actionName"]
             script_logger.log(exception_text)
             raise Exception(exception_text)
+        return action, status, state, context, run_queue, update_queue
 
 @staticmethod
 def set_adb_args(device_key):
