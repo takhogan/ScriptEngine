@@ -64,7 +64,7 @@ class ParallelizedScriptExecutor:
                         system_inputs['python'] = input_obj
                 else:
                     raise Exception('unimplemented target system: ' + target_system)
-                script_logger.log('using input_obj', (f'{k} {type(input_obj[k])}' for k in list(input_obj)))
+                script_logger.log('using input_obj', list(f'{k} {type(input_obj[k])}' for k in list(input_obj)))
 
             parallel_action["input_obj"] = input_obj
             (action_handler, action_handler_args) = script_executor.handle_action(parallel_action, lazy_eval=True)
@@ -81,12 +81,24 @@ class ParallelizedScriptExecutor:
                     run_queue,
                     script_mode
                 ) = action_handler_args
-                pickle.dumps(action_handler_args)
+                script_logger.log('action args')
+
                 pickle.dumps(action)
+                script_logger.log('state args')
+
                 pickle.dumps(state)
+                script_logger.log('context args')
+
                 pickle.dumps(context)
+                script_logger.log('run_queue args')
+
                 pickle.dumps(run_queue)
+                script_logger.log('script_mode args')
+
                 pickle.dumps(script_mode)
+
+                pickle.dumps(action_handler_args)
+
                 script_logger.log('action_log')
                 pickle.dumps(action_log)
                 script_logger.log('logs')
