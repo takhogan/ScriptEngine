@@ -15,6 +15,7 @@ import cv2
 import re
 from image_matcher import ImageMatcher
 from script_engine_utils import is_null, apply_state_to_cmd_str, DummyFile
+from typing import Callable, Dict, List, Tuple
 
 import time
 from color_compare_helper import ColorCompareHelper
@@ -216,11 +217,12 @@ class python_host:
         )
         return state
 
-
-    def handle_action(self, action, state, context, run_queue, lazy_eval=False):
+    def handle_action(self, action, state, context, run_queue, lazy_eval=False) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
         self.initialize_host()
+        update_queue = []
         if action["actionName"] == "shellScript":
-            return action, ScriptExecutionState.SUCCESS, self.run_shell_script(action, state), context, run_queue, []
+            state = self.run_shell_script(action, state)
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "clickAction":
             action["actionData"]["clickCount"] = int(action["actionData"]["clickCount"])
             var_name = action["actionData"]["inputExpression"]
@@ -236,8 +238,7 @@ class python_host:
             for click_count in range(0, action["actionData"]["clickCount"]):
                 self.click(point_choice[0], point_choice[1], 'left')
                 time.sleep(delays[click_count] if click_count > 1 else delays)
-
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "mouseScrollAction":
             var_name = action["actionData"]["inputExpression"]
             point_choice, point_list, state, context = ClickActionHelper.get_point_choice(action, var_name, state, context)
@@ -247,12 +248,11 @@ class python_host:
                     self.screenshot(), point_choice, point_list
                 )
             pyautogui.scroll(action["actionData"]["scrollDistance"])
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "keyboardAction":
             status, state, context = DeviceActionInterpreter.parse_keyboard_action(
                 self, action, state, context
             )
-            return action, status, state, context, run_queue, []
         elif action["actionName"] == "detectObject":
             if not lazy_eval:
                 input_obj = DetectObjectHelper.get_detect_area(action, state)
@@ -260,10 +260,12 @@ class python_host:
                     script_logger.log('No cached screenshot or input expression, taking screenshot')
                     screencap_im_bgr = self.screenshot()
                     script_logger.log('Storing original image')
+
                     input_obj['screencap_im_bgr'] = screencap_im_bgr
                     original_image = cv2.copyMakeBorder(screencap_im_bgr.copy(), 15, 15, 15, 15, cv2.BORDER_REPLICATE)
                     original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
                     input_obj["original_image"] = original_image[15:-15, 15:-15]
+
                     input_obj['original_height'] = screencap_im_bgr.shape[0]
                     input_obj['original_width'] = screencap_im_bgr.shape[1]
                     input_obj['fixed_scale'] = False
@@ -272,20 +274,16 @@ class python_host:
             if lazy_eval:
                 return DetectObjectHelper.handle_detect_object, (
                     action,
-                    state,
-                    context,
-                    run_queue,
                     script_mode
                 )
             else:
-                action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_object(
+                handle_action_result = DetectObjectHelper.handle_detect_object(
                     action,
-                    state,
-                    context,
-                    run_queue,
                     script_mode=script_mode
                 )
-                return action, status, state, context, run_queue, update_queue
+                action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_action_result(
+                    handle_action_result, state, context, run_queue
+                )
         elif action["actionName"] == "colorCompareAction":
             input_obj = DetectObjectHelper.get_detect_area(
                 action, state, output_type='matched_pixels'
@@ -313,7 +311,7 @@ class python_host:
                         float(action['actionData']['threshold'])
                     )
                 )
-                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+                status = ScriptExecutionState.SUCCESS
             else:
                 script_logger.get_action_log().append_supporting_file(
                     'text',
@@ -323,7 +321,7 @@ class python_host:
                         float(action['actionData']['threshold'])
                     )
                 )
-                return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
+                status = ScriptExecutionState.FAILURE
         elif action["actionName"] == "dragLocationSource":
             point_choice, point_list, state, context = ClickActionHelper.get_point_choice(
                 action, action['actionData']['inputExpression'], state, context,
@@ -335,7 +333,7 @@ class python_host:
             }
             thread_script_logger = script_logger.copy()
             self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "dragLocationTarget":
             source_point = context["dragLocationSource"]["point_choice"]
             source_point_list = context["dragLocationSource"]["point_list"]
@@ -365,13 +363,13 @@ class python_host:
                 'drag-log.txt',
                 drag_log
             )
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
         #TODO: deprecated
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
                 log_image = self.screenshot()
                 cv2.imwrite(script_logger.get_log_path_prefix() + '-logImage.png', log_image)
-                return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+                status = ScriptExecutionState.SUCCESS
             else:
                 exception_text = 'log type unimplemented ' + action["actionData"]["logType"]
                 script_logger.log(exception_text)
@@ -384,14 +382,13 @@ class python_host:
             elif action["actionData"]["timezone"] == "utc":
                 time_val = datetime.datetime.utcnow()
             state[action["actionData"]["outputVarName"]] = time_val
-            return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+            status = ScriptExecutionState.SUCCESS
         else:
             exception_text = "action unimplemented on python/desktop " + action["actionName"]
             script_logger.log(exception_text)
             raise Exception(exception_text)
+        return action, status, state, context, run_queue, update_queue
 
-
-@staticmethod
 def parse_inputs(process_host, inputs):
     device_action = inputs[2]
     if device_action == 'screen_capture':

@@ -8,6 +8,8 @@ import re
 import glob
 
 sys.path.append("..")
+from device_manager import DeviceManager
+from detect_object_helper import DetectObjectHelper
 from parallelized_script_executor import ParallelizedScriptExecutor
 from script_engine_constants import *
 from script_execution_state import ScriptExecutionState
@@ -18,7 +20,7 @@ from system_script_handler import SystemScriptHandler
 from script_logger import ScriptLogger
 from script_action_log import ScriptActionLog
 from rv_helper import RandomVariableHelper
-
+from typing import Callable, Dict, List, Tuple
 script_logger = ScriptLogger()
 
 
@@ -56,7 +58,7 @@ class ScriptExecutor:
                  base_script_name,
                  base_start_time_str,
                  script_id,
-                 device_manager,
+                 device_manager : DeviceManager,
                  process_executor,
                  parent_folder='',
                  script_start_time=None,
@@ -267,7 +269,7 @@ class ScriptExecutor:
             ', elapsed: ,' + str(elapsed)
         )
 
-    def handle_action(self, action, lazy_eval=False):
+    def handle_action(self, action, lazy_eval=False) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
         if lazy_eval:
             script_logger.log('returning parallel handle action handler')
         else:
@@ -305,7 +307,33 @@ class ScriptExecutor:
 
         return handle_action_result
 
-    def handle_script_reference(self, action, state, context, run_queue):
+    def handle_handle_action_result(self, handle_action_result, status, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List]:
+        action = handle_action_result[0]
+        script_logger.configure_action_logger_from_strs(*action["script_logger"])
+        script_logger.log(
+            'Handling handle action result for action ' + action["actionName"] + '-' + str(action["actionGroup"])
+        )
+        update_queue = []
+        if action["actionName"] == "detectObject":
+            action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_action_result(
+                handle_action_result, state, context, run_queue
+            )
+        else:
+            pass
+
+        if "status_detail" in context:
+            status_detail = context["status_detail"]
+            del context["status_detail"]
+        else:
+            status_detail = None
+        if status_detail is not None:
+            script_logger.get_action_log().set_status(status_detail)
+        else:
+            script_logger.get_action_log().set_status(status.name)
+
+        return action, status, state, context, run_queue, update_queue
+
+    def handle_script_reference(self, action, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List]:
         if action["actionName"] == 'scriptReference':
 
             if 'paused_script' in self.context:
@@ -703,12 +731,15 @@ class ScriptExecutor:
             if "parallel_process" in action:
                 process_index = action["parallel_process"]
                 del action["parallel_process"]
+
                 handle_action_result = self.parallelized_executor.processes[process_index].result()
-                self.action, self.status, self.state, self.context, self.run_queue, update_queue = handle_action_result
+                _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_handle_action_result(
+                    handle_action_result, self.status, self.state, self.context, self.run_queue
+                )
             else:
                 self.context["script_counter"] += 1
                 script_logger.configure_action_logger(action, self.context["script_counter"], self.parent_action_log)
-                self.action, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
+                _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
                 # post_handle_action((self.action, self.status, self.state, self.context, self.run_queue, update_queue))
 
             if 'postActionDelay' in action['actionData'] and len(action['actionData']['postActionDelay']) > 0:

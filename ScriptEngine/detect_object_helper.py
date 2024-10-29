@@ -1,7 +1,6 @@
 import cv2
 import sys
 import numpy as np
-
 sys.path.append("..")
 from script_engine_utils import generate_context_switch_action, state_eval
 from script_execution_state import ScriptExecutionState
@@ -9,6 +8,7 @@ from image_matcher import ImageMatcher
 from detect_scene_helper import DetectSceneHelper
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
+
 
 class DetectObjectHelper:
     def __init__(self):
@@ -18,7 +18,7 @@ class DetectObjectHelper:
     def get_detect_area(action, state, output_type='matched_area'):
         screencap_im_bgr = None
         original_image = None
-        match_point = (0,0)
+        match_point = (0, 0)
         original_width = 0
         original_height = 0
         fixed_scale = False
@@ -103,7 +103,7 @@ class DetectObjectHelper:
                 truncate_log = 'Truncated {} excess matches'.format(excess_matches)
                 update_update_queue_log += truncate_log + '\n'
                 script_logger.log(truncate_log)
-            for match_index,match in enumerate(matches[1:max_matches]):
+            for match_index, match in enumerate(matches[1:max_matches]):
                 switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
                     "state": {
                         action['actionData']['outputVarName']: match
@@ -159,9 +159,6 @@ class DetectObjectHelper:
     @staticmethod
     def handle_detect_object(
             action,
-            state,
-            context,
-            run_queue,
             script_mode='train'
     ):
         screencap_im_bgr = action['input_obj']['screencap_im_bgr']
@@ -266,17 +263,22 @@ class DetectObjectHelper:
                 threshold=float(action["actionData"]["threshold"]),
                 use_color=action["actionData"]["useColor"] == "true" or action["actionData"]["useColor"]
             )
+
+        script_logger.get_action_log().append_supporting_file(
+            'text',
+            'detect_result.txt',
+            (detect_scene_result_log + '\n' if detect_scene_result_log != '' else '') +
+            detect_object_result_log
+        )
+        script_logger.log('Completed handle detect object')
+        return action, matches
+
+    @staticmethod
+    def handle_detect_action_result(detect_action_result, state, context, run_queue):
+        (action, matches) = detect_action_result
         update_queue = []
         # matches are added to the update queue and then added to the state after handle_action returns
         update_queue, status = DetectObjectHelper.update_update_queue(
             action, state, context, matches, update_queue
         )
-
-        script_logger.get_action_log().append_supporting_file(
-            'text',
-            'detect_result.txt',
-            (detect_scene_result_log + '\n' if detect_scene_result_log != '' else '') + \
-            detect_object_result_log
-        )
-        script_logger.log('Completed handle detect object')
         return action, status, state, context, run_queue, update_queue
