@@ -667,6 +667,7 @@ class ScriptExecutor:
             script_logger.log("shuffling")
             random.shuffle(action_indices)
 
+        script_logger.log('All actions: ', list(map(lambda action: action["actionGroup"], self.actions)))
         parallel_group = []
         for action_index in range(0, n_actions):
             action = self.actions[action_indices[action_index]]
@@ -678,11 +679,14 @@ class ScriptExecutor:
             else:
                 if len(parallel_group) > 1:
                     for parallel_action in parallel_group:
+                        script_logger.log('adding parallel group to ' + str(parallel_action['actionGroup']))
                         parallel_action['parallel_group'] = parallel_group
                 parallel_group = []
         if len(parallel_group) > 1:
             for parallel_action in parallel_group:
+                script_logger.log('adding parallel group to ' + str(parallel_action['actionGroup']))
                 parallel_action['parallel_group'] = parallel_group
+
 
 
 
@@ -725,6 +729,7 @@ class ScriptExecutor:
                 self.context["object_handler_encountered"] = True
 
             if "parallel_group" in action:
+                script_logger.log('parallel group found in ' + str(action['actionGroup']))
                 self.parallelized_executor.start_processes(self, action["parallel_group"])
 
             self.log_action_details(action)
