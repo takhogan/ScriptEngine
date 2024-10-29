@@ -79,7 +79,6 @@ def get_digits(number):
     return digits
 
 
-import subprocess
 import re
 
 
