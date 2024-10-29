@@ -96,7 +96,7 @@ class ScriptLogger:
             if flush:
                 file.flush()
 
-        print(*args, sep=sep, end=end, flush=flush)
+        print(text, *args, sep=sep, end=end, flush=flush)
 
     def set_log_file_path(self, log_file_path):
         self.log_file_path = log_file_path
