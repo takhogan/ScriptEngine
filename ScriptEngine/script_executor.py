@@ -269,7 +269,7 @@ class ScriptExecutor:
 
     def handle_action(self, action, lazy_eval=False):
         if lazy_eval:
-            script_logger.log('parallel handle action')
+            script_logger.log('returning parallel handle action handler')
         else:
             script_logger.log('sequential handle action')
         if "targetSystem" in action["actionData"]:
