@@ -26,6 +26,8 @@ class ParallelizedScriptExecutor:
         parent_action_log = script_executor.parent_action_log
         script_logger.log('CONTROL FLOW: starting parallel execution')
         for parallel_action in parallel_actions:
+            if "parallel_group" not in parallel_action:
+                script_logger.log('Error: paralle_group not in action', str(parallel_action["actionGroup"]), ' all ', parallel_actions)
             del parallel_action["parallel_group"]
 
         # if you want to implement for other actions keep in mind you should filter here
