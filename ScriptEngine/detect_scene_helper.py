@@ -122,6 +122,9 @@ class DetectSceneHelper:
             'matched_area': match_img_bgr,
             'height': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].shape[0],
             'width': sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].shape[1],
+            'original_image': sceneAction['input_obj']['original_image'],
+            'original_height': sceneAction['input_obj']['original_height'],
+            'original_width': sceneAction['input_obj']['original_width'],
             'score': ssim_coeff,
             'n_matches' : 1
         }], ssim_coeff
