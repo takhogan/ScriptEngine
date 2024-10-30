@@ -657,6 +657,9 @@ class ScriptExecutor:
 
 
     #if it is handle all branches then you take the first branch and for the rest you create a context switch action
+    # Unless you know for certain that the field is going to be overwritten, you shouldn't rely on writing to the action
+    # Keep in mind that the action is not copied, so any writes you do will be there when you call the same script again
+    # And maybe you call the same script in the same script
     def execute_actions(self):
         script_logger.log('CONTROL FLOW: ', self.props['script_name'], 'starting next batch of actions')
         self.handle_out_of_attempts_check()
@@ -668,30 +671,27 @@ class ScriptExecutor:
             random.shuffle(action_indices)
 
         script_logger.log('All actions: ', list(map(lambda action: action["actionGroup"], self.actions)))
+        parallel_groups = {}
         parallel_group = []
-        for action_index in range(0, n_actions):
-            action = self.actions[action_indices[action_index]]
-            if "parallel_process" in action:
-                del action["parallel_process"]
-            parallellizeable = is_parallelizeable(action)
-            if parallellizeable:
-                parallel_group.append(action)
-            else:
-                if len(parallel_group) > 1:
-                    for parallel_action in parallel_group:
-                        script_logger.log('adding parallel group to ' + str(parallel_action['actionGroup']))
-                        parallel_action['parallel_group'] = parallel_group
-                parallel_group = []
-        if len(parallel_group) > 1:
-            for parallel_action in parallel_group:
-                script_logger.log('adding parallel group to ' + str(parallel_action['actionGroup']))
-                parallel_action['parallel_group'] = parallel_group
 
-
-
-
+        # TODO need to put your thinking cap on for attemptAllBranches
+        # when you go to the next branch it will clear the process
         if self.context["branching_behavior"] == "firstMatch":
-            pass
+            for action_index in range(0, n_actions):
+                action = self.actions[action_indices[action_index]]
+                parallellizeable = is_parallelizeable(action)
+                if parallellizeable:
+                    parallel_group.append(action)
+                else:
+                    if len(parallel_group) > 1:
+                        for parallel_action in parallel_group:
+                            script_logger.log('adding parallel group to ' + str(parallel_action['actionGroup']))
+                            parallel_groups[parallel_action["actionGroup"]] = parallel_group
+                    parallel_group = []
+            if len(parallel_group) > 1:
+                for parallel_action in parallel_group:
+                    script_logger.log('adding parallel group to ' + str(parallel_action['actionGroup']))
+                    parallel_groups[parallel_action["actionGroup"]] = parallel_group
         elif self.context["branching_behavior"] == "attemptAllBranches" and n_actions > 1:
             state_copy = self.state.copy()
             context_copy = self.context.copy()
@@ -728,16 +728,17 @@ class ScriptExecutor:
                     "searchAreaObjectHandler" in action["actionData"]["detectorAttributes"]:
                 self.context["object_handler_encountered"] = True
 
-            if "parallel_group" in action:
+            if action["actionGroup"] in parallel_groups:
                 script_logger.log('parallel group found in ' + str(action['actionGroup']))
-                self.parallelized_executor.start_processes(self, action["parallel_group"])
+                parallel_group = parallel_groups[action['actionGroup']]
+                for parallel_action in parallel_group:
+                    del parallel_groups[parallel_action["actionGroup"]]
+                self.parallelized_executor.start_processes(self, parallel_group)
 
             self.log_action_details(action)
-            if "parallel_process" in action:
-                process_index = action["parallel_process"]
-                del action["parallel_process"]
-
-                handle_action_result = self.parallelized_executor.processes[process_index].result()
+            parallel_process = self.parallelized_executor.get_process(action["actionGroup"])
+            if parallel_process is not None:
+                handle_action_result = parallel_process.result()
                 _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_handle_action_result(
                     handle_action_result, self.status, self.state, self.context, self.run_queue
                 )
