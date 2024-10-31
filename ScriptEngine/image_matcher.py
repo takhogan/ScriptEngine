@@ -309,7 +309,7 @@ class ImageMatcher:
         h, w = screencap_search_bgr.shape[0:2]
         # if len(screencap_search_bgr.shape) < 3:
         #     screencap_search_bgr = cv2.cvtColor(screencap_search_bgr, cv2.COLOR_GRAY2BGR)
-        threshold = detectObject['actionData']['threshold']
+        threshold = float(detectObject['actionData']['threshold'])
 
         # draw red box around best match
         if detectObject['actionData']['detectActionType'] == "detectObject":
