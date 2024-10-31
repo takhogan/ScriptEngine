@@ -281,4 +281,5 @@ class DetectObjectHelper:
         update_queue, status = DetectObjectHelper.update_update_queue(
             action, state, context, matches, update_queue
         )
+        script_logger.log('update_queue', update_queue)
         return action, status, state, context, run_queue, update_queue

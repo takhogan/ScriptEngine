@@ -202,8 +202,9 @@ class ImageMatcher:
             height_translation=1,
             width_translation=1,
             script_mode='test', output_cropping=None):
+
         h, w = screencap_search_bgr.shape[0:2]
-        dist_threshold = max(min(w, h) * 0.2, MINIMUM_MATCH_PIXEL_SPACING)
+        dist_threshold = max(min(h, w) * 0.2, MINIMUM_MATCH_PIXEL_SPACING)
         matches = []
         match_img_index = 1
         unpacked_results = list(zip(*thresholded_match_results[::-1]))
@@ -261,52 +262,95 @@ class ImageMatcher:
                     #     match_result[pt[1], pt[0]]) + '-img.png', match_img_bgr)
                 match_img_index += 1
         matches.sort(reverse=True, key=lambda match: match[1])
-        result_log = '{} initial matches meeting threshold. {} matches after pruning.\n'.format(
+        initial_result_log = '{} initial matches meeting threshold. {} matches after pruning.\n'.format(
             initial_matches,
             len(matches)
         )
 
+        script_logger.log(initial_result_log)
+        script_logger.get_action_log().append_supporting_file(
+            'text',
+            'detect_result.txt',
+            initial_result_log
+        )
+
         #pt = (x, y)
-        def adjust_box_to_bounds(pt, box_width, box_height, screen_width, screen_height, box_thickness):
-            x_overshoot = pt[0] + box_width + box_thickness - screen_width
-            y_overshoot = pt[1] + box_height + box_thickness - screen_height
-            return (
-                max(0, box_width - x_overshoot if x_overshoot > 0 else box_width),
-                max(0, box_height - y_overshoot if y_overshoot > 0 else box_height)
-            )
+
+        result_im_bgr = ImageMatcher.create_result_im(
+            detectObject,
+            screencap_im_bgr,
+            screencap_search_bgr,
+            matches,
+            match_result,
+            False
+        )
+
+        # if thresholded_match_results[0].size == 0 and best_match_pt is not None:
+        #     box_w, box_h = adjust_box_to_bounds(best_match_pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+        #     cv2.rectangle(result_im_bgr, best_match_pt, (best_match_pt[0] + box_w, best_match_pt[1] + box_h), (255, 0, 0), 2)
+        return matches, match_result, result_im_bgr
+
+    @staticmethod
+    def adjust_box_to_bounds(pt, box_width, box_height, screen_width, screen_height, box_thickness):
+        x_overshoot = pt[0] + box_width + box_thickness - screen_width
+        y_overshoot = pt[1] + box_height + box_thickness - screen_height
+        return (
+            max(0, box_width - x_overshoot if x_overshoot > 0 else box_width),
+            max(0, box_height - y_overshoot if y_overshoot > 0 else box_height)
+        )
+
+    @staticmethod
+    def create_result_im(detectObject, screencap_im_bgr, screencap_search_bgr, matches, match_result, input_rescaled):
+
 
         best_point = 'None'
         best_point_score = 0
         result_im_bgr = screencap_im_bgr.copy()
-        box_w = box_h = -1
-        if len(matches) > 0:
-            best_point = matches[0][0]
-            best_point_score = matches[0][1]
+        h, w = screencap_search_bgr.shape[0:2]
+        # if len(screencap_search_bgr.shape) < 3:
+        #     screencap_search_bgr = cv2.cvtColor(screencap_search_bgr, cv2.COLOR_GRAY2BGR)
+        threshold = detectObject['actionData']['threshold']
+
+        # draw red box around best match
+        if detectObject['actionData']['detectActionType'] == "detectObject":
+            if len(matches) > 0:
+                best_point = matches[0][0]
+                best_point_score = matches[0][1]
+            else:
+                valid_matched_points = np.where(np.isinf(match_result) | np.isnan(match_result), -np.inf, match_result)
+                max_valid_point = np.max(valid_matched_points)
+                if max_valid_point != -np.inf:
+                    best_point = np.unravel_index(np.argmax(valid_matched_points), valid_matched_points.shape)
+                    best_point_score = float(match_result[best_point])
+                    best_point = (best_point[1], best_point[0])
+                    box_w, box_h = ImageMatcher.adjust_box_to_bounds(best_point, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+                    end_y = min(best_point[1] + box_h, result_im_bgr.shape[0])
+                    end_x = min(best_point[0] + box_w, result_im_bgr.shape[1])
+                    slice_h = end_y - best_point[1]
+                    slice_w = end_x - best_point[0]
+                    result_im_bgr[
+                        best_point[1]:best_point[1] + box_h, best_point[0]:best_point[0] + box_w
+                    ] = screencap_search_bgr[:slice_h,:slice_w]
+                    result_im_bgr = cv2.addWeighted(result_im_bgr, 0.3, screencap_im_bgr, 0.7, 0)
+                    cv2.rectangle(
+                        result_im_bgr,
+                        best_point,
+                        (best_point[0] + box_w,
+                         best_point[1] + box_h),
+                        (0, 0, int((255 * best_point_score + 255) / 2)),
+                        2
+                    )
         else:
-            valid_matched_points = np.where(np.isinf(match_result) | np.isnan(match_result), -np.inf, match_result)
-            max_valid_point = np.max(valid_matched_points)
-            if max_valid_point != -np.inf:
-                best_point = np.unravel_index(np.argmax(valid_matched_points), valid_matched_points.shape)
-                best_point_score = float(match_result[best_point])
-                best_point = (best_point[1], best_point[0])
-                box_w, box_h = adjust_box_to_bounds(best_point, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-                end_y = min(best_point[1] + box_h, result_im_bgr.shape[0])
-                end_x = min(best_point[0] + box_w, result_im_bgr.shape[1])
-                slice_h = end_y - best_point[1]
-                slice_w = end_x - best_point[0]
-                result_im_bgr[
-                    best_point[1]:best_point[1] + box_h, best_point[0]:best_point[0] + box_w
-                ] = screencap_search_bgr[:slice_h,:slice_w]
-                result_im_bgr = cv2.addWeighted(result_im_bgr, 0.3, screencap_im_bgr, 0.7, 0)
-                cv2.rectangle(
-                    result_im_bgr,
-                    best_point,
-                    (best_point[0] + box_w,
-                     best_point[1] + box_h),
-                    (0, 0, int((255 * best_point_score + 255) / 2)),
-                    2
-                )
-        result_log += 'Best valid match: {} with score {}\n'.format(
+            cv2.rectangle(
+                screencap_im_bgr,
+                matches[0][0],
+                (
+                    matches[0][0][0] + w,
+                    matches[0][0][1] + h,
+                ), (0, 0, int(255 * matches[0][1])), 2
+            )
+
+        result_log = 'Best valid match: {} with score {}\n'.format(
             str(best_point),
             str(best_point_score)
         )
@@ -319,29 +363,30 @@ class ImageMatcher:
         )
 
         overlay = result_im_bgr.copy()
+        alpha = 0.5
 
-        if str(detectObject['actionData']['maxMatches']).isdigit():
-            max_matches = int(detectObject['actionData']['maxMatches'])
-        else:
-            max_matches = 1 # state_eval(detectObject['actionData']['maxMatches'], {}, state)
-        alpha = 0.5  # 0.0 fully transparent, 1.0 fully opaque
+        # draw search image over matches
+        if detectObject['actionData']['detectActionType'] == "detectObject":
+            for match_obj in matches:
+                pt = tuple(map(int, match_obj[0]))
+                box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+                end_y = min(pt[1] + box_h, result_im_bgr.shape[0])
+                end_x = min(pt[0] + box_w, result_im_bgr.shape[1])
+                slice_h = end_y - pt[1]
+                slice_w = end_x - pt[0]
+                result_im_bgr[
+                    pt[1]:pt[1] + box_h, pt[0]:pt[0] + box_w
+                ] = screencap_search_bgr[:slice_h, :slice_w]
+            result_im_bgr = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
+
+
+        # color in match area of matches above threshold with red
         for match_obj in matches:
             pt = tuple(map(int, match_obj[0]))
-            box_w, box_h = adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-            end_y = min(pt[1] + box_h, result_im_bgr.shape[0])
-            end_x = min(pt[0] + box_w, result_im_bgr.shape[1])
-            slice_h = end_y - pt[1]
-            slice_w = end_x - pt[0]
-            result_im_bgr[
-                pt[1]:pt[1] + box_h, pt[0]:pt[0] + box_w
-            ] = screencap_search_bgr[:slice_h, :slice_w]
-
-        overlay = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
-        for match_obj in matches:
-            pt = tuple(map(int, match_obj[0]))
-
-            box_w, box_h = adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-
+            score = match_obj[1]
+            if score < threshold:
+                continue
+            box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
             cv2.rectangle(
                 overlay,
                 pt,
@@ -349,11 +394,20 @@ class ImageMatcher:
                 (0, 0, 255),
                 thickness=-1
             )
-
         result_im_bgr = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
+
+        if 'maxMatches' in detectObject['actionData'] and str(detectObject['actionData']['maxMatches']).isdigit():
+            max_matches = int(detectObject['actionData']['maxMatches'])
+        else:
+            max_matches = 1
+
+        # draw blue rectangle around matches above threshold
         for match_index in range(0, min(max_matches, len(matches))):
             pt = tuple(map(int, matches[match_index][0]))
-            box_w, box_h = adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+            score = matches[match_index][1]
+            if score < threshold:
+                continue
+            box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
             cv2.rectangle(
                 result_im_bgr,
                 pt,
@@ -362,7 +416,8 @@ class ImageMatcher:
                 2
             )
 
-        if detectObject['input_obj']['fixed_scale']:
+        # place subimage inside original image if input expression is an image
+        if detectObject['input_obj']['fixed_scale'] and not input_rescaled:
             rescaled_result_im_bgr = detectObject['input_obj']['original_image'].copy()
             match_point = detectObject['input_obj']['match_point']
             rescaled_result_im_bgr[
@@ -380,11 +435,7 @@ class ImageMatcher:
         else:
             rescaled_result_im_bgr = result_im_bgr
 
-
-        # if thresholded_match_results[0].size == 0 and best_match_pt is not None:
-        #     box_w, box_h = adjust_box_to_bounds(best_match_pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-        #     cv2.rectangle(result_im_bgr, best_match_pt, (best_match_pt[0] + box_w, best_match_pt[1] + box_h), (255, 0, 0), 2)
-        return matches, match_result, rescaled_result_im_bgr
+        return rescaled_result_im_bgr
 
     # def produce_logistic_matches(self, screencap_im, screencap_search, screencap_mask, logs_path, assets_folder, threshold=0.7):
     #     # https://towardsdatascience.com/logistic-regression-using-python-sklearn-numpy-mnist-handwriting-recognition-matplotlib-a6b31e2b166a
