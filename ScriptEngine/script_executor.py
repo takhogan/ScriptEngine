@@ -138,7 +138,8 @@ class ScriptExecutor:
         os.makedirs(self.log_folder + '/search_patterns', exist_ok=True)
         self.log_folder += '/'
         if self.parent_action_log is not None:
-            self.parent_action_log.add_supporting_file_reference('text', 'stdout.txt', log_header=False)
+            script_logger.log('adding supporting file reference for', self.props['script_name'], script_logger.get_action_log().get_action_log_path())
+            self.parent_action_log.add_supporting_absolute_file_reference('text', self.log_folder + 'stdout.txt')
         return self.log_folder
 
     def set_log_paths(self):

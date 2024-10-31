@@ -123,6 +123,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         base_script_object = script_object.copy()
         base_script_object['inputs'] = constants
 
+        # action logger for the script running the scriptReference
+        script_logger.configure_action_logger(script_object['props']['scriptReference'], 1, None)
         main_script = ScriptExecutor(
             base_script_object,
             timeout,
@@ -133,16 +135,17 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
             process_executor,
             script_start_time=start_time
         )
+
         try:
-            script_logger.configure_action_logger({
-                "actionName": "inputsParser",
-                "actionGroup": -1,
-                "actionData": {
-                    "targetSystem": "none"
-                }
-            }, 0, None)
             main_script.parse_inputs({})
-            script_logger.configure_action_logger(script_object['props']['scriptReference'], 1, None)
+            # action logger for the scriptReference
+            main_script.context["script_counter"] += 1
+            script_logger.configure_action_logger(
+                script_object['props']['scriptReference'],
+                main_script.context["script_counter"],
+                script_logger.get_action_log()
+            )
+            script_logger.get_action_log().add_supporting_file_reference('text', 'global-stdout.txt', log_header=False)
             main_script.handle_action(
                 script_object['props']['scriptReference']
             )
@@ -213,12 +216,15 @@ if __name__=='__main__':
             constants.append([arg_split[0], arg_split[1], False])
 
     log_folder = './logs/' + str(0).zfill(5) + '-' +\
-                 script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/stdout.txt'
-    script_logger.set_log_file_path(log_folder)
-    script_logger.set_log_header('')
+                 script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/'
+    script_logger.set_log_file_path(log_folder + 'global-stdout.txt')
+    script_logger.set_log_folder(log_folder)
+    script_logger.set_log_header('SCRIPT MANAGER')
+    script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
+
     script_logger.set_log_level(log_level)
-    script_logger.log('SCRIPT MANAGER: completed parsing args ', sys.argv)
-    script_logger.log('SCRIPT MANAGER: loading script {} and running with log level {}'.format(
+    script_logger.log('completed parsing args ', sys.argv)
+    script_logger.log('loading script {} and running with log level {}'.format(
         script_name, script_logger.get_log_level())
     )
     load_and_run(

@@ -3,6 +3,7 @@ import numpy as np
 
 from script_engine_utils import masked_mse
 from script_logger import ScriptLogger
+from image_matcher import ImageMatcher
 script_logger = ScriptLogger()
 
 class DetectSceneHelper:
@@ -70,17 +71,27 @@ class DetectSceneHelper:
         post_log = 'Final output image size is {}'.format(str(match_img_bgr.shape))
         script_logger.log(post_log)
 
-        cv2.rectangle(
+        # cv2.rectangle(
+        #     screencap_im_bgr,
+        #     location_val,
+        #     (
+        #         location_val[0] + object_w,
+        #         location_val[1] + object_h,
+        #     ), (0, 0, int(255 * ssim_coeff)), 2
+        # )
+
+        result_im_bgr = ImageMatcher.create_result_im(
+            sceneAction,
             screencap_im_bgr,
-            location_val,
-            (
-                location_val[0] + object_w,
-                location_val[1] + object_h,
-            ), (0, 0, 255), 2
+            object_mask_single_channel,
+            [(location_val, ssim_coeff)],
+            None,
+            needs_rescale
         )
+
         if script_logger.get_log_level() == 'info':
             matching_overlay_relative_path = 'detectScene-matchOverlayed.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, screencap_im_bgr)
+            cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
             script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
             masked_img_relative_path = 'detectScene-maskApplied.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + masked_img_relative_path, screencap_masked)
@@ -88,6 +99,7 @@ class DetectSceneHelper:
             comparison_img_relative_path = 'detectScene-comparisonImage.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, screencap_compare)
             script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
+
         output_mask_single_channel = sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].copy()
         post_post_log = ''
         if needs_rescale:

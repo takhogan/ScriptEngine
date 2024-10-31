@@ -15,7 +15,7 @@ class ScriptActionLog:
         self.name = action["actionName"] + '-' + str(action["actionGroup"])
         self.script_counter = script_counter
         self.status = 'RUNNING'
-        self.start_time = datetime.datetime.now()
+        self.start_time = datetime.datetime.now(datetime.timezone.utc)
         self.script_log_folder = None
         self.target_system = action['actionData']['targetSystem']
 
@@ -42,7 +42,8 @@ class ScriptActionLog:
                 'log_object_type' : self.type,
                 'tree_entity_type' : 'node',
                 'status' : self.get_status(),
-                'elapsed' : (datetime.datetime.now() - self.start_time).total_seconds(),
+                'start_time' : self.start_time.strftime("%Y-%m-%d %H:%M:%S.%f"),
+                'elapsed' : (datetime.datetime.now(datetime.timezone.utc) - self.start_time).total_seconds(),
                 'pre_file' : {
                     'file_type' : self.pre_file[0],
                     'file_path' : self.pre_file[1]
@@ -143,6 +144,12 @@ class ScriptActionLog:
         for supporting_file_type,supporting_file_path in self.supporting_files:
             assert supporting_file_path != new_supporting_file_path
         self.supporting_files.append((file_type, new_supporting_file_path))
+        self.to_dict()
+
+    def add_supporting_absolute_file_reference(self, file_type, absolute_path):
+        for supporting_file_type,supporting_file_path in self.supporting_files:
+            assert supporting_file_path != absolute_path
+        self.supporting_files.append((file_type, absolute_path))
         self.to_dict()
 
     def add_supporting_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
