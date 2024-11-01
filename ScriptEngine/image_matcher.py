@@ -307,8 +307,8 @@ class ImageMatcher:
         best_point_score = 0
         result_im_bgr = screencap_im_bgr.copy()
         h, w = screencap_search_bgr.shape[0:2]
-        # if len(screencap_search_bgr.shape) < 3:
-        #     screencap_search_bgr = cv2.cvtColor(screencap_search_bgr, cv2.COLOR_GRAY2BGR)
+        if len(screencap_search_bgr.shape) < 3:
+            screencap_search_bgr = cv2.cvtColor(screencap_search_bgr, cv2.COLOR_GRAY2BGR)
         threshold = float(detectObject['actionData']['threshold'])
 
         # draw red box around best match
