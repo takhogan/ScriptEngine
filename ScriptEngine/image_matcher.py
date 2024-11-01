@@ -308,6 +308,7 @@ class ImageMatcher:
         result_im_bgr = screencap_im_bgr.copy()
         h, w = screencap_search_bgr.shape[0:2]
         if len(screencap_search_bgr.shape) < 3:
+            script_logger.log('converting search image to BGR for logging')
             screencap_search_bgr = cv2.cvtColor(screencap_search_bgr, cv2.COLOR_GRAY2BGR)
         threshold = float(detectObject['actionData']['threshold'])
 
