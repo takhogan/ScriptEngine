@@ -167,7 +167,7 @@ class SystemHostController:
                 'and incrementBy params {}'.format(incrementby_stripped)
             script_logger.log(pre_log)
             if not counterVarName in state:
-                initialValue = 0
+                initialValue = '0'
                 if "initialValue" in action["actionData"]:
                     initialValue = action["actionData"]["initialValue"].strip()
                 initial_value_stripped = sanitize_input(initialValue, state)
