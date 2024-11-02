@@ -159,6 +159,7 @@ class SystemHostController:
             counterVarName = action["actionData"]["counterVarName"].strip()
             counterThreshold = action["actionData"]["counterThreshold"].strip()
             incrementBy = action["actionData"]["incrementBy"].strip()
+
             threhold_stripped = sanitize_input(counterThreshold, state)
             incrementby_stripped = sanitize_input(incrementBy, state)
             pre_log = 'with counter name {}'.format(counterVarName) +\
@@ -166,7 +167,20 @@ class SystemHostController:
                 'and incrementBy params {}'.format(incrementby_stripped)
             script_logger.log(pre_log)
             if not counterVarName in state:
-                state[counterVarName] = 0
+                initialValue = 0
+                if "initialValue" in action["actionData"]:
+                    initialValue = action["actionData"]["initialValue"].strip()
+                initial_value_stripped = sanitize_input(initialValue, state)
+
+                initial_value_logs = 'Setting initial value with initialValue params {}'.format(initial_value_stripped)
+                script_logger.log(initial_value_logs)
+                initial_value = state_eval(initialValue, {}, state)
+                state[counterVarName] = initial_value
+
+                initial_value_post_logs = 'Evaluated initial value to {}'.format(initial_value)
+                script_logger.log(initial_value_post_logs)
+                pre_log += '\n' + initial_value_logs + '\n' + initial_value_post_logs
+
             counter_value = state_eval(counterVarName, {}, state)
             threshold_value = state_eval(counterThreshold, {}, state)
             if counter_value < threshold_value:
@@ -879,6 +893,20 @@ class SystemHostController:
                 script_logger.log("DB provider unimplemented")
                 raise Exception(action["actionName"] + ' DB provider unimplemented')
             status = ScriptExecutionState.SUCCESS
+        elif action["actionName"] == "maskMergeAction":
+            # // leftInputExpression: string,
+            # // rightInputExpression: string,
+            # // joinLeftAt: 'angle' | 'topLeft' | 'top' | 'topRight' | 'right' | 'bottomRight' | 'bottom' | 'bottomLeft' | 'left',
+            # // joinRightAt: 'angle' | 'topLeft' | 'top' | 'topRight' | 'right' | 'bottomRight' | 'bottom' | 'bottomLeft' | 'left',
+            # // leftMaskType: 'floating' | 'fixed',
+            # // rightMaskType: 'floating' | 'fixed',
+            # // includeLeftMask: boolean,
+            # // includeRightMask: boolean,
+            # // includeSpaceBetween: boolean,
+            # // fillWith: 'horizontalOverlap' | 'verticalOverlap' | 'linear'
+            # // useFillBoundaries: 'left' | 'right' | 'both',
+            # // outputVarName: string
+            pass
         else:
             return self.python_host.handle_action(action, state, context, run_queue)
         return action, status, state, context, run_queue, []

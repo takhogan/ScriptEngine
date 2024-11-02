@@ -23,6 +23,7 @@ class RandomVariableHelper:
 
     @staticmethod
     def get_rv_val(action, repeats: int = None) -> List[float]:
+        script_logger.log('calculating delay value')
         if action["actionData"]["distributionType"] == 'normal':
             mean = action["actionData"]["normalDistMean"]
             stddev = action["actionData"]["normalDistStdDev"]

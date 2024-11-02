@@ -52,7 +52,9 @@ class DeviceActionInterpreter:
                 for hotKeyKey in hotKeyKeys:
                     device.keyDown(hotKeyKey)
                 typed_chars_log += ' '.join(hotKeyKeys)
-                time.sleep(RandomVariableHelper.get_rv_val(keyboard_action)[0])
+                delay_val = RandomVariableHelper.get_rv_val(keyboard_action)[0]
+                script_logger.log('Sleeping for {} seconds'.format(delay_val))
+                time.sleep(delay_val)
                 for hotKeyKey in reversed(hotKeyKeys):
                     device.keyUp(hotKeyKey)
         else:
@@ -84,7 +86,9 @@ class DeviceActionInterpreter:
                 for keyPressKey in keyPressKeys:
                     device.keyDown(keyPressKey)
                     typed_chars_log += keyPressKey + ' '
-                time.sleep(RandomVariableHelper.get_rv_val(keyboard_action)[0])
+                delay_val = RandomVariableHelper.get_rv_val(keyboard_action)[0]
+                script_logger.log('Sleeping for {} seconds'.format(delay_val))
+                time.sleep(delay_val)
                 for keyPressKey in keyPressKeys:
                     device.keyUp(keyPressKey)
         script_logger.log(typed_chars_log)
