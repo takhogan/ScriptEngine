@@ -2,9 +2,11 @@ import cv2
 import sys
 import json
 import numpy as np
-
+import os
 sys.path.append("..")
 
+bin_path = os.path.abspath("bin")
+os.environ["PATH"] += os.pathsep + bin_path
 
 class ScriptLogPreviewGenerator:
     def __init__(self):
@@ -122,6 +124,6 @@ class ScriptLogPreviewGenerator:
 
 if __name__=='__main__':
     ScriptLogPreviewGenerator.assemble_script_log_preview(
-        '/Users/takhogan/Documents/Script-Engine-Controller/logs/00000-DeviceToWaoLoadingScreen-2024-10-14 22-49-41/00001-scriptReference-0-action-log.json',
+        r'C:\Users\takho\Script-Engine-Controller\logs\00000-BlueStacks_WAO_ClosePopUps-2024-11-03 21-34-11\00001-scriptReference-0-action-log.json',
         'test'
     )
