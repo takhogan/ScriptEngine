@@ -26,10 +26,8 @@ class ScriptLogPreviewGenerator:
     @staticmethod
     def log_tree_to_image_list(log_tree, image_list):
         if log_tree['name'].startswith('detectObject') or\
-            log_tree['name'].startswith('clickAction') or\
-            log_tree['name'].startswith('dragLocationSource') or\
-            log_tree['name'].startswith('dragLocationTarget') or\
-            log_tree['name'].startswith('mouseScrollAction'):
+            log_tree['name'].startswith('mouseInteractionAction') or\
+            log_tree['name'].startswith('mouseMoveAction'):
             if "file_path" in log_tree['post_file']:
                 image_list.append({
                     'script_name': log_tree['base_path'].split('/')[-2],
