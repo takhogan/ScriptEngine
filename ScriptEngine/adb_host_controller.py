@@ -943,7 +943,7 @@ class adb_host:
     def y_command_func(self, y_val):
         return self.sendevent_command.format(3, int('36', 16), y_val)
 
-    def click(self, x, y, important=True):
+    def click(self, x, y, important=True, mouse_up=True):
         # 1st point always the og x,y
         script_logger.log('clicking')
         if self.dummy_mode:
@@ -1014,7 +1014,7 @@ class adb_host:
             footer_commands = ['(',
                                self.commands["syn_mt_report"],
                                self.commands["action_terminate_command"],
-                               ')']
+                               ')'] if mouse_up else []
             click_command += footer_commands
         elif self.emulator_type == 'avd':
             click_command.append('input tap {} {};'.format(
@@ -1052,6 +1052,15 @@ class adb_host:
         )
         # script_logger.log((''.join(click_command)).encode('utf-8'))
         self.event_counter += 1
+
+    def mouse_down(self, x, y):
+        self.click(x, y, important=True, mouse_up=False)
+
+    def mouse_up(self, x, y):
+        self.click(x, y)
+
+    def scroll(self, x, y, scroll_distance):
+        raise Exception('Scroll Action unsupported on device type Android')
 
     def delta_sequence_to_commands(self, x_pos, y_pos, delta_xs, delta_ys, unmap=False, split=True):
         script_logger.log('sequence len', len(delta_xs))
@@ -1100,7 +1109,7 @@ class adb_host:
             ))
         return commands
 
-    def click_and_drag(self, source_x, source_y, target_x, target_y):
+    def click_and_drag(self, source_x, source_y, target_x, target_y, mouse_up=True):
         if self.dummy_mode:
             frac_source_x = (source_x / self.width)
             frac_target_x = (target_x / self.width)
@@ -1114,13 +1123,6 @@ class adb_host:
             return delta_x, delta_y
         command_strings = []
         if self.emulator_type == 'bluestacks':
-            # yes x and y are flipped on purpouse
-            # if self.device_profile == 'windows-bluestacks-8GB':
-            #     frac_source_x = ((self.height - source_y) / self.height)
-            #     frac_source_y = (source_x / self.width)
-            #     frac_target_x = ((self.height - target_y) / self.height)
-            #     frac_target_y = (target_x / self.width)
-            # else:
             frac_source_x = (source_x / self.width)
             frac_target_x = (target_x / self.width)
             frac_source_y = (source_y / self.height)
@@ -1133,11 +1135,6 @@ class adb_host:
             n_events = len(delta_x)
             mapped_source_x = int(frac_source_x * self.xmax)
             mapped_source_y = int(frac_source_y * self.ymax)
-
-            # script_logger.log(mapped_source_x)
-            # script_logger.log(mapped_source_y)
-            # script_logger.log(sum(delta_x), delta_x)
-            # script_logger.log(sum(delta_y), delta_y)
 
             init_click_commands = [
 
@@ -1163,7 +1160,7 @@ class adb_host:
             footer_commands = [
                 self.commands["syn_mt_report"],
                 self.commands["action_terminate_command"]
-            ]
+            ] if mouse_up else []
             command_strings += footer_commands
         elif self.emulator_type == 'avd':
             # frac_source_x = (source_x / self.width)
@@ -1179,8 +1176,8 @@ class adb_host:
             mapped_source_y = int((source_y / self.height) * self.ymax)
             # x_pos = mapped_source_x
             # y_pos = mapped_source_y
-            delta_x = [int(self.xmax * (source_x - target_x) / self.width)]
-            delta_y = [int(self.ymax * (source_y - target_y) / self.height)]
+            delta_x = [int(self.xmax * (target_x - source_x) / self.width)]
+            delta_y = [int(self.ymax * (target_y - source_y) / self.height)]
             command_strings.append('input swipe {} {} {} {} {};'.format(
                 source_x, source_y,
                 target_x, target_y,
@@ -1220,8 +1217,8 @@ class adb_host:
                             source_point, source_point_list,
                             target_point, target_point_list,
                             delta_x, delta_y):
-        # thread_local_storage.script_logger = thread_script_logger
-        # thread_script_logger.log('started draw click thread')
+        thread_local_storage.script_logger = thread_script_logger
+        thread_script_logger.log('started draw click thread')
         delta_x = list(map(lambda x: (x / self.xmax) * self.width, delta_x))
         delta_y = list(map(lambda y: (y / self.ymax) * self.height, delta_y))
         ClickActionHelper.draw_click_and_drag(
@@ -1272,73 +1269,128 @@ class adb_host:
                 action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_action_result(
                     handle_action_result, state, context, run_queue
                 )
-        elif action["actionName"] == "clickAction":
-            action["actionData"]["clickCount"] = int(action["actionData"]["clickCount"])
-            var_name = action["actionData"]["inputExpression"]
-            point_choice,point_list,state,context = ClickActionHelper.get_point_choice(
-                action, var_name, state, context,
-                self.width, self.height
+        elif action["actionName"] == "mouseInteractionAction":
+            point_choice, point_list = ClickActionHelper.get_point_choice(
+                action["actionData"]["sourceDetectTypeData"],
+                action["actionData"]["sourceDetectTypeData"]["inputExpression"],
+                action["actionData"]["sourcePointList"],
+                state,
+                self.width,
+                self.height,
+                1
             )
-            delays = [0] * action["actionData"]["clickCount"]
-            if action["actionData"]["delayState"] == "active":
-                delays = RandomVariableHelper.get_rv_val(action, action["actionData"]["clickCount"])
             script_logger.log('ADB CONTROLLER: starting draw click thread')
             thread_script_logger = script_logger.copy()
             self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
-            for click_count in range(0, action["actionData"]["clickCount"]):
-                self.click(point_choice[0], point_choice[1])
-                time.sleep(delays[click_count] if click_count > 1 else delays)
-            status = ScriptExecutionState.SUCCESS
 
-        elif action["actionName"] == "shellScript":
+            if action["actionData"]["mouseActionType"] == "click":
+                click_counts = int(action["actionData"]["clickCount"])
+                if click_counts > 1 and action["actionData"]["betweenClickDelay"]:
+                    delays = RandomVariableHelper.get_rv_val(action["actionData"]["randomVariableTypeData"], click_counts)
+                else:
+                    delays = [0]
+                for click_count in range(0, click_counts):
+                    self.click(*point_choice, action["actionData"]["mouseButton"])
+                    time.sleep(delays[click_count])
+            elif action["actionData"]["mouseActionType"] == "mouseUp":
+                if not context["mouse_down"]:
+                    script_logger.log("mouseUp selected but no mouseDown to release")
+                else:
+                    self.mouse_up(context["last_mouse_position"][0], context["last_mouse_position"][1])
+                    context["mouse_down"] = False
+            elif action["actionData"]["mouseActionType"] == "mouseDown":
+                context["mouse_down"] = True
+                context["last_mouse_position"] = point_choice
+                self.mouse_down(*point_choice)
+            elif action["actionData"]["mouseActionType"] == "scroll":
+                scroll_distance = action["actionData"]["scrollDistance"]
+                self.scroll(*point_choice, scroll_distance)
             status = ScriptExecutionState.SUCCESS
+        elif action["actionName"] == "mouseMoveAction":
+            source_point, point_list = ClickActionHelper.get_point_choice(
+                action["actionData"]["sourceDetectTypeData"],
+                action["actionData"]["sourceDetectTypeData"]["inputExpression"],
+                action["actionData"]["sourcePointList"],
+                state,
+                self.width,
+                self.height,
+                1
+            )
+            target_point, point_list = ClickActionHelper.get_point_choice(
+                action["actionData"]["targetDetectTypeData"],
+                action["actionData"]["targetDetectTypeData"]["inputExpression"],
+                action["actionData"]["targetPointList"],
+                state,
+                self.width,
+                self.height,
+                2
+            )
 
-        elif action["actionName"] == "dragLocationSource":
-            point_choice, point_list, state, context = ClickActionHelper.get_point_choice(
-                action, action['actionData']['inputExpression'], state, context,
-                self.width, self.height
-            )
-            context["dragLocationSource"] = {
-                'point_choice' : point_choice,
-                'point_list' : point_list
-            }
-            thread_script_logger = script_logger.copy()
-            self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
-            status = ScriptExecutionState.SUCCESS
+            if action["actionData"]["dragMouse"]:
+                drag_log = 'Dragging from {} to {}'.format(
+                    str(source_point),
+                    str(target_point)
+                )
+                script_logger.log(drag_log)
+                delta_x, delta_y = self.click_and_drag(
+                    source_point[0],
+                    source_point[1],
+                    target_point[0],
+                    target_point[1],
+                    mouse_up=action["actionData"]["releaseMouseOnCompletion"]
+                )
 
-        elif action["actionName"] == "dragLocationTarget":
-            source_point = context["dragLocationSource"]["point_choice"]
-            source_point_list = context["dragLocationSource"]["point_list"]
-            target_point, target_point_list, state, context = ClickActionHelper.get_point_choice(
-                action, action['actionData']['inputExpression'], state, context,
-                self.width, self.height
-            )
-            drag_log = 'Dragging from {} to {}'.format(
-                str(source_point),
-                str(target_point)
-            )
-            script_logger.log(drag_log)
-            delta_x, delta_y = self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
-            thread_script_logger = script_logger.copy()
-            # self.draw_click_and_drag(
-            #     thread_script_logger,
-            #     source_point,
-            #     source_point_list,
-            #     target_point,
-            #     target_point_list,
-            #     delta_x,
-            #     delta_y
-            # )
-            self.io_executor.submit(
-                self.draw_click_and_drag,
-                thread_script_logger,
-                source_point,
-                source_point_list,
-                target_point,
-                target_point_list,
-                delta_x,
-                delta_y
-            )
+                thread_script_logger = script_logger.copy()
+                self.io_executor.submit(
+                    self.draw_click_and_drag,
+                    thread_script_logger,
+                    source_point,
+                    {
+                        "input_type": "point_list",
+                        "point_list": action['actionData']['sourcePointList']
+                    },
+                    target_point,
+                    {
+                        "input_type": "point_list",
+                        "point_list": action['actionData']['targetPointList']
+                    },
+                    delta_x,
+                    delta_y
+                )
+            else:
+                if context["mouse_down"]:
+                    drag_log = 'Moving from {} to {} with mouse down'.format(
+                        str(source_point),
+                        str(target_point)
+                    )
+                    script_logger.log(drag_log)
+                    delta_x, delta_y = self.click_and_drag(
+                        source_point[0],
+                        source_point[1],
+                        target_point[0],
+                        target_point[1],
+                        mouse_up=action["actionData"]["releaseMouseOnCompletion"]
+                    )
+
+                    thread_script_logger = script_logger.copy()
+                    self.io_executor.submit(
+                        self.draw_click_and_drag,
+                        thread_script_logger,
+                        source_point,
+                        action['actionData']['sourcePointList'],
+                        target_point,
+                        action['actionData']['targetPointList'],
+                        delta_x,
+                        delta_y
+                    )
+                else:
+                    drag_log = 'Moving from {} to {} with mouse up. Note mouse movement on Android has no effect'.format(
+                        str(source_point),
+                        str(target_point)
+                    )
+                    script_logger.log(drag_log)
+                    context["last_mouse_position"] = target_point
+
             script_logger.get_action_log().add_supporting_file(
                 'text',
                 'drag-log.txt',

@@ -19,6 +19,7 @@ from script_executor import ScriptExecutor
 from script_engine_constants import *
 from device_manager import DeviceManager
 from script_engine_utils import datetime_to_local_str, imageFileExtensions
+from script_execution_state import ScriptExecutionState
 from system_script_handler import SystemScriptHandler
 from script_log_preview_generator import ScriptLogPreviewGenerator
 from script_logger import ScriptLogger
@@ -115,11 +116,6 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         # logger = multiprocessing.log_to_stderr()
         # logger.setLevel(multiprocessing.SUBDEBUG)
 
-        if system_script:
-            handle_result = SystemScriptHandler.handle_system_script(device_manager, script_name, {})
-            if handle_result == "return":
-                return
-
         base_script_object = script_object.copy()
         base_script_object['inputs'] = constants
 
@@ -146,26 +142,35 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
                 script_logger.get_action_log()
             )
             script_logger.get_action_log().add_supporting_file_reference('text', 'global-stdout.txt', log_header=False)
-            main_script.handle_action(
-                script_object['props']['scriptReference']
-            )
+            if system_script:
+                handle_result = SystemScriptHandler.handle_system_script(device_manager, script_name, {})
+                if handle_result == "return":
+                    script_logger.get_action_log().set_status(ScriptExecutionState.SUCCESS.name)
+                else:
+                    main_script.handle_action(
+                        script_object['props']['scriptReference']
+                    )
+            else:
+                main_script.handle_action(
+                    script_object['props']['scriptReference']
+                )
         except:
             io_executor.shutdown(wait=True)
             traceback.print_exc()
             errored = True
         else:
             io_executor.shutdown(wait=True)
-
-        sys.stderr.write("<--IGNORE-OPENCV-VIDEO-ENCODING-SCRIPT-ENGINE-ERRORS-->")
-        sys.stderr.flush()
-        with redirect_stderr(sys.stdout):
-            ScriptLogPreviewGenerator.assemble_script_log_preview(
-                main_script.script_action_log.get_action_log_path(),
-                main_script.log_folder + 'script-log-preview'
-            )
-            main_script.script_action_log.add_supporting_file_reference(
-                'video', 'script-log-preview.mp4', log_header=False
-            )
+        if not system_script:
+            sys.stderr.write("<--IGNORE-OPENCV-VIDEO-ENCODING-SCRIPT-ENGINE-ERRORS-->")
+            sys.stderr.flush()
+            with redirect_stderr(sys.stdout):
+                ScriptLogPreviewGenerator.assemble_script_log_preview(
+                    main_script.script_action_log.get_action_log_path(),
+                    main_script.log_folder + 'script-log-preview'
+                )
+                main_script.script_action_log.add_supporting_file_reference(
+                    'video', 'script-log-preview.mp4', log_header=False
+                )
     if errored:
         exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())
@@ -217,6 +222,7 @@ if __name__=='__main__':
 
     log_folder = './logs/' + str(0).zfill(5) + '-' +\
                  script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/'
+    print('log_folder', log_folder, start_time)
     script_logger.set_log_file_path(log_folder + 'global-stdout.txt')
     script_logger.set_log_folder(log_folder)
     script_logger.set_log_header('SCRIPT MANAGER')

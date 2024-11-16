@@ -250,7 +250,7 @@ class SystemHostController:
             state[action["actionData"]["outputVarName"]] = time_val
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "randomVariable":
-            rv_vals = RandomVariableHelper.get_rv_val(action)
+            rv_vals = RandomVariableHelper.get_rv_val(action["actionData"])
             state[action["actionData"]["outputVarName"]] = rv_vals[0]
             status = ScriptExecutionState.SUCCESS
             script_logger.log('created random values', rv_vals[0])

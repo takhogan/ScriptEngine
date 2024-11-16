@@ -22,23 +22,23 @@ class RandomVariableHelper:
         time.sleep(post_delay)
 
     @staticmethod
-    def get_rv_val(action, repeats: int = None) -> List[float]:
+    def get_rv_val(delayTypeData, repeats: int = None) -> List[float]:
         script_logger.log('calculating delay value')
-        if action["actionData"]["distributionType"] == 'normal':
-            mean = action["actionData"]["normalDistMean"]
-            stddev = action["actionData"]["normalDistStdDev"]
+        if delayTypeData["distributionType"] == 'normal':
+            mean = delayTypeData["normalDistMean"]
+            stddev = delayTypeData["normalDistStdDev"]
             mins = ((
-                        action["actionData"]["normalDistMin"] if repeats is None else np.repeat(action["actionData"]["normalDistMin"], repeats)
+                        delayTypeData["normalDistMin"] if repeats is None else np.repeat(delayTypeData["normalDistMin"], repeats)
                     ) - mean) / stddev
             maxes = ((
-                action["actionData"]["normalDistMax"] if repeats is None else np.repeat(action["actionData"]["normalDistMax"], repeats)
+                delayTypeData["normalDistMax"] if repeats is None else np.repeat(delayTypeData["normalDistMax"], repeats)
             ) - mean) / stddev
             rv_vals = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)
             rv_vals = [rv_vals] if repeats is None else rv_vals
             return rv_vals
-        elif action["actionData"]["distributionType"] == "uniform":
-            min_val = action["actionData"]["uniformDistMin"]
-            max_val = action["actionData"]["uniformDistMax"]
+        elif delayTypeData["distributionType"] == "uniform":
+            min_val = delayTypeData["uniformDistMin"]
+            max_val = delayTypeData["uniformDistMax"]
             dist_range = max_val - min_val
             if repeats is None:
                 rv_vals = [random.random() * dist_range + min_val]
@@ -46,6 +46,6 @@ class RandomVariableHelper:
                 rv_vals = [(random.random() * dist_range + min_val) for _ in range(0, repeats)]
             return rv_vals
         else:
-            exception_message = 'random variable unimplemented: ' + action["actionData"]["distributionType"]
+            exception_message = 'random variable unimplemented: ' + delayTypeData["distributionType"]
             script_logger.log(exception_message)
             raise Exception(exception_message)

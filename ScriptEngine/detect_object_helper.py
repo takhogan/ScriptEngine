@@ -178,11 +178,20 @@ class DetectObjectHelper:
             'detect_result.txt',
             ''
         )
-        screencap_search_bgr = action["actionData"]["positiveExamples"][0]["img"]
+        fixed_detect_obj = None
+        for positive_example in action["actionData"]["positiveExamples"]:
+            if positive_example["detectType"] == "fixedObject":
+                fixed_detect_obj = positive_example
+                break
+        floating_detect_obj = None
+        for positive_example in action["actionData"]["positiveExamples"]:
+            if positive_example["detectType"] == "floatingObject":
+                floating_detect_obj = positive_example
+                break
         if script_mode == "train" and script_logger.get_log_level() == 'info':
             template_image_relative_path = 'templateImage.png'
             cv2.imwrite(
-                script_logger.get_log_path_prefix() + template_image_relative_path, screencap_search_bgr
+                script_logger.get_log_path_prefix() + template_image_relative_path, floating_detect_obj["img"]
             )
             script_logger.get_action_log().add_supporting_file_reference(
                 'image',
@@ -192,6 +201,8 @@ class DetectObjectHelper:
                 action['actionData']['detectActionType'] == 'detectObject' and action['actionData'][
             'matchMode'] == 'firstMatch'
         )
+
+
         # if is match mode firstMatch or is a detectScene
         detect_scene_result_log = ''
         if is_detect_object_first_match or \
@@ -203,11 +214,8 @@ class DetectObjectHelper:
             matches, ssim_coeff = DetectSceneHelper.get_match(
                 action,
                 screencap_im_bgr.copy(),
-                action["actionData"]["positiveExamples"][0]["sceneimg"],
-                action["actionData"]["positiveExamples"][0]["scenemask"],
-                action["actionData"]["positiveExamples"][0]["scenemask_single_channel"],
-                action["actionData"]["positiveExamples"][0]["mask_single_channel"],
-                action["actionData"]["positiveExamples"][0]["outputMask"],
+                floating_detect_obj,
+                fixed_detect_obj,
                 check_image_scale=check_image_scale,
                 output_cropping=action["actionData"]["maskLocation"] if
                 (action["actionData"]["maskLocation"] != 'null' and
@@ -244,14 +252,10 @@ class DetectObjectHelper:
                 (is_detect_object_first_match and len(matches) == 0):
             detect_object_result_log = 'Performing detectActionType detect object'
             script_logger.log(detect_object_result_log)
-
             matches = ImageMatcher.template_match(
                 action,
                 screencap_im_bgr,
-                screencap_search_bgr,
-                action["actionData"]["positiveExamples"][0]["mask_single_channel"],
-                action["actionData"]["positiveExamples"][0]["outputMask"],
-                action["actionData"]["positiveExamples"][0]["outputMask_single_channel"],
+                floating_detect_obj,
                 action['actionData']['detectorName'],
                 script_mode,
                 match_point,
@@ -281,5 +285,4 @@ class DetectObjectHelper:
         update_queue, status = DetectObjectHelper.update_update_queue(
             action, state, context, matches, update_queue
         )
-        script_logger.log('update_queue', update_queue)
         return action, status, state, context, run_queue, update_queue
