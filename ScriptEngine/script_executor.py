@@ -111,7 +111,8 @@ class ScriptExecutor:
             'object_handler_encountered' : False,
             'run_queue': None,
             'actionOrder': 'sequential',
-            'success_states': None
+            'success_states': None,
+            'mouse_down' : False
         }
         self.parent_action_log = None
         self.script_action_log = None

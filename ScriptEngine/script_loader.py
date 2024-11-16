@@ -11,19 +11,27 @@ script_logger = ScriptLogger()
 
 def set_output_mask(positive_example, img_type_prefix, include_contained_area, exclude_matched_area):
     if include_contained_area and exclude_matched_area:
+        if "containedAreaMask" not in positive_example:
+            return positive_example
         positive_example[img_type_prefix + "outputMask"] = positive_example[
             img_type_prefix + "containedAreaMask"].copy()
     elif include_contained_area and not exclude_matched_area:
+        if "containedAreaMask" not in positive_example or "mask" not in positive_example:
+            return positive_example
         positive_example[img_type_prefix + "outputMask"] = cv2.bitwise_or(
             positive_example[img_type_prefix + "mask"].copy(),
             positive_example[img_type_prefix + "containedAreaMask"].copy()
         )
     elif not include_contained_area and exclude_matched_area:
+        if "containedAreaMask" not in positive_example or "mask" not in positive_example:
+            return positive_example
         positive_example[img_type_prefix + "outputMask"] = cv2.bitwise_and(
             positive_example[img_type_prefix + "mask"].copy(),
             positive_example[img_type_prefix + "containedAreaMask"].copy()
         )
     else:
+        if "mask" not in positive_example:
+            return positive_example
         positive_example[img_type_prefix + "outputMask"] = positive_example[img_type_prefix + "mask"].copy()
     positive_example[img_type_prefix + "outputMask_single_channel"] = np.uint8(
         cv2.cvtColor(positive_example[img_type_prefix + "outputMask"].copy(), cv2.COLOR_BGR2GRAY)
@@ -33,6 +41,7 @@ def set_output_mask(positive_example, img_type_prefix, include_contained_area, e
 def script_to_string(script_name, action_rows):
     def childGroupLink_to_child(childGroupLink):
         if not childGroupLink["type"] == "outOfAttemptsHandler":
+            script_logger.log('childGroupLink', childGroupLink)
             return action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]]
         return None
     def dfs(action, depth, visited, unpack_childLink=True):
@@ -69,9 +78,9 @@ def parse_script_file(
         script_zip=None):
     script_logger.log('SCRIPT LOAD: loading script ', script_name)
     def read_and_set_image(example, action, img_type):
-        # if script_zip is not None:
-        #     example[img_type] = cv2.imdecode(np.frombuffer(script_zip.open(script_name + '/').read()), cv2.IMREAD_COLOR)
-        example[img_type] = cv2.imread(dir_path + '/' + action["actionData"]["positiveExamples"][0][img_type])
+        if img_type in example and not example[img_type] is None:
+            script_logger.log(dir_path, example[img_type])
+            example[img_type] = cv2.imread(dir_path + '/' + example[img_type])
     with action_rows_file_obj as action_rows_file:
         action_rows = json.load(action_rows_file)
     script_logger.log(script_to_string(script_name, action_rows))
@@ -89,19 +98,13 @@ def parse_script_file(
                 include_contained_area = 'includeContainedAreaInOutput' in action["actionData"]["detectorAttributes"]
                 exclude_matched_area = 'excludeMatchedAreaFromOutput' in action["actionData"]["detectorAttributes"]
                 for example_index,positive_example in enumerate(action["actionData"]["positiveExamples"]):
-                    read_and_set_image(positive_example, action, "mask")
-                    positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
+                    if "mask" in positive_example and not positive_example["mask"] is None:
+                        read_and_set_image(positive_example, action, "mask")
+                        positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
                     read_and_set_image(positive_example, action, "containedAreaMask")
                     read_and_set_image(positive_example, action, "img")
-                    positive_example = set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)
+                    set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)
 
-                    if "scenemask" in action["actionData"]["positiveExamples"][0]:
-                        read_and_set_image(positive_example, action, "scenemask")
-                        positive_example["scenemask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["scenemask"].copy(), cv2.COLOR_BGR2GRAY))
-                        read_and_set_image(positive_example, action, "scenecontainedAreaMask")
-                        read_and_set_image(positive_example, action, "sceneimg")
-                        positive_example = set_output_mask(positive_example, 'scene', include_contained_area,exclude_matched_area)
-                    action["actionData"]["positiveExamples"][0] = positive_example
     with props_file_obj as props_file:
         props = json.load(props_file)
 

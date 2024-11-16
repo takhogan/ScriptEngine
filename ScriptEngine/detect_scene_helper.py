@@ -14,13 +14,17 @@ class DetectSceneHelper:
     def get_match(
             sceneAction,
             screencap_im_bgr,
-            screencap_compare,
-            scene_screencap_mask,
-            scene_screencap_mask_single_channel,
-            object_mask_single_channel,
-            screencap_outputmask_bgr,
+            floating_detect_obj,
+            fixed_detect_obj,
             check_image_scale=True,
             output_cropping=None):
+        screencap_compare = fixed_detect_obj["img"]
+        scene_screencap_mask = fixed_detect_obj["mask"]
+        scene_screencap_mask_single_channel = fixed_detect_obj["mask_single_channel"]
+        screencap_outputmask_bgr = floating_detect_obj["outputMask"]
+        object_mask_single_channel = floating_detect_obj["mask_single_channel"]
+
+
         mask_size = np.count_nonzero(scene_screencap_mask_single_channel)
         original_height,original_width = screencap_im_bgr.shape[0],screencap_im_bgr.shape[1]
 
@@ -56,7 +60,7 @@ class DetectSceneHelper:
         location_val = sceneAction["actionData"]["sceneLocation"][0]
         match_img_bgr = screencap_im_bgr[location_val[1]:location_val[1] + object_h, location_val[0]:location_val[0] + object_w].copy()
 
-        mid_log_4 = 'Applying mask to output. Output has size of {}'.format(str(match_img_bgr.shape))
+        mid_log_4 = 'Applying mask to output. Output has size of {}. Output mask has size of {}'.format(str(match_img_bgr.shape), str(screencap_outputmask_bgr.shape))
         script_logger.log(mid_log_4)
 
         match_img_bgr = cv2.bitwise_and(match_img_bgr, screencap_outputmask_bgr)

@@ -15,8 +15,7 @@ class ImageMatcher:
 
     @staticmethod
     def template_match(detectObject,
-                       screencap_im_bgr, screencap_search_bgr, screencap_mask_gray,
-                       screencap_outputmask_bgr, screencap_outputmask_gray,
+                       screencap_im_bgr, floating_detect_obj,
                        detector_name, script_mode, match_point,
                        check_image_scale=True,
                        output_cropping=None,
@@ -25,11 +24,7 @@ class ImageMatcher:
             matches, match_result, result_im_bgr = ImageMatcher.produce_template_matches(
                 detectObject,
                 screencap_im_bgr,
-                screencap_search_bgr,
-                screencap_mask_gray,
-                screencap_outputmask_bgr,
-                int(detectObject['actionData']['sourceScreenHeight']),
-                int(detectObject['actionData']['sourceScreenWidth']),
+                floating_detect_obj,
                 check_image_scale=check_image_scale,
                 output_cropping=output_cropping,
                 threshold=threshold,
@@ -45,7 +40,7 @@ class ImageMatcher:
             script_logger.log("detector unimplemented! ")
             exit(0)
 
-        h, w = screencap_outputmask_gray.shape[0:2]
+        h, w = floating_detect_obj["outputMask_single_channel"].shape[0:2]
         if script_logger.get_log_level() == 'info':
             matching_overlay_relative_path = 'detectObject-matchOverlayed.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
@@ -59,7 +54,7 @@ class ImageMatcher:
         return [{
                 'input_type': 'shape',
                 'point': (match[0] + match_point[0], match[1] + match_point[1]) if match_point is not None else match,
-                'shape': screencap_outputmask_gray,
+                'shape': floating_detect_obj["outputMask_single_channel"],
                 'matched_area': match_area,
                 'height': h,
                 'width': w,
@@ -75,15 +70,17 @@ class ImageMatcher:
     def produce_template_matches(
             detectObject,
             screencap_im_bgr,
-            screencap_search_bgr,
-            screencap_mask_gray,
-            screencap_outputmask_bgr,
-            source_screen_height,
-            source_screen_width,
+            floating_detect_obj,
             check_image_scale,
             output_cropping=None,
             threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
         # https://docs.opencv.org/3.4/de/da9/tutorial_template_matching.html
+        screencap_search_bgr = floating_detect_obj["img"]
+        screencap_mask_gray = floating_detect_obj["mask_single_channel"]
+        screencap_outputmask_bgr = floating_detect_obj["outputMask"]
+        source_screen_height = floating_detect_obj["sourceScreenHeight"]
+        source_screen_width = floating_detect_obj["sourceScreenWidth"]
+
         capture_height = screencap_im_bgr.shape[0]
         capture_width = screencap_im_bgr.shape[1]
         is_dims_mismatch = check_image_scale and (capture_width != source_screen_width or capture_height != source_screen_height)
