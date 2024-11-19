@@ -18,13 +18,26 @@ class ScriptActionLog:
         self.start_time = datetime.datetime.now(datetime.timezone.utc)
         self.script_log_folder = None
         self.target_system = action['actionData']['targetSystem']
+        self.attributes = {}
 
-        if action["actionData"]["targetSystem"] == "none" and action["actionName"] == "scriptReference":
-            self.type = 'script'
+        if action["actionName"] == "scriptReference":
+            self.type = "script"
             self.script_name = action["actionData"]["scriptName"]
         else:
-            self.type = 'action'
+            self.type = "action"
             self.script_name = None
+
+        if action["actionName"] == "scriptReference":
+            self.attributes = {
+                "branchingBehavior": action["actionData"]["branchingBehavior"],
+                "runMode": action["actionData"]["runMode"],
+                "actionOrder": action["actionData"]["actionOrder"],
+                "scriptMaxActionAttempts": action["actionData"]["scriptMaxActionAttempts"]
+            }
+        elif action["actionName"] == "detectObject":
+            self.attributes = {
+                "detectActionType": action["actionData"]["detectActionType"]
+            }
 
         self.to_dict()
 
@@ -66,7 +79,8 @@ class ScriptActionLog:
                         'tree_entity_type' : 'child',
                         'action_log_path' : child.get_action_log_path()
                     } for child in self.children
-                ]
+                ],
+                'attributes' : self.attributes
             }, action_log_file)
 
     def set_pre_file(self, file_type, relative_path : str, log_header : bool =True, absolute_path : bool =False):
