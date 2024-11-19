@@ -1048,7 +1048,7 @@ class adb_host:
               'shell'
             ],
             ''.join(click_command),
-            shell_process.communicate((''.join(click_command)).encode('utf-8'))
+            shell_process.communicate((''.join(click_command)).encode('utf-8'), timeout=15)
         )
         # script_logger.log((''.join(click_command)).encode('utf-8'))
         self.event_counter += 1
