@@ -853,7 +853,7 @@ class adb_host:
             header_format = '<4I'  # Little-endian, 4 unsigned integers
             w, h, f, c = struct.unpack(header_format, raw_data[:header_size])
 
-            script_logger.log(f"Width: {w}, Height: {h}, Format: {f}, Colorspace: {c}")
+            script_logger.log(f"Width: {w}, Height: {h}, Format: {f}, Colorspace: {c}, Image Size: {len(raw_data) - header_size}")
 
             # Map the pixel format to bytes per pixel (Bpp)
             if f == 1:  # PIXEL_FORMAT_RGBA_8888
