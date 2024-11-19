@@ -33,6 +33,7 @@ class ParallelizedScriptExecutor:
         # if you want to implement for other actions keep in mind you should filter here
         system_inputs = {}
         for process_index,parallel_action in enumerate(parallel_actions):
+            script_logger.log('Creating parallel process for ' + str(parallel_action["actionGroup"]))
             script_counter += 1
             action_log = script_logger.configure_action_logger(parallel_action, script_counter, parent_action_log)
             parallel_action["script_logger"] = (
@@ -71,8 +72,7 @@ class ParallelizedScriptExecutor:
                         system_inputs['python'] = input_obj
                 else:
                     raise Exception('unimplemented target system: ' + target_system)
-                script_logger.log('using input_obj', list(f'{k} {type(input_obj[k])}' for k in list(input_obj)))
-
+            script_logger.log('Generating parallel action handler for ' + str(parallel_action["actionGroup"]))
             parallel_action["input_obj"] = input_obj
             (action_handler, action_handler_args) = script_executor.handle_action(parallel_action, lazy_eval=True)
             helper = ParallelizedScriptExecutorHelper(action_handler)
