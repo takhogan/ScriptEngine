@@ -41,7 +41,6 @@ def set_output_mask(positive_example, img_type_prefix, include_contained_area, e
 def script_to_string(script_name, action_rows):
     def childGroupLink_to_child(childGroupLink):
         if not childGroupLink["type"] == "outOfAttemptsHandler":
-            script_logger.log('childGroupLink', childGroupLink)
             return action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]]
         return None
     def dfs(action, depth, visited, unpack_childLink=True):
