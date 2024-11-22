@@ -12,7 +12,7 @@ include_files = [(model_path, ".EasyOCR")]
 
 options = {
     'build_exe': {
-        'packages': ["ScriptEngine"],
+        'packages': ["ScriptEngine", "torch", "torchvision", "easyocr", "PIL"],
         "include_files": include_files
     }
 }
