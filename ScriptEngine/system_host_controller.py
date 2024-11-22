@@ -1,7 +1,6 @@
 from PIL import Image
 import tesserocr
 import re
-import requests
 import cv2
 import easyocr
 import json
