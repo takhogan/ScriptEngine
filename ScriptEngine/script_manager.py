@@ -1,19 +1,17 @@
-import sys
+import os
 from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
 
 from contextlib import redirect_stderr
 from dateutil import tz
-import os
+
 import cv2
 import json
 import traceback
-import multiprocessing, logging
+import multiprocessing
 import uuid
 import datetime
 import sys
-import warnings
 
-from parallelized_script_executor import ParallelizedScriptExecutor
 from script_loader import parse_zip
 from script_executor import ScriptExecutor
 from script_engine_constants import *
@@ -107,7 +105,6 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
                     script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
     errored = False
-    multiprocessing.set_start_method('spawn')
 
     with ThreadPoolExecutor(max_workers=50) as io_executor, ProcessPoolExecutor(max_workers=os.cpu_count()) as process_executor:
         device_manager = DeviceManager(script_name, script_object['props'], device_params, io_executor)
@@ -179,6 +176,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
 
 
 if __name__=='__main__':
+    multiprocessing.freeze_support()
+    multiprocessing.set_start_method('spawn')
     print('SCRIPT MANAGER: parsing args ', sys.argv)
     script_name = sys.argv[1]
     start_time = None
@@ -223,6 +222,8 @@ if __name__=='__main__':
     log_folder = './logs/' + str(0).zfill(5) + '-' +\
                  script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/'
     print('log_folder', log_folder, start_time)
+    os.makedirs(log_folder, exist_ok=True)
+
     script_logger.set_log_file_path(log_folder + 'global-stdout.txt')
     script_logger.set_log_folder(log_folder)
     script_logger.set_log_header('SCRIPT MANAGER')
