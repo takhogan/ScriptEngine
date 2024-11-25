@@ -285,21 +285,18 @@ class DetectObjectHelper:
     def create_detect_action_log_images(thread_script_logger, action, log_obj):
         thread_local_storage.script_logger = thread_script_logger
         script_logger = ScriptLogger.get_logger()
-        script_logger.log('log images for action', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+        script_logger.log('Creating log images for action', action["actionGroup"], script_logger.get_action_log().name)
 
         (screencap_im_bgr, floating_detect_obj) = log_obj['base']
 
         input_image_relative_path = 'detectObject-inputImage.png'
-        script_logger.log('log images for action .', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
 
         cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
-        script_logger.log('log images for action ..', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
 
         script_logger.get_action_log().set_pre_file(
             'image',
             input_image_relative_path
         )
-        script_logger.log('log images for action ...', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
 
 
         template_image_relative_path = 'templateImage.png'
@@ -310,7 +307,6 @@ class DetectObjectHelper:
             'image',
             template_image_relative_path
         )
-        script_logger.log('log images for action ^', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
 
 
         if log_obj['fixedObject'] is not None:
@@ -323,24 +319,18 @@ class DetectObjectHelper:
                 None,
                 needs_rescale
             )
-            script_logger.log('log images for action ^.', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
 
             matching_overlay_relative_path = 'detectScene-matchOverlayed.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
             script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
-            script_logger.log('log images for action ^..', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
 
             masked_img_relative_path = 'detectScene-maskApplied.png'
-            script_logger.log('log images for action ^...', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
             cv2.imwrite(script_logger.get_log_path_prefix() + masked_img_relative_path, screencap_masked)
-            script_logger.log('log images for action ^....', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
             script_logger.get_action_log().add_supporting_file_reference('image', masked_img_relative_path)
-            script_logger.log('log images for action ^.....', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
 
             comparison_img_relative_path = 'detectScene-comparisonImage.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, fixed_detect_obj["img"])
             script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
-        script_logger.log('log images for action ^^', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
 
         if log_obj['floatingObject'] is not None:
             (
@@ -363,7 +353,6 @@ class DetectObjectHelper:
             comparison_img_relative_path = 'detectObject-matchingHeatMap.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, match_result * 255)
             script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
-        script_logger.log('log images for action ^^^', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
 
 
     @staticmethod
