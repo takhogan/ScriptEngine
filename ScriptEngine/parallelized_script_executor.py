@@ -84,4 +84,6 @@ class ParallelizedScriptExecutor:
                 action_handler_args
             )
 
+            script_logger.log('Parallel process submitted to pool for ' + str(parallel_action["actionGroup"]))
+
             self.processes[parallel_action["actionGroup"]] = future
