@@ -1,5 +1,13 @@
 import os
 from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"Unable to retrieve source for @torch.jit._overload function",
+    category=UserWarning,
+    module=r"torch\._jit_internal"
+)
 
 from contextlib import redirect_stderr
 from dateutil import tz
