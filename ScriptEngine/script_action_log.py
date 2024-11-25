@@ -152,6 +152,7 @@ class ScriptActionLog:
             raise Exception('Unsupported File Type')
 
     def add_supporting_file_reference(self, file_type, relative_path, log_header=True):
+        print('add_supporting_file_reference', self.name, relative_path, flush=True)
         new_supporting_file_path = (
            self.default_path_header if log_header else self.base_path
         ) + relative_path
@@ -161,12 +162,15 @@ class ScriptActionLog:
         self.to_dict()
 
     def add_supporting_absolute_file_reference(self, file_type, absolute_path):
+        print('add_supporting_absolute_file_reference', self.name, absolute_path, flush=True)
+
         for supporting_file_type,supporting_file_path in self.supporting_files:
             assert supporting_file_path != absolute_path
         self.supporting_files.append((file_type, absolute_path))
         self.to_dict()
 
     def add_supporting_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
+        print('add_supporting_file', self.name, relative_path, flush=True)
         new_supporting_file_path = (
             self.default_path_header if log_header else self.base_path
         ) + relative_path
@@ -181,6 +185,8 @@ class ScriptActionLog:
             raise Exception('Unsupported File Type')
 
     def append_supporting_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
+        print('append_supporting_file', self.name, relative_path, flush=True)
+
         existing_supporting_file_path = (
             self.default_path_header if log_header else self.base_path
         ) + relative_path

@@ -21,7 +21,7 @@ class ImageMatcher:
                        output_cropping=None,
                        threshold=0.96, use_color=True, use_mask=True):
         if detector_name == "pixelDifference":
-            matches, match_result, result_im_bgr = ImageMatcher.produce_template_matches(
+            matches, match_result = ImageMatcher.produce_template_matches(
                 detectObject,
                 screencap_im_bgr,
                 floating_detect_obj,
@@ -41,14 +41,6 @@ class ImageMatcher:
             exit(0)
 
         h, w = floating_detect_obj["outputMask_single_channel"].shape[0:2]
-        if script_logger.get_log_level() == 'info':
-            matching_overlay_relative_path = 'detectObject-matchOverlayed.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
-            script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
-
-            comparison_img_relative_path = 'detectObject-matchingHeatMap.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, match_result * 255)
-            script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
 
         n_matches = len(matches)
         return [{
@@ -63,7 +55,7 @@ class ImageMatcher:
                 'original_width': detectObject['input_obj']['original_width'],
                 'score': score,
                 'n_matches': n_matches
-        } for match, score, match_area in matches]
+        } for match, score, match_area in matches], match_result
 
 
     @staticmethod
@@ -175,7 +167,7 @@ class ImageMatcher:
                 width_translation = capture_width/source_screen_width
         # if there is an erorr resize image to original dims, pass translation factor to filter_matches
 
-        return ImageMatcher.filter_matches_and_get_result_im(
+        return ImageMatcher.filter_matches(
             detectObject,
             match_result,
             thresholded_match_results,
@@ -189,7 +181,7 @@ class ImageMatcher:
         )
 
     @staticmethod
-    def filter_matches_and_get_result_im(
+    def filter_matches(
             detectObject,
             match_result,
             thresholded_match_results,
@@ -271,21 +263,7 @@ class ImageMatcher:
             initial_result_log
         )
 
-        #pt = (x, y)
-
-        result_im_bgr = ImageMatcher.create_result_im(
-            detectObject,
-            screencap_im_bgr,
-            screencap_search_bgr,
-            matches,
-            match_result,
-            False
-        )
-
-        # if thresholded_match_results[0].size == 0 and best_match_pt is not None:
-        #     box_w, box_h = adjust_box_to_bounds(best_match_pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-        #     cv2.rectangle(result_im_bgr, best_match_pt, (best_match_pt[0] + box_w, best_match_pt[1] + box_h), (255, 0, 0), 2)
-        return matches, match_result, result_im_bgr
+        return matches, match_result
 
     @staticmethod
     def adjust_box_to_bounds(pt, box_width, box_height, screen_width, screen_height, box_thickness):
@@ -298,8 +276,7 @@ class ImageMatcher:
 
     @staticmethod
     def create_result_im(detectObject, screencap_im_bgr, screencap_search_bgr, matches, match_result, input_rescaled):
-
-
+        script_logger = ScriptLogger.get_logger()
         best_point = 'None'
         best_point_score = 0
         result_im_bgr = screencap_im_bgr.copy()
@@ -312,8 +289,8 @@ class ImageMatcher:
         # draw red box around best match
         if detectObject['actionData']['detectActionType'] == "detectObject":
             if len(matches) > 0:
-                best_point = matches[0][0]
-                best_point_score = matches[0][1]
+                best_point = matches[0]['point']
+                best_point_score = matches[0]['score']
             else:
                 valid_matched_points = np.where(np.isinf(match_result) | np.isnan(match_result), -np.inf, match_result)
                 max_valid_point = np.max(valid_matched_points)
@@ -341,11 +318,11 @@ class ImageMatcher:
         else:
             cv2.rectangle(
                 screencap_im_bgr,
-                matches[0][0],
+                matches[0]['point'],
                 (
-                    matches[0][0][0] + w,
-                    matches[0][0][1] + h,
-                ), (0, 0, int(255 * matches[0][1])), 2
+                    matches[0]['point'][0] + w,
+                    matches[0]['point'][1] + h,
+                ), (0, 0, int(255 * matches[0]['score'])), 2
             )
 
         result_log = 'Best valid match: {} with score {}\n'.format(
@@ -366,7 +343,7 @@ class ImageMatcher:
         # draw search image over matches
         if detectObject['actionData']['detectActionType'] == "detectObject":
             for match_obj in matches:
-                pt = tuple(map(int, match_obj[0]))
+                pt = tuple(map(int, match_obj['point']))
                 box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
                 end_y = min(pt[1] + box_h, result_im_bgr.shape[0])
                 end_x = min(pt[0] + box_w, result_im_bgr.shape[1])
@@ -380,8 +357,8 @@ class ImageMatcher:
 
         # color in match area of matches above threshold with red
         for match_obj in matches:
-            pt = tuple(map(int, match_obj[0]))
-            score = match_obj[1]
+            pt = tuple(map(int, match_obj['point']))
+            score = match_obj['score']
             if score < threshold:
                 continue
             box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
@@ -401,8 +378,8 @@ class ImageMatcher:
 
         # draw blue rectangle around matches above threshold
         for match_index in range(0, min(max_matches, len(matches))):
-            pt = tuple(map(int, matches[match_index][0]))
-            score = matches[match_index][1]
+            pt = tuple(map(int, matches[match_index]['point']))
+            score = matches[match_index]['score']
             if score < threshold:
                 continue
             box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
@@ -410,7 +387,7 @@ class ImageMatcher:
                 result_im_bgr,
                 pt,
                 (pt[0] + box_w, pt[1] + box_h),
-                (int((255 * matches[match_index][1] + 255) / 2), 0, 0),
+                (int((255 * matches[match_index]['score'] + 255) / 2), 0, 0),
                 2
             )
 

@@ -16,7 +16,7 @@ class DetectSceneHelper:
             screencap_im_bgr,
             floating_detect_obj,
             fixed_detect_obj,
-            check_image_scale=True,
+            needs_rescale,
             output_cropping=None):
         screencap_compare = fixed_detect_obj["img"]
         scene_screencap_mask = fixed_detect_obj["mask"]
@@ -28,7 +28,6 @@ class DetectSceneHelper:
         mask_size = np.count_nonzero(scene_screencap_mask_single_channel)
         original_height,original_width = screencap_im_bgr.shape[0],screencap_im_bgr.shape[1]
 
-        needs_rescale = screencap_im_bgr.shape != scene_screencap_mask.shape
         pre_log = 'Performing fixed location detectScene template comparison.' +\
             'Expected input size is {} input image input size is {}'.format(
                 str(scene_screencap_mask.shape),
@@ -84,26 +83,6 @@ class DetectSceneHelper:
         #     ), (0, 0, int(255 * ssim_coeff)), 2
         # )
 
-        result_im_bgr = ImageMatcher.create_result_im(
-            sceneAction,
-            screencap_im_bgr,
-            object_mask_single_channel,
-            [(location_val, ssim_coeff)],
-            None,
-            needs_rescale
-        )
-
-        if script_logger.get_log_level() == 'info':
-            matching_overlay_relative_path = 'detectScene-matchOverlayed.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
-            script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
-            masked_img_relative_path = 'detectScene-maskApplied.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + masked_img_relative_path, screencap_masked)
-            script_logger.get_action_log().add_supporting_file_reference('image', masked_img_relative_path)
-            comparison_img_relative_path = 'detectScene-comparisonImage.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, screencap_compare)
-            script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
-
         output_mask_single_channel = sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].copy()
         post_post_log = ''
         if needs_rescale:
@@ -143,4 +122,4 @@ class DetectSceneHelper:
             'original_width': sceneAction['input_obj']['original_width'],
             'score': ssim_coeff,
             'n_matches' : 1
-        }], ssim_coeff
+        }], ssim_coeff, screencap_masked

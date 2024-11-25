@@ -6,9 +6,10 @@ from script_engine_utils import generate_context_switch_action, state_eval
 from script_execution_state import ScriptExecutionState
 from image_matcher import ImageMatcher
 from detect_scene_helper import DetectSceneHelper
-from script_logger import ScriptLogger
+from script_logger import ScriptLogger,thread_local_storage
 script_logger = ScriptLogger()
-
+import random
+import time
 
 class DetectObjectHelper:
     def __init__(self):
@@ -165,13 +166,6 @@ class DetectObjectHelper:
         match_point = action['input_obj']['match_point']
         check_image_scale = not action['input_obj']['fixed_scale']
         script_logger.log('Starting handle detect object')
-        if script_logger.get_log_level() == 'info':
-            input_image_relative_path = 'detectObject-inputImage.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
-            script_logger.get_action_log().set_pre_file(
-                'image',
-                input_image_relative_path
-            )
 
         script_logger.get_action_log().add_supporting_file(
             'text',
@@ -188,19 +182,18 @@ class DetectObjectHelper:
             if positive_example["detectType"] == "floatingObject":
                 floating_detect_obj = positive_example
                 break
-        if script_mode == "train" and script_logger.get_log_level() == 'info':
-            template_image_relative_path = 'templateImage.png'
-            cv2.imwrite(
-                script_logger.get_log_path_prefix() + template_image_relative_path, floating_detect_obj["img"]
-            )
-            script_logger.get_action_log().add_supporting_file_reference(
-                'image',
-                template_image_relative_path
-            )
         is_detect_object_first_match = (
                 action['actionData']['detectActionType'] == 'detectObject' and action['actionData'][
             'matchMode'] == 'firstMatch'
         )
+
+        script_logger.log('before', id(script_logger), script_logger.id, script_logger.get_action_log().name)
+        log_objs = {
+            'base': (screencap_im_bgr.copy(), floating_detect_obj),
+            'fixedObject' : None,
+            'floatingObject' : None
+        }
+        script_logger.log('after', id(script_logger), script_logger.id, script_logger.get_action_log().name)
 
 
         # if is match mode firstMatch or is a detectScene
@@ -211,18 +204,22 @@ class DetectObjectHelper:
             script_logger.log(detect_scene_pre_log)
             detect_scene_result_log += detect_scene_pre_log + '\n'
 
-            matches, ssim_coeff = DetectSceneHelper.get_match(
+            needs_rescale = screencap_im_bgr.shape != fixed_detect_obj["mask"].shape
+            matches, ssim_coeff, screencap_masked = DetectSceneHelper.get_match(
                 action,
-                screencap_im_bgr.copy(),
+                screencap_im_bgr,
                 floating_detect_obj,
                 fixed_detect_obj,
-                check_image_scale=check_image_scale,
+                needs_rescale,
                 output_cropping=action["actionData"]["maskLocation"] if
                 (action["actionData"]["maskLocation"] != 'null' and
                  "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
                  ) else None
             )
-            if ssim_coeff < float(action["actionData"]["threshold"]):
+            log_objs['fixedObject'] = (
+                matches, screencap_masked, fixed_detect_obj, needs_rescale
+            )
+            if matches[0]['score'] < float(action["actionData"]["threshold"]):
                 matches = []
                 if action['actionData']['detectActionType'] == 'detectScene':
                     detect_scene_result_log = 'detect mode detectScene failed.' +\
@@ -242,7 +239,9 @@ class DetectObjectHelper:
                                               action["actionData"]["threshold"],
                                               ssim_coeff
                                           )
+
             script_logger.log(detect_scene_result_log)
+
 
         # if is a detectObject and matchMode is bestMatch
         # or is a detectObject and matchMode firstMatch but did not find a firstmatch
@@ -252,7 +251,7 @@ class DetectObjectHelper:
                 (is_detect_object_first_match and len(matches) == 0):
             detect_object_result_log = 'Performing detectActionType detect object'
             script_logger.log(detect_object_result_log)
-            matches = ImageMatcher.template_match(
+            matches, match_result = ImageMatcher.template_match(
                 action,
                 screencap_im_bgr,
                 floating_detect_obj,
@@ -268,6 +267,10 @@ class DetectObjectHelper:
                 use_color=action["actionData"]["useColor"] == "true" or action["actionData"]["useColor"]
             )
 
+            log_objs['floatingObject'] = (
+                matches, match_result
+            )
+
         script_logger.get_action_log().append_supporting_file(
             'text',
             'detect_result.txt',
@@ -275,11 +278,104 @@ class DetectObjectHelper:
             detect_object_result_log
         )
         script_logger.log('Completed handle detect object')
-        return action, matches
+        return action, matches, log_objs
+
 
     @staticmethod
-    def handle_detect_action_result(detect_action_result, state, context, run_queue):
-        (action, matches) = detect_action_result
+    def create_detect_action_log_images(thread_script_logger, action, log_obj):
+        thread_local_storage.script_logger = thread_script_logger
+        script_logger = ScriptLogger.get_logger()
+        script_logger.log('log images for action', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+
+        (screencap_im_bgr, floating_detect_obj) = log_obj['base']
+
+        input_image_relative_path = 'detectObject-inputImage.png'
+        script_logger.log('log images for action .', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+
+        cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
+        script_logger.log('log images for action ..', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+
+        script_logger.get_action_log().set_pre_file(
+            'image',
+            input_image_relative_path
+        )
+        script_logger.log('log images for action ...', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+
+
+        template_image_relative_path = 'templateImage.png'
+        cv2.imwrite(
+            script_logger.get_log_path_prefix() + template_image_relative_path, floating_detect_obj["img"]
+        )
+        script_logger.get_action_log().add_supporting_file_reference(
+            'image',
+            template_image_relative_path
+        )
+        script_logger.log('log images for action ^', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+
+
+        if log_obj['fixedObject'] is not None:
+            (matches, screencap_masked, fixed_detect_obj, needs_rescale) = log_obj['fixedObject']
+            result_im_bgr = ImageMatcher.create_result_im(
+                action,
+                screencap_im_bgr,
+                floating_detect_obj["mask_single_channel"],
+                matches,
+                None,
+                needs_rescale
+            )
+            script_logger.log('log images for action ^.', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+
+            matching_overlay_relative_path = 'detectScene-matchOverlayed.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
+            script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
+            script_logger.log('log images for action ^..', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+
+            masked_img_relative_path = 'detectScene-maskApplied.png'
+            script_logger.log('log images for action ^...', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+            cv2.imwrite(script_logger.get_log_path_prefix() + masked_img_relative_path, screencap_masked)
+            script_logger.log('log images for action ^....', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+            script_logger.get_action_log().add_supporting_file_reference('image', masked_img_relative_path)
+            script_logger.log('log images for action ^.....', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+
+            comparison_img_relative_path = 'detectScene-comparisonImage.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, fixed_detect_obj["img"])
+            script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
+        script_logger.log('log images for action ^^', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+
+        if log_obj['floatingObject'] is not None:
+            (
+                matches, match_result
+            ) = log_obj['floatingObject']
+
+            result_im_bgr = ImageMatcher.create_result_im(
+                action,
+                screencap_im_bgr,
+                floating_detect_obj["img"],
+                matches,
+                match_result,
+                False
+            )
+
+            matching_overlay_relative_path = 'detectObject-matchOverlayed.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
+            script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
+
+            comparison_img_relative_path = 'detectObject-matchingHeatMap.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, match_result * 255)
+            script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
+        script_logger.log('log images for action ^^^', action["actionGroup"], script_logger.get_action_log().name, script_logger.id, id(script_logger))
+
+
+    @staticmethod
+    def handle_detect_action_result(io_executor, detect_action_result, state, context, run_queue):
+        (action, matches, log_obj) = detect_action_result
+
+        if script_logger.get_log_level() == 'info':
+            script_logger.log('DetectObjectHelper: starting detect object log thread')
+            thread_script_logger = script_logger.copy()
+            # DetectObjectHelper.create_detect_action_log_images(thread_script_logger, action, log_obj)
+            io_executor.submit(DetectObjectHelper.create_detect_action_log_images, thread_script_logger, action, log_obj)
+
         update_queue = []
         # matches are added to the update queue and then added to the state after handle_action returns
         update_queue, status = DetectObjectHelper.update_update_queue(

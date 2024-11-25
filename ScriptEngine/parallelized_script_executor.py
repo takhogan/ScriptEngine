@@ -25,6 +25,7 @@ class ParallelizedScriptExecutor:
             return self.processes[action_group]
         else:
             return None
+
     def start_processes(self, script_executor, parallel_actions):
         self.processes = {}
         script_counter = script_executor.context["script_counter"]

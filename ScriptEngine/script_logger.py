@@ -22,6 +22,8 @@ class ScriptLogger:
             cls._instance.log_folder_path = None
             cls._instance.log_header = None
             cls._instance.log_level = 'info'
+            print('new script_logger instance', cls._instance.id, flush=True)
+
         return cls._instance
 
     @classmethod
@@ -80,7 +82,13 @@ class ScriptLogger:
         new_instance.log_folder_path = self.log_folder_path
         new_instance.log_header = self.log_header
         new_instance.log_level = self.log_level
+        print('new script_logger copy instance id', new_instance.id, flush=True)
+
         return new_instance
+
+    def __reduce__(self):
+        # when this class is deseralized is overwrites the current instance
+        raise TypeError(f"Instances of {self.__class__.__name__} cannot be serialized.")
 
     def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True):
         text = str(datetime.datetime.now()) + ': ' + (

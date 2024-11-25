@@ -11,6 +11,7 @@ class DeviceManager:
             input_source = device_params
         else:
             input_source = None
+        self.io_executor = io_executor
         self.python_host = python_host(props.copy(), io_executor, input_source=input_source)
         self.adb_host = adb_host(props.copy(), self.python_host, device_params, io_executor, input_source=input_source)
         self.system_host = SystemHostController(self.python_host, base_script_name, props.copy(), io_executor)
