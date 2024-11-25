@@ -277,7 +277,7 @@ class python_host:
                     script_mode=script_mode
                 )
                 action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_action_result(
-                    handle_action_result, state, context, run_queue
+                    self.io_executor, handle_action_result, state, context, run_queue
                 )
 
         elif action["actionName"] == "mouseInteractionAction":

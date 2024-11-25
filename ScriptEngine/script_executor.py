@@ -318,7 +318,7 @@ class ScriptExecutor:
         update_queue = []
         if action["actionName"] == "detectObject":
             action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_action_result(
-                handle_action_result, state, context, run_queue
+                self.device_manager.io_executor, handle_action_result, state, context, run_queue
             )
         else:
             pass
