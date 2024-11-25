@@ -1,5 +1,7 @@
 import os
-from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
+from concurrent.futures import ALL_COMPLETED, ProcessPoolExecutor,ThreadPoolExecutor, wait
+import threading
+
 import warnings
 
 warnings.filterwarnings(
@@ -20,6 +22,8 @@ import uuid
 import datetime
 import sys
 
+from custom_thread_pool import CustomThreadPool
+from custom_process_pool import CustomProcessPool
 from script_loader import parse_zip
 from script_executor import ScriptExecutor
 from script_engine_constants import *
@@ -75,6 +79,29 @@ def update_running_scripts_file(scriptname, action):
                 with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
                     json.dump(running_scripts, running_script_file)
 
+def close_threads_and_processes(io_executor, process_executor, timeout=30):
+    thread_futures = io_executor.active_tasks
+    process_futures = process_executor.active_tasks
+
+
+    thread_done, thread_not_done = wait(thread_futures, timeout=timeout, return_when=ALL_COMPLETED)
+    process_done, process_not_done = wait(process_futures, timeout=timeout, return_when=ALL_COMPLETED)
+    # Shutdown pools
+    script_logger.log("Shutting down thread pool...")
+    io_executor.shutdown(wait=False)
+    script_logger.log("Shutting down process pool...")
+    process_executor.shutdown(wait=False)
+
+    # Handle any unfinished tasks
+    if thread_not_done or process_not_done:
+        script_logger.log(
+            f"Timeout reached. Cancelling unfinished threads/processes. {len(thread_not_done)} threads and {len(process_not_done)} processes are still active.")
+        for future in thread_not_done:
+            future.cancel()
+        for future in process_not_done:
+            future.cancel()
+
+
 def load_and_run(script_name, script_id, timeout, constants=None, start_time_str=None, device_details=None, system_script=False):
     # if you want to open zip then you pass .zip in command line args
     # update_running_scripts_file(script_name, 'push')
@@ -114,7 +141,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
     errored = False
 
-    with ThreadPoolExecutor(max_workers=50) as io_executor, ProcessPoolExecutor(max_workers=os.cpu_count()) as process_executor:
+    with CustomThreadPool(max_workers=50) as io_executor, CustomProcessPool(max_workers=os.cpu_count()) as process_executor:
         device_manager = DeviceManager(script_name, script_object['props'], device_params, io_executor)
 
         # TODO: might need fixing
@@ -160,22 +187,28 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
                     script_object['props']['scriptReference']
                 )
         except:
-            io_executor.shutdown(wait=True)
+            script_logger.log('Script Execution interrupted by exception')
+            close_threads_and_processes(io_executor, process_executor)
+
             traceback.print_exc()
             errored = True
         else:
-            io_executor.shutdown(wait=True)
-        if not system_script:
-            sys.stderr.write("<--IGNORE-OPENCV-VIDEO-ENCODING-SCRIPT-ENGINE-ERRORS-->")
-            sys.stderr.flush()
-            with redirect_stderr(sys.stdout):
-                ScriptLogPreviewGenerator.assemble_script_log_preview(
-                    main_script.script_action_log.get_action_log_path(),
-                    main_script.log_folder + 'script-log-preview'
-                )
-                main_script.script_action_log.add_supporting_file_reference(
-                    'video', 'script-log-preview.mp4', log_header=False
-                )
+            script_logger.log('Script Execution completed')
+            close_threads_and_processes(io_executor, process_executor)
+
+
+
+    if not system_script:
+        sys.stderr.write("<--IGNORE-OPENCV-VIDEO-ENCODING-SCRIPT-ENGINE-ERRORS-->")
+        sys.stderr.flush()
+        with redirect_stderr(sys.stdout):
+            ScriptLogPreviewGenerator.assemble_script_log_preview(
+                main_script.script_action_log.get_action_log_path(),
+                main_script.log_folder + 'script-log-preview'
+            )
+            main_script.script_action_log.add_supporting_file_reference(
+                'video', 'script-log-preview.mp4', log_header=False
+            )
     if errored:
         exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())

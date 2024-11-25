@@ -187,13 +187,11 @@ class DetectObjectHelper:
             'matchMode'] == 'firstMatch'
         )
 
-        script_logger.log('before', id(script_logger), script_logger.id, script_logger.get_action_log().name)
         log_objs = {
             'base': (screencap_im_bgr.copy(), floating_detect_obj),
             'fixedObject' : None,
             'floatingObject' : None
         }
-        script_logger.log('after', id(script_logger), script_logger.id, script_logger.get_action_log().name)
 
 
         # if is match mode firstMatch or is a detectScene
