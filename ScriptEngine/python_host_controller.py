@@ -43,6 +43,9 @@ class python_host:
         self.image_matcher = ImageMatcher()
         self.click_path_generator = None
 
+        self.xmax = self.width
+        self.ymax = self.height
+
         if input_source is not None:
             self.dummy_mode = True
             self.input_source = input_source
@@ -62,6 +65,8 @@ class python_host:
             host_dimensions = pyautogui.size()
             self.width = host_dimensions.width
             self.height = host_dimensions.height
+            self.xmax = self.width
+            self.ymax = self.height
             height, width, _ = np.array(pyautogui.screenshot()).shape
             if (not is_null(self.props['width']) and (self.props['width'] != width)) or \
                     (not is_null(self.props['height']) and self.props['height'] != height):
@@ -92,20 +97,41 @@ class python_host:
         pyautogui.hotkey(*keys)
 
     def mouse_up(self, x, y, button):
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from click')
+            return
+        # if (self.width != self.props['width'] or self.height != self.props['height']):
+        #     x = (self.width / self.props['width']) * x
+        #     y = (self.height / self.props['height']) * y
+        #     script_logger.log('mouse_up: adjusted coords for pyautogui', x, y, flush=True)
         current_position = pyautogui.position()
         if current_position != (x, y):
             self.smooth_move(*current_position, x, y)
-        pyautogui.mouseDown(button=button)
+        pyautogui.mouseUp(x=x, y=y, button=button)
 
 
     def mouse_down(self, x, y, button):
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from click')
+            return
+        # if (self.width != self.props['width'] or self.height != self.props['height']):
+        #     x = (self.width / self.props['width']) * x
+        #     y = (self.height / self.props['height']) * y
+        #     script_logger.log('mouse_down: adjusted coords for pyautogui', x, y, flush=True)
         current_position = pyautogui.position()
         if current_position != (x, y):
             self.smooth_move(*current_position, x, y)
-        pyautogui.mouseDown(button=button)
+        pyautogui.mouseDown(x=x, y=y, button=button)
 
 
     def scroll(self, x, y, distance):
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from click')
+            return
+        # if (self.width != self.props['width'] or self.height != self.props['height']):
+        #     x = (self.width / self.props['width']) * x
+        #     y = (self.height / self.props['height']) * y
+        #     script_logger.log('scroll: adjusted coords for pyautogui', x, y, flush=True)
         pyautogui.moveTo(x, y)
         pyautogui.scroll(distance)
 
@@ -120,56 +146,61 @@ class python_host:
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from click')
             return
-        if (self.width != self.props['width'] or self.height != self.props['height']):
-            x = (self.width / self.props['width']) * x
-            y = (self.height / self.props['height']) * y
-            script_logger.log('clickAction: adjusted coords for pyautogui', x, y, flush=True)
+        # if (self.width != self.props['width'] or self.height != self.props['height']):
+        #     x = (self.width / self.props['width']) * x
+        #     y = (self.height / self.props['height']) * y
+        #     script_logger.log('clickAction: adjusted coords for pyautogui', x, y, flush=True)
         pyautogui.click(x=x, y=y, button=button)
 
-    def smooth_move(self, source_x, source_y, target_x, target_y):
+    def smooth_move(self, source_x, source_y, target_x, target_y, drag=False, button='left'):
+        # if (self.width != self.props['width'] or self.height != self.props['height']):
+        #     source_x = (self.width / self.props['width']) * source_x
+        #     source_y = (self.height / self.props['height']) * source_y
+        #     target_x = (self.width / self.props['width']) * target_x
+        #     target_y = (self.height / self.props['height']) * target_y
+        #     script_logger.log('smooth_move: adjusted coords for pyautogui', source_x, source_y, target_x, target_y, flush=True)
         frac_source_x = (source_x / self.width)
         frac_target_x = (target_x / self.width)
         frac_source_y = (source_y / self.height)
         frac_target_y = (target_y / self.height)
-        # script_logger.log('({},{}),({},{})'.format(frac_source_x, frac_source_y, frac_target_x, frac_target_y))
         delta_x, delta_y = self.click_path_generator.generate_click_path(
             frac_source_x, frac_source_y,
             frac_target_x, frac_target_y
         )
+        if self.dummy_mode:
+            script_logger.log('ADB CONTROLLER: script running in dummy mode, adb click and drag returning')
+            return delta_x, delta_y
+
         traverse_x = source_x
         traverse_y = source_y
         script_logger.log('delta_x', delta_x, 'delta_y', delta_y)
         for delta_pair in zip(delta_x, delta_y):
-            pyautogui.moveTo(traverse_x + delta_pair[0], traverse_y + delta_pair[1])
+            if drag and sys.platform == 'darwin':
+                pyautogui.dragTo(
+                    traverse_x + delta_pair[0],
+                    traverse_y + delta_pair[1],
+                    button=button,
+                    mouseDownUp=False
+                )
+            else:
+                pyautogui.moveTo(traverse_x + delta_pair[0], traverse_y + delta_pair[1])
             traverse_x += delta_pair[0]
             traverse_y += delta_pair[1]
         return delta_x, delta_y
 
     def click_and_drag(self, source_x, source_y, target_x, target_y, mouse_down=True, mouse_up=True):
-        if self.dummy_mode:
-            frac_source_x = (source_x / self.width)
-            frac_target_x = (target_x / self.width)
-            frac_source_y = (source_y / self.height)
-            frac_target_y = (target_y / self.height)
-            delta_x, delta_y = self.click_path_generator.generate_click_path(
-                frac_source_x, frac_source_y,
-                frac_target_x, frac_target_y
-            )
-            script_logger.log('ADB CONTROLLER: script running in dummy mode, adb click and drag returning')
-            return delta_x, delta_y
         script_logger.log('pyautogui size', pyautogui.size())
         script_logger.log(
             'moving from initial position {} to click and drag start {}'.format(
                 str(pyautogui.position()), str((source_x, source_y))
             )
         )
-        # intial_delta_x, initial_delta_y = self.smooth_move(*pyautogui.position(), source_x, source_y)
 
         if mouse_down:
-            pyautogui.mouseDown(button='left')
-        delta_x, delta_y = self.smooth_move(source_x, source_y, target_x, target_y)
+            self.mouse_down(source_x, source_y, button='left')
+        delta_x, delta_y = self.smooth_move(source_x, source_y, target_x, target_y, drag=True, button='left')
         if mouse_up:
-            pyautogui.mouseUp(button='left')
+            self.mouse_up(target_x, target_y, button='left')
         return delta_x, delta_y
 
     def draw_click_and_drag(self, thread_script_logger,
@@ -280,8 +311,9 @@ class python_host:
                     self.io_executor, handle_action_result, state, context, run_queue
                 )
 
+
         elif action["actionName"] == "mouseInteractionAction":
-            point_choice, point_list = ClickActionHelper.get_point_choice(
+            point_choice, log_point_choice, point_list, log_point_list = ClickActionHelper.get_point_choice(
                 action["actionData"]["sourceDetectTypeData"],
                 action["actionData"]["sourceDetectTypeData"]["inputExpression"],
                 action["actionData"]["sourcePointList"],
@@ -290,37 +322,44 @@ class python_host:
                 self.height,
                 1
             )
-
             script_logger.log('ADB CONTROLLER: starting draw click thread')
             thread_script_logger = script_logger.copy()
-            self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
+            self.io_executor.submit(
+                self.draw_click,
+                thread_script_logger,
+                log_point_choice,
+                log_point_list
+            )
 
             if action["actionData"]["mouseActionType"] == "click":
                 click_counts = int(action["actionData"]["clickCount"])
                 if click_counts > 1 and action["actionData"]["betweenClickDelay"]:
-                    delays = RandomVariableHelper.get_rv_val(action["actionData"]["randomVariableTypeData"],
-                                                             click_counts)
+                    delays = RandomVariableHelper.get_rv_val(
+                        action["actionData"]["randomVariableTypeData"],
+                        click_counts
+                    )
                 else:
                     delays = [0]
                 for click_count in range(0, click_counts):
                     self.click(*point_choice, action["actionData"]["mouseButton"])
                     time.sleep(delays[click_count])
+
             elif action["actionData"]["mouseActionType"] == "mouseUp":
                 if not context["mouse_down"]:
                     script_logger.log("mouseUp selected but no mouseDown to release")
                 else:
-                    self.mouse_up(*context["last_mouse_position"], action["actionData"]["mouseButton"])
+                    self.mouse_up(context["last_mouse_position"][0], context["last_mouse_position"][1])
                     context["mouse_down"] = False
             elif action["actionData"]["mouseActionType"] == "mouseDown":
                 context["mouse_down"] = True
                 context["last_mouse_position"] = point_choice
-                self.mouse_down(*point_choice, action["actionData"]["mouseButton"])
+                self.mouse_down(*point_choice)
             elif action["actionData"]["mouseActionType"] == "scroll":
                 scroll_distance = action["actionData"]["scrollDistance"]
                 self.scroll(*point_choice, scroll_distance)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "mouseMoveAction":
-            source_point, point_list = ClickActionHelper.get_point_choice(
+            source_point, log_source_point_choice, point_list, log_source_point_list = ClickActionHelper.get_point_choice(
                 action["actionData"]["sourceDetectTypeData"],
                 action["actionData"]["sourceDetectTypeData"]["inputExpression"],
                 action["actionData"]["sourcePointList"],
@@ -329,7 +368,8 @@ class python_host:
                 self.height,
                 1
             )
-            target_point, point_list = ClickActionHelper.get_point_choice(
+
+            target_point, log_target_point_choice, point_list, log_target_point_list = ClickActionHelper.get_point_choice(
                 action["actionData"]["targetDetectTypeData"],
                 action["actionData"]["targetDetectTypeData"]["inputExpression"],
                 action["actionData"]["targetPointList"],
@@ -344,14 +384,26 @@ class python_host:
                     str(source_point),
                     str(target_point)
                 )
+
                 script_logger.log(drag_log)
                 delta_x, delta_y = self.click_and_drag(
                     source_point[0],
                     source_point[1],
                     target_point[0],
                     target_point[1],
-                    mouse_down=(not context["mouse_down"]),
                     mouse_up=action["actionData"]["releaseMouseOnCompletion"]
+                )
+
+                thread_script_logger = script_logger.copy()
+                self.io_executor.submit(
+                    self.draw_click_and_drag,
+                    thread_script_logger,
+                    log_source_point_choice,
+                    log_source_point_list,
+                    log_target_point_choice,
+                    log_target_point_list,
+                    delta_x,
+                    delta_y
                 )
             else:
                 if context["mouse_down"]:
@@ -359,45 +411,40 @@ class python_host:
                         str(source_point),
                         str(target_point)
                     )
+
                     script_logger.log(drag_log)
+                    delta_x, delta_y = self.click_and_drag(
+                        source_point[0],
+                        source_point[1],
+                        target_point[0],
+                        target_point[1],
+                        mouse_up=action["actionData"]["releaseMouseOnCompletion"]
+                    )
+
+                    thread_script_logger = script_logger.copy()
+                    self.io_executor.submit(
+                        self.draw_click_and_drag,
+                        thread_script_logger,
+                        log_source_point_choice,
+                        log_source_point_list,
+                        log_target_point_choice,
+                        log_target_point_list,
+                        delta_x,
+                        delta_y
+                    )
                 else:
-                    drag_log = 'Moving from {} to {} with mouse up.'.format(
+                    drag_log = 'Moving from {} to {} with mouse up. Note mouse movement on Android has no effect'.format(
                         str(source_point),
                         str(target_point)
                     )
-                script_logger.log(drag_log)
-                delta_x, delta_y = self.click_and_drag(
-                    source_point[0],
-                    source_point[1],
-                    target_point[0],
-                    target_point[1],
-                    mouse_down=False,
-                    mouse_up=(action["actionData"]["releaseMouseOnCompletion"] and context["mouse_down"])
-                )
-
-            thread_script_logger = script_logger.copy()
-            self.io_executor.submit(
-                self.draw_click_and_drag,
-                thread_script_logger,
-                source_point,
-                {
-                    "input_type": "point_list",
-                    "point_list": action['actionData']['sourcePointList']
-                },
-                target_point,
-                {
-                    "input_type": "point_list",
-                    "point_list": action['actionData']['targetPointList']
-                },
-                delta_x,
-                delta_y
-            )
-
+                    script_logger.log(drag_log)
+                    context["last_mouse_position"] = target_point
             script_logger.get_action_log().add_supporting_file(
                 'text',
                 'drag-log.txt',
                 drag_log
             )
+
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "shellScript":
             state = self.run_shell_script(action, state)

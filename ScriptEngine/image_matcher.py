@@ -1,12 +1,9 @@
 import cv2
 import numpy as np
-import datetime
 from script_engine_utils import dist
-from script_engine_utils import masked_mse
 
 MINIMUM_MATCH_PIXEL_SPACING = 15
 from script_logger import ScriptLogger
-from script_engine_utils import state_eval
 
 script_logger = ScriptLogger()
 class ImageMatcher:
@@ -445,73 +442,75 @@ class ImageMatcher:
     #     exit(0)
     #     return None,None,None
 
-    @staticmethod
-    def preprocess_scaled_match_object(state, detectObject):
-        def createScaleFunction(scaleAction):
-            return lambda x,y : scaleAction["actionData"]["xCoefficient"] * x + scaleAction["actionData"]["yCoefficient"] * y + scaleAction["actionData"]["constantTerm"]
-        heightScaleAction = state_eval(detectObject["actionData"]["heightScale"], {}, state)
-        heightScale = createScaleFunction(heightScaleAction)
-        widthScaleAction = state_eval(detectObject["actionData"]["widthScale"], {}, state)
-        widthScale = createScaleFunction(widthScaleAction)
-        source_width = heightScaleAction["actionData"]["sourceWidth"]
-        source_height = heightScaleAction["actionData"]["sourceHeight"]
-        scaled_template_heights = np.zeros((source_height, source_width))
-        scaled_template_widths = np.zeros((source_height, source_width))
-        scaled_templates = np.empty((source_height, source_width), dtype=object)
-        scaled_template_masks = np.empty((source_height, source_width), dtype=object)
-        scaled_template_mask_sizes = np.zeros((source_height, source_width))
-        scaled_template_output_masks = np.empty((source_height, source_width), dtype=object)
-        scaled_template_output_masks_single_channel = np.empty((source_height, source_width), dtype=object)
 
 
-        for y_index in range(0, source_height):
-            for x_index in range(0, source_width):
-                template_height = heightScale(x_index,y_index)
-                template_width = widthScale(x_index,y_index)
-                template_height = template_height if (y_index + template_height < source_height) else 0
-                template_width = template_width if (x_index + template_width < source_width) else 0
-                scaled_template_heights[y_index, x_index] = template_height
-                scaled_template_widths[y_index, x_index] = template_width
-                if template_width != 0 and template_height != 0:
-                    scaled_templates[y_index, x_index] = cv2.resize(detectObject["actionData"]["positiveExamples"][0]["img"], (template_height, template_width), interpolation=cv2.INTER_LINEAR)
-                    scaled_template_masks[y_index, x_index] = cv2.resize(detectObject["actionData"]["positiveExamples"][0]["mask"], (template_height, template_width), interpolation=cv2.INTER_LINEAR)
-                    scaled_template_mask_sizes[y_index, x_index] = np.count_nonzero(detectObject["actionData"]["positiveExamples"][0]["mask_single_channel"]) * 3 * 255
-                    scaled_template_output_masks = cv2.resize(detectObject["actionData"]["positiveExamples"][0]["outputMask"], (template_height, template_width), interpolation=cv2.INTER_LINEAR)
-                    scaled_template_output_masks_single_channel = cv2.resize(detectObject["actionData"]["positiveExamples"][0]["outputMask_single_channel"], (template_height, template_width), interpolation=cv2.INTER_LINEAR)
-                else:
-                    scaled_templates[y_index, x_index] = None
-                    scaled_template_masks[y_index, x_index] = None
-                    scaled_template_mask_sizes[y_index, x_index] = 0
-                    scaled_template_output_masks = None
-                    scaled_template_output_masks_single_channel = None
+    # @staticmethod
+    # def preprocess_scaled_match_object(state, detectObject):
+    #     def createScaleFunction(scaleAction):
+    #         return lambda x,y : scaleAction["actionData"]["xCoefficient"] * x + scaleAction["actionData"]["yCoefficient"] * y + scaleAction["actionData"]["constantTerm"]
+    #     heightScaleAction = state_eval(detectObject["actionData"]["heightScale"], {}, state)
+    #     heightScale = createScaleFunction(heightScaleAction)
+    #     widthScaleAction = state_eval(detectObject["actionData"]["widthScale"], {}, state)
+    #     widthScale = createScaleFunction(widthScaleAction)
+    #     source_width = heightScaleAction["actionData"]["sourceWidth"]
+    #     source_height = heightScaleAction["actionData"]["sourceHeight"]
+    #     scaled_template_heights = np.zeros((source_height, source_width))
+    #     scaled_template_widths = np.zeros((source_height, source_width))
+    #     scaled_templates = np.empty((source_height, source_width), dtype=object)
+    #     scaled_template_masks = np.empty((source_height, source_width), dtype=object)
+    #     scaled_template_mask_sizes = np.zeros((source_height, source_width))
+    #     scaled_template_output_masks = np.empty((source_height, source_width), dtype=object)
+    #     scaled_template_output_masks_single_channel = np.empty((source_height, source_width), dtype=object)
+    #
+    #
+    #     for y_index in range(0, source_height):
+    #         for x_index in range(0, source_width):
+    #             template_height = heightScale(x_index,y_index)
+    #             template_width = widthScale(x_index,y_index)
+    #             template_height = template_height if (y_index + template_height < source_height) else 0
+    #             template_width = template_width if (x_index + template_width < source_width) else 0
+    #             scaled_template_heights[y_index, x_index] = template_height
+    #             scaled_template_widths[y_index, x_index] = template_width
+    #             if template_width != 0 and template_height != 0:
+    #                 scaled_templates[y_index, x_index] = cv2.resize(detectObject["actionData"]["positiveExamples"][0]["img"], (template_height, template_width), interpolation=cv2.INTER_LINEAR)
+    #                 scaled_template_masks[y_index, x_index] = cv2.resize(detectObject["actionData"]["positiveExamples"][0]["mask"], (template_height, template_width), interpolation=cv2.INTER_LINEAR)
+    #                 scaled_template_mask_sizes[y_index, x_index] = np.count_nonzero(detectObject["actionData"]["positiveExamples"][0]["mask_single_channel"]) * 3 * 255
+    #                 scaled_template_output_masks = cv2.resize(detectObject["actionData"]["positiveExamples"][0]["outputMask"], (template_height, template_width), interpolation=cv2.INTER_LINEAR)
+    #                 scaled_template_output_masks_single_channel = cv2.resize(detectObject["actionData"]["positiveExamples"][0]["outputMask_single_channel"], (template_height, template_width), interpolation=cv2.INTER_LINEAR)
+    #             else:
+    #                 scaled_templates[y_index, x_index] = None
+    #                 scaled_template_masks[y_index, x_index] = None
+    #                 scaled_template_mask_sizes[y_index, x_index] = 0
+    #                 scaled_template_output_masks = None
+    #                 scaled_template_output_masks_single_channel = None
+    #
+    #     detectObject["actionData"]["scaled_templates"] = scaled_templates
+    #     detectObject["actionData"]["scaled_template_heights"] = scaled_template_heights
+    #     detectObject["actionData"]["scaled_template_widths"] = scaled_template_widths
+    #     detectObject["actionData"]["scaled_template_masks"] = scaled_template_masks
+    #     detectObject["actionData"]["scaled_template_mask_sizes"] = scaled_template_mask_sizes
+    #     detectObject["actionData"]["scaled_template_output_masks"] = scaled_template_output_masks
+    #     detectObject["actionData"]["scaled_template_output_masks_single_channel"] = scaled_template_output_masks_single_channel
+    #     return detectObject
 
-        detectObject["actionData"]["scaled_templates"] = scaled_templates
-        detectObject["actionData"]["scaled_template_heights"] = scaled_template_heights
-        detectObject["actionData"]["scaled_template_widths"] = scaled_template_widths
-        detectObject["actionData"]["scaled_template_masks"] = scaled_template_masks
-        detectObject["actionData"]["scaled_template_mask_sizes"] = scaled_template_mask_sizes
-        detectObject["actionData"]["scaled_template_output_masks"] = scaled_template_output_masks
-        detectObject["actionData"]["scaled_template_output_masks_single_channel"] = scaled_template_output_masks_single_channel
-        return detectObject
 
 
 
-
-    @staticmethod
-    def produce_scaled_template_matches(detectObject, screencap_im_bgr, screencap_search_bgr, screencap_outputmask_bgr,
-                                 logs_path, threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
-        for y_index in range(0, detectObject["actionData"]["scaled_template_heights"].shape[0]):
-            for x_index in range(0, detectObject["actionData"]["scaled_template_heights"].shape[1]):
-                scaled_template = detectObject["actionData"]["scaled_templates"][y_index, x_index]
-                if scaled_template is not None:
-                    template_height = detectObject["actionData"]["scaled_template_heights"][y_index, x_index]
-                    template_width = detectObject["actionData"]["scaled_template_widths"][y_index, x_index]
-                    template_mask = detectObject["actionData"]["scaled_template_masks"][y_index, x_index]
-                    template_mask_size = detectObject["actionData"]["scaled_template_mask_sizes"][y_index, x_index]
-                    screencap_masked = cv2.bitwise_and(
-                        screencap_im_bgr[y_index:y_index+template_height, x_index:x_index+template_width],
-                        template_mask
-                    )
-                    ssim_coeff = masked_mse(screencap_masked, screencap_search_bgr, template_mask_size)
+    # @staticmethod
+    # def produce_scaled_template_matches(detectObject, screencap_im_bgr, screencap_search_bgr, screencap_outputmask_bgr,
+    #                              logs_path, threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
+    #     for y_index in range(0, detectObject["actionData"]["scaled_template_heights"].shape[0]):
+    #         for x_index in range(0, detectObject["actionData"]["scaled_template_heights"].shape[1]):
+    #             scaled_template = detectObject["actionData"]["scaled_templates"][y_index, x_index]
+    #             if scaled_template is not None:
+    #                 template_height = detectObject["actionData"]["scaled_template_heights"][y_index, x_index]
+    #                 template_width = detectObject["actionData"]["scaled_template_widths"][y_index, x_index]
+    #                 template_mask = detectObject["actionData"]["scaled_template_masks"][y_index, x_index]
+    #                 template_mask_size = detectObject["actionData"]["scaled_template_mask_sizes"][y_index, x_index]
+    #                 screencap_masked = cv2.bitwise_and(
+    #                     screencap_im_bgr[y_index:y_index+template_height, x_index:x_index+template_width],
+    #                     template_mask
+    #                 )
+    #                 ssim_coeff = masked_mse(screencap_masked, screencap_search_bgr, template_mask_size)
 
 

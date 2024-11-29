@@ -23,7 +23,7 @@ import random
 import time
 import sys
 import struct
-from script_engine_utils import get_glob_digit_regex_string, is_null, masked_mse, state_eval, DummyFile
+from script_engine_utils import is_null, state_eval, DummyFile
 from typing import Callable, Dict, List, Tuple
 import pyautogui
 
@@ -1270,7 +1270,7 @@ class adb_host:
                     self.io_executor, handle_action_result, state, context, run_queue
                 )
         elif action["actionName"] == "mouseInteractionAction":
-            point_choice, point_list = ClickActionHelper.get_point_choice(
+            point_choice, log_point_choice, point_list, log_point_list = ClickActionHelper.get_point_choice(
                 action["actionData"]["sourceDetectTypeData"],
                 action["actionData"]["sourceDetectTypeData"]["inputExpression"],
                 action["actionData"]["sourcePointList"],
@@ -1281,7 +1281,7 @@ class adb_host:
             )
             script_logger.log('ADB CONTROLLER: starting draw click thread')
             thread_script_logger = script_logger.copy()
-            self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
+            self.io_executor.submit(self.draw_click, thread_script_logger, log_point_choice, log_point_list)
 
             if action["actionData"]["mouseActionType"] == "click":
                 click_counts = int(action["actionData"]["clickCount"])
@@ -1307,7 +1307,7 @@ class adb_host:
                 self.scroll(*point_choice, scroll_distance)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "mouseMoveAction":
-            source_point, point_list = ClickActionHelper.get_point_choice(
+            source_point, log_source_point_choice, point_list, log_source_point_list = ClickActionHelper.get_point_choice(
                 action["actionData"]["sourceDetectTypeData"],
                 action["actionData"]["sourceDetectTypeData"]["inputExpression"],
                 action["actionData"]["sourcePointList"],
@@ -1316,7 +1316,7 @@ class adb_host:
                 self.height,
                 1
             )
-            target_point, point_list = ClickActionHelper.get_point_choice(
+            target_point, log_target_point_choice, point_list, log_target_point_list = ClickActionHelper.get_point_choice(
                 action["actionData"]["targetDetectTypeData"],
                 action["actionData"]["targetDetectTypeData"]["inputExpression"],
                 action["actionData"]["targetPointList"],
@@ -1344,16 +1344,10 @@ class adb_host:
                 self.io_executor.submit(
                     self.draw_click_and_drag,
                     thread_script_logger,
-                    source_point,
-                    {
-                        "input_type": "point_list",
-                        "point_list": action['actionData']['sourcePointList']
-                    },
-                    target_point,
-                    {
-                        "input_type": "point_list",
-                        "point_list": action['actionData']['targetPointList']
-                    },
+                    log_source_point_choice,
+                    log_source_point_list,
+                    log_target_point_choice,
+                    log_target_point_list,
                     delta_x,
                     delta_y
                 )
@@ -1376,9 +1370,9 @@ class adb_host:
                     self.io_executor.submit(
                         self.draw_click_and_drag,
                         thread_script_logger,
-                        source_point,
+                        log_source_point_choice,
                         action['actionData']['sourcePointList'],
-                        target_point,
+                        log_target_point_choice,
                         action['actionData']['targetPointList'],
                         delta_x,
                         delta_y

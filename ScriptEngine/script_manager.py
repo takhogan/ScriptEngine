@@ -1,6 +1,8 @@
+import time
+
+start_time = time.time()
 import os
-from concurrent.futures import ALL_COMPLETED, ProcessPoolExecutor,ThreadPoolExecutor, wait
-import threading
+from concurrent.futures import ALL_COMPLETED, wait
 
 import warnings
 
@@ -13,29 +15,27 @@ warnings.filterwarnings(
 
 from contextlib import redirect_stderr
 from dateutil import tz
-
-import cv2
 import json
 import traceback
 import multiprocessing
 import uuid
 import datetime
 import sys
+print(f"builtin initialization took {time.time() - start_time:.2f} seconds")
 
 from custom_thread_pool import CustomThreadPool
 from custom_process_pool import CustomProcessPool
-from script_loader import parse_zip
-from script_executor import ScriptExecutor
 from script_engine_constants import *
-from device_manager import DeviceManager
 from script_engine_utils import datetime_to_local_str, imageFileExtensions
 from script_execution_state import ScriptExecutionState
 from system_script_handler import SystemScriptHandler
-from script_log_preview_generator import ScriptLogPreviewGenerator
+print(f"non builtin initialization took {time.time() - start_time:.2f} seconds")
+
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
+print(f"script logger initialization took {time.time() - start_time:.2f} seconds")
 
 def str_timeout_to_datetime_timeout(timeout, src=None):
     if not isinstance(timeout, str):
@@ -110,6 +110,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
           'actual script start time: ', datetime.datetime.now(), ' scheduled end time: ',
           datetime_to_local_str(timeout))
     script_logger.log('constants : ', constants)
+    from script_loader import parse_zip
     script_object = parse_zip(script_name, system_script)
     #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
     # exit(0)
@@ -119,6 +120,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
             file_path = ''.join(device_details.split(':')[1:])
             file_type = os.path.splitext(file_path)[1]
             script_logger.log('SCRIPT MANAGER: loading input source', file_path, 'file exists', os.path.exists(file_path))
+            import cv2
             if file_type[1:] in imageFileExtensions:
                 input_img = cv2.imread(file_path)
                 height,width,_ = input_img.shape
@@ -140,6 +142,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
                     script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
     errored = False
+    from device_manager import DeviceManager
+    from script_executor import ScriptExecutor
 
     with CustomThreadPool(max_workers=50) as io_executor, CustomProcessPool(max_workers=os.cpu_count()) as process_executor:
         device_manager = DeviceManager(script_name, script_object['props'], device_params, io_executor)
@@ -196,8 +200,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
             script_logger.log('Script Execution completed')
             close_threads_and_processes(io_executor, process_executor)
 
-
-
+    from script_log_preview_generator import ScriptLogPreviewGenerator
     if not system_script:
         sys.stderr.write("<--IGNORE-OPENCV-VIDEO-ENCODING-SCRIPT-ENGINE-ERRORS-->")
         sys.stderr.flush()
@@ -215,6 +218,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
     # update_running_scripts_file(script_name, 'pop')
 
 
+print(f"Final Method initialization took {time.time() - start_time:.2f} seconds")
 
 if __name__=='__main__':
     multiprocessing.freeze_support()

@@ -242,7 +242,7 @@ class ClickPathGenerator:
         click_sequence_y = self.discretize_deltalist(click_sequence_y, self.y_max, self.y_increment, is_delta_x=False)
         return click_sequence_x,click_sequence_y
 
-    def generate_raw_path(self, source_point_x,source_point_y,target_point_x,target_point_y, deviation_degree, deviation_probability):
+    def generate_raw_path(self, source_point_x, source_point_y, target_point_x, target_point_y, deviation_degree, deviation_probability):
         target_source_dist = 1
         # log_file.write('source:\n')
         # log_file.write('\t' + str(source_point_x) + ',' + str(source_point_y) + '\n')
@@ -354,11 +354,14 @@ class ClickPathGenerator:
         # plt.show()
         return deltalist_x, deltalist_y
 
-    def generate_click_path(self, source_x,source_y,target_x,target_y):
+    def generate_click_path(self, source_x, source_y, target_x, target_y):
         script_logger.log('source: ({}, {}), target: ({}, {})'.format(source_x, source_y, target_x, target_y))
-        deltalist_x,deltalist_y = self.generate_raw_path(source_x,source_y,target_x,target_y, self.deviation_degree, self.deviation_probability)
+        deltalist_x,deltalist_y = self.generate_raw_path(source_x, source_y, target_x, target_y, self.deviation_degree, self.deviation_probability)
+        script_logger.log('deltalist', deltalist_x, deltalist_y)
         refitted_path_x,refitted_path_y = self.refit_delta_path(deltalist_x, self.x_max, self.x_increment),self.refit_delta_path(deltalist_y, self.y_max, self.y_increment)
+        script_logger.log('refitted', refitted_path_x, refitted_path_y)
         discretized_delta_x,discretized_delta_y = self.discretize_deltalist(refitted_path_x, self.x_max, self.x_increment, is_delta_x=True), self.discretize_deltalist(refitted_path_y, self.y_max, self.y_increment, is_delta_x=False)
+        script_logger.log('discretized', discretized_delta_x, discretized_delta_y)
         return discretized_delta_x, discretized_delta_y
 
 if __name__=='__main__':
