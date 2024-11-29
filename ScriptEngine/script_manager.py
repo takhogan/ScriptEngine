@@ -21,7 +21,7 @@ import multiprocessing
 import uuid
 import datetime
 import sys
-print(f"builtin initialization took {time.time() - start_time:.2f} seconds")
+print(f"builtin initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
 from custom_thread_pool import CustomThreadPool
 from custom_process_pool import CustomProcessPool
@@ -29,13 +29,13 @@ from script_engine_constants import *
 from script_engine_utils import datetime_to_local_str, imageFileExtensions
 from script_execution_state import ScriptExecutionState
 from system_script_handler import SystemScriptHandler
-print(f"non builtin initialization took {time.time() - start_time:.2f} seconds")
+print(f"non builtin initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
-print(f"script logger initialization took {time.time() - start_time:.2f} seconds")
+print(f"script logger initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
 def str_timeout_to_datetime_timeout(timeout, src=None):
     if not isinstance(timeout, str):
@@ -218,7 +218,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
     # update_running_scripts_file(script_name, 'pop')
 
 
-print(f"Final Method initialization took {time.time() - start_time:.2f} seconds")
+print(f"Final Method initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
 if __name__=='__main__':
     multiprocessing.freeze_support()
