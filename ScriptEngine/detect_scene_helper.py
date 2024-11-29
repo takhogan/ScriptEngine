@@ -1,10 +1,11 @@
 import cv2
 import numpy as np
-
-from script_engine_utils import masked_mse
 from script_logger import ScriptLogger
-from image_matcher import ImageMatcher
+
 script_logger = ScriptLogger()
+
+def masked_mse(target_im, compare_im, mask_size):
+    return 1 - np.sum(np.square(np.subtract(target_im, compare_im))) / mask_size
 
 class DetectSceneHelper:
     def __init__(self):
@@ -83,11 +84,11 @@ class DetectSceneHelper:
         #     ), (0, 0, int(255 * ssim_coeff)), 2
         # )
 
-        output_mask_single_channel = sceneAction["actionData"]["positiveExamples"][0]["outputMask_single_channel"].copy()
+        output_mask_single_channel = floating_detect_obj["outputMask_single_channel"].copy()
         post_post_log = ''
         if needs_rescale:
-            width_translation = original_width / int(sceneAction["actionData"]["sourceScreenWidth"])
-            height_translation = original_height / int(sceneAction["actionData"]["sourceScreenHeight"])
+            width_translation = original_width / int(fixed_detect_obj["sourceScreenWidth"])
+            height_translation = original_height / int(fixed_detect_obj["sourceScreenHeight"])
             location_val = (location_val[0] * width_translation, location_val[1] * height_translation)
 
             post_post_log = 'Remapping scene location for resized input'

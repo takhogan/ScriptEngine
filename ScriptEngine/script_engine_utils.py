@@ -1,5 +1,4 @@
 import math
-import numpy as np
 import os
 import json
 from dateutil import tz
@@ -55,8 +54,6 @@ def generate_context_switch_action(childGroups, state, context, update_dict):
         }
     }
 
-def masked_mse(target_im, compare_im, mask_size):
-    return 1 - np.sum(np.square(np.subtract(target_im, compare_im))) / mask_size
 
 
 def is_null(item):

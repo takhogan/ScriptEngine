@@ -23,9 +23,11 @@ class ClickActionHelper:
     @staticmethod
     def get_point_choice(detectTypeData, var_name, point_list, state, screen_width, screen_height, point_index):
         point_choice = (None, None)
+        log_point_choice = (None, None)
         if len(point_list) > 0:
             pre_log = 'pointList in actionData, choosing point from pointlist'
             point_choice = random.choice(point_list)
+            log_point_choice = point_choice
             script_logger.log('detectTypeData', detectTypeData)
             if detectTypeData["detectActionType"] == "detectScene":
                 fixed_detect_obj = None
@@ -54,6 +56,10 @@ class ClickActionHelper:
             point_choice_log = 'Point chosen: {}'.format(str(point_choice))
             pre_log += '\n' + point_choice_log
             script_logger.log(point_choice_log)
+            log_point_list = {
+                'input_type': 'point_list',
+                'point_list': point_list
+            }
             if input_params_valid and (source_screen_width != screen_width) and\
                     (source_screen_height != screen_height):
                 rescaling_log = 'difference in device window size detected.' +\
@@ -85,6 +91,7 @@ class ClickActionHelper:
                 'point_list' : point_list
             }
         else:
+            log_point_list = []
             pre_log = 'pointList not in actionData'
             script_logger.log(pre_log)
 
@@ -96,10 +103,13 @@ class ClickActionHelper:
             script_logger.log(input_expression_log)
             input_point = state_eval(var_name, {}, state)
 
+            input_expression_type = 'unknown'
+
             if input_point["input_type"] == "rectangle":
                 width_coord = random.random() * input_point["width"]
                 height_coord = random.random() * input_point['height']
                 point_choice = (input_point["point"][0] + width_coord, input_point["point"][1] + height_coord)
+                input_expression_type = 'rectangle'
             elif input_point["input_type"] == "shape":
                 shape_ys, shape_xs = np.where(input_point["shape"] > 1)
                 point_choice_index = np.random.randint(0, shape_xs.shape[0])
@@ -107,16 +117,21 @@ class ClickActionHelper:
                     input_point["point"][0] + shape_xs[point_choice_index],
                     input_point["point"][1] + shape_ys[point_choice_index]
                 )
-            input_expression_point_choice_log = 'point chosen from input_expression: {}'.format(str(point_choice))
+                input_expression_type = 'shape'
+            log_point_choice = point_choice
+            input_expression_point_choice_log = 'point chosen from input_expression of type {} : {}'.format(
+                input_expression_type,
+                str(point_choice)
+            )
             pre_log += '\n' + input_expression_point_choice_log
             script_logger.log(input_expression_point_choice_log)
-            point_list = input_point
+            log_point_list = point_list = input_point
         script_logger.get_action_log().add_supporting_file(
             'text',
             'clickActionPointChoice-{}-log.txt'.format(str(point_index)),
             pre_log
         )
-        return point_choice, point_list
+        return point_choice, log_point_choice, point_list, log_point_list
 
     @staticmethod
     def draw_point_choice(screenshot_bgr, point_choice, point_list):
@@ -205,6 +220,7 @@ class ClickActionHelper:
             )
             traverse_x += delta_pair[0]
             traverse_y += delta_pair[1]
+            script_logger.log('drawing path', (int(traverse_x), int(traverse_y)), (int(traverse_x + delta_pair[0]), int(traverse_y + delta_pair[1])))
 
         output_image_relative_path = 'dragPath.png'
         cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
