@@ -12,7 +12,7 @@ from image_matcher import ImageMatcher
 from detect_scene_helper import DetectSceneHelper
 from script_logger import ScriptLogger,thread_local_storage
 script_logger = ScriptLogger()
-print(f"detect object imports took {time.time() - start_time:.2f} seconds")
+print(f"detect object imports took {time.time() - start_time:.2f} seconds", flush=True)
 
 class DetectObjectHelper:
     def __init__(self):
@@ -373,4 +373,4 @@ class DetectObjectHelper:
         )
         return action, status, state, context, run_queue, update_queue
 
-print(f"detect object module initialization took {time.time() - start_time:.2f} seconds")
+print(f"detect object module initialization took {time.time() - start_time:.2f} seconds", flush=True)
