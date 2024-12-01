@@ -199,19 +199,6 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         else:
             script_logger.log('Script Execution completed')
             close_threads_and_processes(io_executor, process_executor)
-
-    from script_log_preview_generator import ScriptLogPreviewGenerator
-    if not system_script:
-        sys.stderr.write("<--IGNORE-OPENCV-VIDEO-ENCODING-SCRIPT-ENGINE-ERRORS-->")
-        sys.stderr.flush()
-        with redirect_stderr(sys.stdout):
-            ScriptLogPreviewGenerator.assemble_script_log_preview(
-                main_script.script_action_log.get_action_log_path(),
-                main_script.log_folder + 'script-log-preview'
-            )
-            main_script.script_action_log.add_supporting_file_reference(
-                'video', 'script-log-preview.mp4', log_header=False
-            )
     if errored:
         exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())

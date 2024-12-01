@@ -809,7 +809,13 @@ class ScriptExecutor:
 
     def run_to_failure(self):
         self.context["run_mode"] = "run_to_failure"
-        script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: runToFailure ", "branchingBehavior: ", self.context["branching_behavior"])
+        script_logger.log(
+            "{} CONTROL FLOW: Running script with runMode: runToFailure branchingBehavior: {} scriptMaxActionAttempts {}".format(
+                self.props['script_name'],
+                self.context["branching_behavior"],
+                self.context["scriptMaxActionAttempts"]
+            )
+        )
         self.status = ScriptExecutionState.STARTING
         overall_status = ScriptExecutionState.FAILURE
         while self.status != ScriptExecutionState.FINISHED and\
@@ -851,7 +857,13 @@ class ScriptExecutor:
 
     def run_one(self):
         self.context["run_mode"] = "run_one"
-        script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: runOne ", "branchingBehavior: ", self.context["branching_behavior"])
+        script_logger.log(
+            "{} CONTROL FLOW: Running script with runMode: runOne branchingBehavior: {} scriptMaxActionAttempts {}".format(
+                self.props['script_name'],
+                self.context["branching_behavior"],
+                self.context["scriptMaxActionAttempts"]
+            )
+        )
         self.status = ScriptExecutionState.STARTING
         branches = []
         if self.context["actionOrder"] == "random":
@@ -934,7 +946,12 @@ class ScriptExecutor:
 
     def run(self):
         self.context["run_mode"] = "run"
-        script_logger.log(self.props['script_name'] + " CONTROL FLOW: Running script with runMode: run ", "branchingBehavior: ", self.context["branching_behavior"])
+        script_logger.log("{} CONTROL FLOW: Running script with runMode: run branchingBehavior: {} scriptMaxActionAttempts {}".format(
+                self.props['script_name'],
+                self.context["branching_behavior"],
+                self.context["scriptMaxActionAttempts"]
+            )
+        )
         self.status = ScriptExecutionState.STARTING
         overall_status = ScriptExecutionState.FAILURE
         while self.status != ScriptExecutionState.FINISHED and\
