@@ -6,7 +6,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'ScriptEngine'))
 
 
 
-executables = [Executable("ScriptEngine/script_manager.py"),Executable("ScriptEngine/adb_host_controller.py"), Executable("ScriptEngine/python_host_controller.py")]
+executables = [Executable("ScriptEngine/script_manager.py"),Executable("ScriptEngine/adb_host_controller.py"), Executable("ScriptEngine/python_host_controller.py"), Executable("ScriptEngine/script_log_preview_generator.py")]
 model_path = os.path.join(os.path.expanduser("~"), ".EasyOCR")
 include_files = [(model_path, ".EasyOCR")]
 

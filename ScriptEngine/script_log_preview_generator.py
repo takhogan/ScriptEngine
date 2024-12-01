@@ -85,7 +85,6 @@ class ScriptLogPreviewGenerator:
         # Define the codec and create VideoWriter object
         if codec == "H264":
             fourcc = cv2.VideoWriter_fourcc(*'H264')  # H.264 codec
-            output_path += ".mp4"  # H.264 is commonly saved as .mp4
         else:
             fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Fallback codec
 
@@ -121,7 +120,10 @@ class ScriptLogPreviewGenerator:
             ScriptLogPreviewGenerator.images_to_video(image_list, output_path, fps=2)
 
 if __name__=='__main__':
+    action_log_path = sys.argv[1]
+    output_file_name = sys.argv[2]
+    print('Running ScriptLogPreviewGenerator with args', action_log_path, output_file_name)
     ScriptLogPreviewGenerator.assemble_script_log_preview(
-        r'C:\Users\takho\Script-Engine-Controller\logs\00000-BlueStacks_WAO_ClosePopUps-2024-11-03 21-34-11\00001-scriptReference-0-action-log.json',
-        'test'
+        action_log_path,
+        output_file_name
     )
