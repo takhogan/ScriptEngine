@@ -815,9 +815,9 @@ class adb_host:
 
             except subprocess.TimeoutExpired:
                 script_logger.log('screencap command timed out')
+                stdout, stderr = process.communicate(timeout=10)
                 process.kill()
-                stdout, stderr = process.communicate()
-                script_logger.log(stdout.decode('utf-8'))
+                script_logger.log(stdout.decode('utf-8', errors='ignore'))
                 raise UnidentifiedImageError()
             bytes_im = BytesIO(stdout)
             source_im = Image.open(bytes_im)
@@ -844,9 +844,9 @@ class adb_host:
 
             except subprocess.TimeoutExpired:
                 script_logger.log('screencap command timed out')
+                stdout, stderr = process.communicate(timeout=10)
                 process.kill()
-                stdout, stderr = process.communicate()
-                script_logger.log(stdout.decode('utf-8'))
+                script_logger.log(stdout.decode('utf-8', errors='ignore'))
                 raise UnidentifiedImageError()
             raw_data = stdout
             header_size = 16

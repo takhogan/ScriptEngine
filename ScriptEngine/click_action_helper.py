@@ -28,7 +28,6 @@ class ClickActionHelper:
             pre_log = 'pointList in actionData, choosing point from pointlist'
             point_choice = random.choice(point_list)
             log_point_choice = point_choice
-            script_logger.log('detectTypeData', detectTypeData)
             if detectTypeData["detectActionType"] == "detectScene":
                 fixed_detect_obj = None
                 for positive_example in detectTypeData["positiveExamples"]:
