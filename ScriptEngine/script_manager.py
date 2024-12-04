@@ -100,6 +100,7 @@ def close_threads_and_processes(io_executor, process_executor, timeout=30):
             future.cancel()
         for future in process_not_done:
             future.cancel()
+    script_logger.log('Completed shutting down thread and process pool')
 
 
 def load_and_run(script_name, script_id, timeout, constants=None, start_time_str=None, device_details=None, system_script=False):
@@ -199,6 +200,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
         else:
             script_logger.log('Script Execution completed')
             close_threads_and_processes(io_executor, process_executor)
+    script_logger.log('Script Manager process completed')
     if errored:
         exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())
