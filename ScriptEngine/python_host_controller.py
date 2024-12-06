@@ -237,13 +237,13 @@ class python_host:
             mid_log = 'Running command {} using os.system'.format(run_command)
             script_logger.log(mid_log)
 
-            outputs = os.system("cd {};".format(cwd) + run_command)
+            return_code = os.system("cd {};".format(cwd) + run_command)
 
             post_log = 'Command completed successfully'
             script_logger.log(post_log)
 
-            state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
-            state[action["actionData"]["returnCodeOutputVarName"]] = outputs.returncode
+            state[action["actionData"]["pipeOutputVarName"]] = ""
+            state[action["actionData"]["returnCodeOutputVarName"]] =return_code
 
             post_post_log = "shell output: {} code: {}".format(
                 state[action["actionData"]["pipeOutputVarName"]],
@@ -265,7 +265,7 @@ class python_host:
             post_log = 'Command completed successfully'
             script_logger.log(post_log)
             script_logger.log(outputs)
-            state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8')
+            state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8') + '\n' + outputs.stderr.decode('utf-8')
             state[action["actionData"]["returnCodeOutputVarName"]] = outputs.returncode
 
             post_post_log = "shell output: {} code: {}".format(
