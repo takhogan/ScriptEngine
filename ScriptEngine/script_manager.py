@@ -4,14 +4,7 @@ start_time = time.time()
 import os
 from concurrent.futures import ALL_COMPLETED, wait
 
-import warnings
 
-warnings.filterwarnings(
-    "ignore",
-    message=r"Unable to retrieve source for @torch.jit._overload function",
-    category=UserWarning,
-    module=r"torch\._jit_internal"
-)
 
 from contextlib import redirect_stderr
 from dateutil import tz
@@ -36,6 +29,12 @@ script_logger = ScriptLogger()
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
 print(f"script logger initialization took {time.time() - start_time:.2f} seconds", flush=True)
+
+
+def hot_swap(current_action_group, current_script, include_scripts, recovery_script=None):
+    if recovery_script is not None:
+        pass
+    pass
 
 def str_timeout_to_datetime_timeout(timeout, src=None):
     if not isinstance(timeout, str):

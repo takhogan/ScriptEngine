@@ -28,15 +28,14 @@ class ParallelizedScriptExecutor:
 
     def start_processes(self, script_executor, parallel_actions):
         self.processes = {}
-        script_counter = script_executor.context["script_counter"]
         parent_action_log = script_executor.parent_action_log
         script_logger.log('CONTROL FLOW: starting parallel execution')
         # if you want to implement for other actions keep in mind you should filter here
         system_inputs = {}
         for process_index,parallel_action in enumerate(parallel_actions):
             script_logger.log('Creating parallel process for ' + str(parallel_action["actionGroup"]))
-            script_counter += 1
-            action_log = script_logger.configure_action_logger(parallel_action, script_counter, parent_action_log)
+            script_executor.context["script_counter"] += 1
+            action_log = script_logger.configure_action_logger(parallel_action, script_executor.context["script_counter"], parent_action_log)
             parallel_action["script_logger"] = (
                 script_logger.get_log_header(),
                 script_logger.get_log_folder(),

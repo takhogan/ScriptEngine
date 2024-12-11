@@ -1,3 +1,16 @@
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"Unable to retrieve source for @torch.jit._overload function",
+    category=UserWarning,
+    module=r"torch\._jit_internal"
+)
+warnings.filterwarnings(
+    "ignore",
+    message="Neither CUDA nor MPS are available"
+)
+
 from PIL import Image
 import tesserocr
 import re
@@ -15,7 +28,6 @@ from pymongo import MongoClient
 
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
-from script_action_log import ScriptActionLog
 from script_execution_state import ScriptExecutionState
 from script_engine_constants import *
 from script_engine_utils import generate_context_switch_action, state_eval
