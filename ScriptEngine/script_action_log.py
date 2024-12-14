@@ -99,7 +99,7 @@ class ScriptActionLog:
         )
         self.to_dict()
         if file_type == 'text':
-            with open(self.pre_file[1], 'w') as pre_file:
+            with open(self.pre_file[1], 'w', encoding='utf-8', errors='replace') as pre_file:
                 pre_file.write(file_contents + end)
         else:
             raise Exception('Unsupported File Type')
@@ -112,7 +112,7 @@ class ScriptActionLog:
                 ' contents: ' + str(file_contents)
             )
         if file_type == 'text':
-            with open(self.pre_file[1], 'a') as pre_file:
+            with open(self.pre_file[1], 'a', encoding='utf-8', errors='replace') as pre_file:
                 pre_file.write(file_contents + end)
         else:
             raise Exception('Unsupported File Type')
@@ -133,7 +133,7 @@ class ScriptActionLog:
         )
         self.to_dict()
         if file_type == 'text':
-            with open(self.post_file[1], 'w') as post_file:
+            with open(self.post_file[1], 'w', encoding='utf-8', errors='replace') as post_file:
                 post_file.write(file_contents + end)
         else:
             raise Exception('Unsupported File Type')
@@ -146,7 +146,7 @@ class ScriptActionLog:
                 ' contents: ' + str(file_contents)
             )
         if file_type == 'text':
-            with open(self.post_file[1], 'a') as post_file:
+            with open(self.post_file[1], 'a', encoding='utf-8', errors='replace') as post_file:
                 post_file.write(file_contents + end)
         else:
             raise Exception('Unsupported File Type')
@@ -175,7 +175,7 @@ class ScriptActionLog:
         self.supporting_files.append((file_type, new_supporting_file_path))
         self.to_dict()
         if file_type == 'text':
-            with open(new_supporting_file_path, 'w') as supporting_file:
+            with open(new_supporting_file_path, 'w', encoding='utf-8', errors='replace') as supporting_file:
                 supporting_file.write(file_contents + end)
         else:
             raise Exception('Unsupported File Type')
@@ -199,7 +199,7 @@ class ScriptActionLog:
                         ' to file ' + str(existing_supporting_file_path) +
                         ' contents: ' + str(file_contents))
         if file_type == 'text':
-            with open(existing_supporting_file_path, 'a') as supporting_file:
+            with open(existing_supporting_file_path, 'a', encoding='utf-8', errors='replace') as supporting_file:
                 supporting_file.write(file_contents + end)
         else:
             raise Exception('Unsupported File Type')

@@ -22,7 +22,6 @@ class ScriptLogger:
             cls._instance.log_folder_path = None
             cls._instance.log_header = None
             cls._instance.log_level = 'info'
-            print('new script_logger instance', cls._instance.id, flush=True)
 
         return cls._instance
 
@@ -82,7 +81,6 @@ class ScriptLogger:
         new_instance.log_folder_path = self.log_folder_path
         new_instance.log_header = self.log_header
         new_instance.log_level = self.log_level
-        print('new script_logger copy instance id', new_instance.id, flush=True)
 
         return new_instance
 
@@ -95,7 +93,7 @@ class ScriptLogger:
             self.log_header if log_header else ''
         ) + ' ' + sep.join(map(str, args)) + end
         if file is None:
-            with open(self.log_file_path, 'a') as log_file:
+            with open(self.log_file_path, 'a', encoding='utf-8', errors='replace') as log_file:
                 log_file.write(text)
                 if flush:
                     log_file.flush()

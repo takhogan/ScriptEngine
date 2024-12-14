@@ -633,6 +633,9 @@ class ScriptExecutor:
         else:
             return True
 
+    def process_engine_interrupts(self):
+        pass
+
     def parse_update_queue(self, update_queue):
         for [update_type, update_target, update_key, update_payload] in update_queue:
             if update_target == 'context':
@@ -721,7 +724,8 @@ class ScriptExecutor:
         self.parallelized_executor.clear_processes()
         for action_index in range(0, n_actions):
             self.context["action_index"] = action_index
-            action = self.actions[action_indices[action_index]]
+            self.process_engine_interrupts()
+            action = self.actions[action_indices[self.context["action_index"]]]
             child_actions = self.get_children(action)
             self.context['child_actions'] = child_actions
 
@@ -764,7 +768,7 @@ class ScriptExecutor:
                   self.status
             )
 
-            self.context["action_attempts"][action_index] += 1
+            self.context["action_attempts"][self.context["action_index"]] += 1
             if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_FAILURE:
                 self.context['parent_action'] = action
                 self.context['child_actions'] = None

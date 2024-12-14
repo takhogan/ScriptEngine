@@ -22,7 +22,8 @@ options = {
     'build_exe': {
         "packages": ["ScriptEngine", "torch", "torchvision", "easyocr", "PIL", "skimage"],
         "includes": ["scipy", "numpy", "PIL"],
-        "include_files": include_files
+        "include_files": include_files,
+        "environment": {"PYTHONIOENCODING": "utf-8"}
     }
 }
 
