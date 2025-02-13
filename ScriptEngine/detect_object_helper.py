@@ -107,25 +107,29 @@ class DetectObjectHelper:
                 truncate_log = 'Truncated {} excess matches'.format(excess_matches)
                 update_update_queue_log += truncate_log + '\n'
                 script_logger.log(truncate_log)
-            for match_index, match in enumerate(matches[1:max_matches]):
-                switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
-                    "state": {
-                        action['actionData']['outputVarName']: match
-                    }
-                })
-                update_queue.append(
-                    [
-                        'append',
-                        'run_queue',
-                        None,
-                        switch_action
-                    ]
-                )
-                context_switch_log = 'Creating contextSwitchAction-' +\
-                                  str(switch_action['actionGroup']) + ' for match number ' + str(match_index) +\
-                                  ' with children: ' + str(action["childGroups"])
-                update_update_queue_log += context_switch_log + '\n'
-                script_logger.log(context_switch_log)
+            if max_matches > 1:
+                matches = matches[:max_matches]
+            else:
+                matches = matches[0]
+            # for match_index, match in enumerate(matches[1:max_matches]):
+            #     switch_action = generate_context_switch_action(action["childGroups"], state_copy, context_copy, {
+            #         "state": {
+            #             action['actionData']['outputVarName']: match
+            #         }
+            #     })
+            #     update_queue.append(
+            #         [
+            #             'append',
+            #             'run_queue',
+            #             None,
+            #             switch_action
+            #         ]
+            #     )
+            #     context_switch_log = 'Creating contextSwitchAction-' +\
+            #                       str(switch_action['actionGroup']) + ' for match number ' + str(match_index) +\
+            #                       ' with children: ' + str(action["childGroups"])
+            #     update_update_queue_log += context_switch_log + '\n'
+            #     script_logger.log(context_switch_log)
             script_logger.get_action_log().append_supporting_file(
                 'text',
                 'detect_result.txt',
@@ -186,7 +190,7 @@ class DetectObjectHelper:
                 floating_detect_obj = positive_example
                 break
         is_detect_object_first_match = (
-                action['actionData']['detectActionType'] == 'detectObject' and action['actionData'][
+                action['actionData']['detectActionType'] == 'floatingObject' and action['actionData'][
             'matchMode'] == 'firstMatch'
         )
 
@@ -200,7 +204,7 @@ class DetectObjectHelper:
         # if is match mode firstMatch or is a detectScene
         detect_scene_result_log = ''
         if is_detect_object_first_match or \
-                action['actionData']['detectActionType'] == 'detectScene':
+                action['actionData']['detectActionType'] == 'fixedObject':
             detect_scene_pre_log = 'Performing detectActionType detect scene'
             script_logger.log(detect_scene_pre_log)
             detect_scene_result_log += detect_scene_pre_log + '\n'
@@ -214,15 +218,15 @@ class DetectObjectHelper:
                 needs_rescale,
                 output_cropping=action["actionData"]["maskLocation"] if
                 (action["actionData"]["maskLocation"] != 'null' and
-                 "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
-                 ) else None
+                    (action['actionData']["excludeMatchedAreaFromOutput"] if 'excludeMatchedAreaFromOutput' in action['actionData'] else False)
+                ) else None
             )
             log_objs['fixedObject'] = (
                 matches, screencap_masked, fixed_detect_obj, needs_rescale
             )
             if matches[0]['score'] < float(action["actionData"]["threshold"]):
                 matches = []
-                if action['actionData']['detectActionType'] == 'detectScene':
+                if action['actionData']['detectActionType'] == 'fixedObject':
                     detect_scene_result_log = 'detect mode detectScene failed.' +\
                                               ' threshold of {} was greater than similarity score of {}'.format(
                                                   action["actionData"]["threshold"],
@@ -247,7 +251,7 @@ class DetectObjectHelper:
         # if is a detectObject and matchMode is bestMatch
         # or is a detectObject and matchMode firstMatch but did not find a firstmatch
         detect_object_result_log = ''
-        if (action['actionData']['detectActionType'] == 'detectObject' and action['actionData'][
+        if (action['actionData']['detectActionType'] == 'floatingObject' and action['actionData'][
             'matchMode'] == 'bestMatch') or \
                 (is_detect_object_first_match and len(matches) == 0):
             detect_object_result_log = 'Performing detectActionType detect object'
@@ -262,8 +266,8 @@ class DetectObjectHelper:
                 check_image_scale=check_image_scale,
                 output_cropping=action["actionData"]["maskLocation"] if
                 (action["actionData"]["maskLocation"] != 'null' and
-                 "excludeMatchedAreaFromOutput" in action['actionData']['detectorAttributes']
-                 ) else None,
+                    (action['actionData']["excludeMatchedAreaFromOutput"] if 'excludeMatchedAreaFromOutput' in action['actionData'] else False)
+                ) else None,
                 threshold=float(action["actionData"]["threshold"]),
                 use_color=action["actionData"]["useColor"] == "true" or action["actionData"]["useColor"]
             )
@@ -366,11 +370,25 @@ class DetectObjectHelper:
             # DetectObjectHelper.create_detect_action_log_images(thread_script_logger, action, log_obj)
             io_executor.submit(DetectObjectHelper.create_detect_action_log_images, thread_script_logger, action, log_obj)
 
-        update_queue = []
-        # matches are added to the update queue and then added to the state after handle_action returns
-        update_queue, status = DetectObjectHelper.update_update_queue(
-            action, state, context, matches, update_queue
-        )
-        return action, status, state, context, run_queue, update_queue
+        if len(matches) > 0:
+            status = ScriptExecutionState.SUCCESS
+            update_update_queue_log = ''
+            if str(action['actionData']['maxMatches']).isdigit():
+                max_matches = int(action['actionData']['maxMatches'])
+            else:
+                max_matches = state_eval(action['actionData']['maxMatches'], {}, state)
+            excess_matches = len(matches) - max_matches
+            if excess_matches > 0:
+                truncate_log = 'Truncated {} excess matches'.format(excess_matches)
+                update_update_queue_log += truncate_log + '\n'
+                script_logger.log(truncate_log)
+            if max_matches > 1:
+                matches = matches[:max_matches]
+            else:
+                matches = matches[0]
+            state[action['actionData']['outputVarName']] = matches
+        else:
+            status = ScriptExecutionState.FAILURE
+        return action, status, state, context, run_queue
 
 print(f"detect object module initialization took {time.time() - start_time:.2f} seconds", flush=True)

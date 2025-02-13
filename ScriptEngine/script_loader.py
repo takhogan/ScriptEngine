@@ -94,8 +94,8 @@ def parse_script_file(
                 "detectObject"
             }
             if detect_type_action:
-                include_contained_area = 'includeContainedAreaInOutput' in action["actionData"]["detectorAttributes"]
-                exclude_matched_area = 'excludeMatchedAreaFromOutput' in action["actionData"]["detectorAttributes"]
+                include_contained_area = (action["actionData"]['includeContainedAreaInOutput'] if 'includeContainedAreaInOutput' in action["actionData"] else False)
+                exclude_matched_area = (action["actionData"]['excludeMatchedAreaFromOutput'] if 'excludeMatchedAreaFromOutput' in action["actionData"] else False)
                 for example_index,positive_example in enumerate(action["actionData"]["positiveExamples"]):
                     if "mask" in positive_example and not positive_example["mask"] is None:
                         read_and_set_image(positive_example, action, "mask")

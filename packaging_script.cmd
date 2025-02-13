@@ -1,1 +1,1 @@
-venv\Scripts\python setup.py build_exe
+venv\Scripts\python freeze_setup.py build_exe

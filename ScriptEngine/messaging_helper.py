@@ -1,5 +1,6 @@
 import sys
 from typing import Dict
+import argparse
 
 if __package__ is None or __package__ == '':
     from script_engine_constants import *
@@ -54,14 +55,13 @@ class MessagingHelper:
         else:
             return True
 
-
-
-
+def main():
+    parser = argparse.ArgumentParser(description='Messaging Helper CLI')
+    parser.add_argument('message', help='Message to send')
+    args = parser.parse_args()
+    
+    helper = MessagingHelper()
+    helper.send_viber_message(args.message)
 
 if __name__ == '__main__':
-    if len(sys.argv) > 2 and sys.argv[1] == 'sendmessage':
-        message = sys.argv[2]
-        helper = MessagingHelper()
-        helper.send_viber_message(message)
-    else:
-        script_logger.log("Usage: python messaging_helper.py sendmessage 'Your Message Here'")
+    main()

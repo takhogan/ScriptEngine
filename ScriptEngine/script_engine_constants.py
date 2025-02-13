@@ -3,3 +3,4 @@ RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
 SERVICE_CREDENTIALS_FILE_PATH = '..\\assets\\service_credentials.json'
 VERIFY_PATH = './certs/Scriptcontroller-CACert.pem'
 SERVER_AUTH_HASH_PATH = './tmp/server_auth_hash.json'
+ENGINE_INTERRUPTS_FILE = "./tmp/{}_engine_interrupts.json"

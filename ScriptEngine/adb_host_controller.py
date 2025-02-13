@@ -501,6 +501,7 @@ class adb_host:
         devices_output = self.get_device_list_output()
 
         if not any(self.full_ip in device_line for device_line in devices_output):
+            self.run_disconnect_command()
             self.run_connect_command()
             time.sleep(3)
             devices_output = self.get_device_list_output()
@@ -550,6 +551,7 @@ class adb_host:
         time.sleep(3)
         self.detect_adb_port()
         script_logger.log('ADB CONTROLLER: connecting to adb device')
+        self.run_disconnect_command()
         self.run_connect_command()
         time.sleep(3)
 
@@ -603,6 +605,7 @@ class adb_host:
             devices_output = self.get_device_list_output()
             script_logger.log('ADB CONTROLLER: listing devices')
             if not any(self.full_ip in device_line for device_line in devices_output):
+                self.run_disconnect_command()
                 self.run_connect_command()
                 time.sleep(3)
                 devices_output = self.get_device_list_output()
@@ -697,6 +700,13 @@ class adb_host:
         script_logger.log('connecting to device', self.full_ip)
         return subprocess.run(
             self.adb_path + ' connect ' + self.full_ip, cwd="/", shell=True, timeout=30
+        )
+
+    def run_disconnect_command(self):
+        script_logger = ScriptLogger.get_logger()
+        script_logger.log('disconnecting from device', self.full_ip)
+        return subprocess.run(
+            self.adb_path + ' disconnect ' + self.full_ip, cwd="/", shell=True, timeout=30
         )
 
     def get_device_list_output(self):
@@ -1266,7 +1276,7 @@ class adb_host:
                     action,
                     script_mode=script_mode
                 )
-                action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_action_result(
+                action, status, state, context, run_queue = DetectObjectHelper.handle_detect_action_result(
                     self.io_executor, handle_action_result, state, context, run_queue
                 )
         elif action["actionName"] == "mouseInteractionAction":

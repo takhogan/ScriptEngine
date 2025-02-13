@@ -5,6 +5,7 @@ import numpy as np
 import os
 sys.path.append("..")
 
+from script_log_tree_generator import ScriptLogTreeGenerator
 bin_path = os.path.abspath("bin")
 os.environ["PATH"] += os.pathsep + bin_path
 
@@ -13,15 +14,7 @@ class ScriptLogPreviewGenerator:
         pass
 
 
-    @staticmethod
-    def assemble_script_log_tree(child_obj):
-        action_log_dict = None
-        with open(child_obj['action_log_path'], 'r') as action_log_file:
-            action_log_dict = json.load(action_log_file)
-        if action_log_dict is not None:
-            child_obj.update(action_log_dict)
-            for child in action_log_dict['children']:
-                ScriptLogPreviewGenerator.assemble_script_log_tree(child)
+
 
     @staticmethod
     def log_tree_to_image_list(log_tree, image_list):
@@ -111,19 +104,24 @@ class ScriptLogPreviewGenerator:
         log_tree = {
             'action_log_path': action_log_path
         }
-        ScriptLogPreviewGenerator.assemble_script_log_tree(log_tree)
+        ScriptLogTreeGenerator.assemble_script_log_tree(log_tree)
         image_list = []
         ScriptLogPreviewGenerator.log_tree_to_image_list(log_tree, image_list)
-        # with open('./log_tree.json', 'w') as log_tree_file:
-        #     json.dump(log_tree, log_tree_file)
         if len(image_list) > 0:
             ScriptLogPreviewGenerator.images_to_video(image_list, output_path, fps=2)
 
-if __name__=='__main__':
-    action_log_path = sys.argv[1]
-    output_file_name = sys.argv[2]
-    print('Running ScriptLogPreviewGenerator with args', action_log_path, output_file_name)
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='Script Log Preview Generator')
+    parser.add_argument('action_log_path', help='Path to action log file')
+    parser.add_argument('output_file_name', help='Output file name')
+    args = parser.parse_args()
+    
+    print('Running ScriptLogPreviewGenerator with args', args.action_log_path, args.output_file_name)
     ScriptLogPreviewGenerator.assemble_script_log_preview(
-        action_log_path,
-        output_file_name
+        args.action_log_path,
+        args.output_file_name
     )
+
+if __name__ == '__main__':
+    main()

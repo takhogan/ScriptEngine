@@ -284,7 +284,7 @@ class ImageMatcher:
         threshold = float(detectObject['actionData']['threshold'])
 
         # draw red box around best match
-        if detectObject['actionData']['detectActionType'] == "detectObject":
+        if detectObject['actionData']['detectActionType'] == "floatingObject":
             if len(matches) > 0:
                 best_point = matches[0]['point']
                 best_point_score = matches[0]['score']
@@ -338,7 +338,7 @@ class ImageMatcher:
         alpha = 0.5
 
         # draw search image over matches
-        if detectObject['actionData']['detectActionType'] == "detectObject":
+        if detectObject['actionData']['detectActionType'] == "floatingObject":
             for match_obj in matches:
                 pt = tuple(map(int, match_obj['point']))
                 box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)

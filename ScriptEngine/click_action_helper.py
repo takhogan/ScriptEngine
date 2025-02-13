@@ -4,7 +4,7 @@ import cv2
 from script_logger import ScriptLogger
 from script_engine_utils import state_eval
 from script_action_log import ScriptActionLog
-from typing import Tuple, Callable
+from typing import Tuple, Callable, List
 script_logger = ScriptLogger()
 
 class ClickActionHelper:
@@ -21,6 +21,41 @@ class ClickActionHelper:
         return remapping_function
 
     @staticmethod
+    def remap_points_to_screen(
+        input_params_valid : bool, source_screen_width : int, source_screen_height : int,
+        screen_width : int, screen_height : int, point_list : List[int], point_choice : Tuple[int, int]
+    ):
+        remap_log = ''
+        if input_params_valid and (source_screen_width != screen_width) and \
+                (source_screen_height != screen_height):
+            rescaling_log = 'difference in device window size detected.' + \
+                            ' Remapping point choice from screen (wxh) ({}x{}) to screen ({}x{})'.format(
+                                str(source_screen_width),
+                                str(source_screen_height),
+                                str(screen_width),
+                                str(screen_height)
+                            )
+            remap_log += '\n' + rescaling_log
+            script_logger.log(rescaling_log)
+            remapping_function = ClickActionHelper.get_remapping_function(
+                source_screen_width,
+                source_screen_height,
+                screen_width,
+                screen_height
+            )
+            point_choice = remapping_function(point_choice)
+            new_point_choice_log = 'New point chosen: {}'.format(str(point_choice))
+            remap_log += '\n' + new_point_choice_log
+            script_logger.log(new_point_choice_log)
+            point_list = point_list.copy()
+            remapping_log = 'Remapping {} point list points'.format(len(point_list))
+            remap_log += '\n' + remapping_log
+            script_logger.log(remapping_log)
+            point_list = list(map(remapping_function, point_list))
+
+        return point_list, point_choice, remap_log
+
+    @staticmethod
     def get_point_choice(detectTypeData, var_name, point_list, state, screen_width, screen_height, point_index):
         point_choice = (None, None)
         log_point_choice = (None, None)
@@ -28,7 +63,7 @@ class ClickActionHelper:
             pre_log = 'pointList in actionData, choosing point from pointlist'
             point_choice = random.choice(point_list)
             log_point_choice = point_choice
-            if detectTypeData["detectActionType"] == "detectScene":
+            if detectTypeData["detectActionType"] == "fixedObject":
                 fixed_detect_obj = None
                 for positive_example in detectTypeData["positiveExamples"]:
                     if positive_example["detectType"] == "fixedObject":
@@ -59,36 +94,17 @@ class ClickActionHelper:
                 'input_type': 'point_list',
                 'point_list': point_list
             }
-            if input_params_valid and (source_screen_width != screen_width) and\
-                    (source_screen_height != screen_height):
-                rescaling_log = 'difference in device window size detected.' +\
-                                ' Remapping point choice from screen (wxh) ({}x{}) to screen ({}x{})'.format(
-                                    str(source_screen_width),
-                                    str(source_screen_height),
-                                    str(screen_width),
-                                    str(screen_height)
-                                )
-                pre_log += '\n' + rescaling_log
-                script_logger.log(rescaling_log)
-                remapping_function = ClickActionHelper.get_remapping_function(
-                    source_screen_width,
-                    source_screen_height,
-                    screen_width,
-                    screen_height
-                )
-                point_choice = remapping_function(point_choice)
-                new_point_choice_log = 'New point chosen: {}'.format(str(point_choice))
-                pre_log += '\n' + new_point_choice_log
-                script_logger.log(new_point_choice_log)
-                point_list = point_list.copy()
-                remapping_log = 'Remapping {} point list points'.format(len(point_list))
-                pre_log += '\n' + remapping_log
-                script_logger.log(remapping_log)
-                point_list = list(map(remapping_function, point_list))
+
+            point_list, point_choice, remap_log = ClickActionHelper.remap_points_to_screen(
+                input_params_valid, source_screen_width, source_screen_height,
+                screen_width, screen_height, point_list, point_choice
+            )
             point_list = {
-                'input_type' : 'point_list',
-                'point_list' : point_list
+                'input_type': 'point_list',
+                'point_list': point_list
             }
+            pre_log += '\n' + remap_log
+
         else:
             log_point_list = []
             pre_log = 'pointList not in actionData'
@@ -117,7 +133,14 @@ class ClickActionHelper:
                     input_point["point"][1] + shape_ys[point_choice_index]
                 )
                 input_expression_type = 'shape'
+            source_screen_width = input_point["original_width"]
+            source_screen_height = input_point["original_height"]
             log_point_choice = point_choice
+            [], point_choice, remap_log = ClickActionHelper.remap_points_to_screen(
+                True, source_screen_width, source_screen_height,
+                screen_width, screen_height, [], point_choice
+            )
+            pre_log += '\n' + remap_log
             input_expression_point_choice_log = 'point chosen from input_expression of type {} : {}'.format(
                 input_expression_type,
                 str(point_choice)

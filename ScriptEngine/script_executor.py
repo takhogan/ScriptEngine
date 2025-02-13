@@ -1,4 +1,4 @@
-
+import copy
 import sys
 import datetime
 from dateutil import tz
@@ -9,6 +9,7 @@ import glob
 
 sys.path.append("..")
 from device_manager import DeviceManager
+from engine_manager import EngineManager
 from detect_object_helper import DetectObjectHelper
 from parallelized_script_executor import ParallelizedScriptExecutor
 from script_engine_constants import *
@@ -26,10 +27,7 @@ script_logger = ScriptLogger()
 
 
 
-import time
 import os
-import pytesseract
-import requests
 
 DETECT_TYPES_SET = {
     'detectObject',
@@ -54,77 +52,110 @@ DELAY_EXEMPT_ACTIONS = {
 class ScriptExecutor:
     def __init__(self,
                  script_obj,
+                 include_scripts,
                  timeout,
                  base_script_name,
                  base_start_time_str,
                  script_id,
                  device_manager : DeviceManager,
+                 engine_manager : EngineManager,
                  process_executor,
+                 call_stack=None,
                  parent_folder='',
-                 script_start_time=None,
+                 script_start_time : datetime.datetime=None,
                  context=None,
                  state=None,
-                 create_log_folders=True):
+                 create_log_folders=True,
+                 screen_plan_server_attached=False):
+        self.include_scripts = include_scripts
         self.script_id = script_id
         self.base_script_name = base_script_name
         self.base_start_time_str = base_start_time_str
         self.device_manager = device_manager
+        self.engine_manager = engine_manager
         self.process_executor = process_executor
         self.parallelized_executor = ParallelizedScriptExecutor(self.process_executor)
-        self.props = script_obj['props']
-        if script_start_time is None:
-            self.refresh_start_time()
-        else:
-            self.props['script_start_time'] = script_start_time
-        self.timeout = timeout
-        self.props["timeout"] = timeout
-        self.actions = script_obj["actionRows"][0]["actions"]
-        self.action_rows = script_obj["actionRows"]
-        self.inputs = script_obj["inputs"]
-        self.outputs = script_obj["outputs"]
-
-        # TODO IP shouldn't be hard coded
-        self.include_scripts = script_obj['include']
-        self.run_queue = []
-
+        self.screen_plan_server_attached = screen_plan_server_attached
         self.state = {
-
+            'SCRIPT_CONTEXT': {
+                'script_id': script_id,
+                'timeout': timeout,
+                'base_script_name': base_script_name, 
+                'base_start_time_str': base_start_time_str
+            }
         }
-        # script_logger.log('state (1) : ', state, self.state)
         if state is not None:
             self.state.update(state)
-
         self.context = {
-            'parent_actions': None,
+            'action_path' : None,
             'parent_action': None,
             'child_actions': None,
             'script_attributes': set(),
             'script_counter': 0,
-            'script_timer' : datetime.datetime.now(),
-            'run_depth' : 0,
-            'branching_behavior' : 'firstMatch',
-            'run_type' : 'run',
+            'script_timer': datetime.datetime.now(),
+            'run_depth': 0,
+            'branching_behavior': 'firstMatch',
+            'run_type': 'run',
             'search_patterns': {},
-            'action_attempts' : [0] * len(script_obj["actionRows"][0]["actions"]),
-            'out_of_attempts' : False,
-            'out_of_attempts_action' : None,
-            'object_handler_encountered' : False,
+            'out_of_attempts': False,
+            'out_of_attempts_action': None,
             'run_queue': None,
             'actionOrder': 'sequential',
             'success_states': None,
-            'mouse_down' : False
+            'mouse_down': False,
+            'run_actions_complete' : None,
+            'skip_input_parsing' : None
         }
-        self.parent_action_log = None
-        self.script_action_log = None
-        # script_logger.log('update context : ', context["action_attempts"] if (context is not None and "action_attempts" in context) else 'none')
         if context is not None:
             self.context.update(context)
-        # script_logger.log('context (1) : ', self.context["action_attempts"])
+        
+        # Parse script object
+        self.parse_script_obj(script_obj)
+        
+        
+        # Set call stack
+        self.call_stack = [] if call_stack is None else call_stack.copy()
+        self.call_stack.append(self.props["script_name"])
+        
+        # Initialize run queue
+        self.run_queue = []
+        
+        # Set script start time
+        if script_start_time is None:
+            self.refresh_start_time()
+        else:
+            self.props['script_start_time'] = script_start_time
+        
+        # Set timeout
+        self.timeout = timeout
+        self.props["timeout"] = timeout
+        
+        # Initialize status
         self.status = ScriptExecutionState.FINISHED
         self.status_detail = None
+        
+        # Setup logging
+        self.parent_action_log = None
+        self.script_action_log = None
         if create_log_folders:
             self.create_log_folders(parent_folder)
             self.set_log_paths()
+        
+        # Set hot swap version
+        self.hot_swap_version = self.engine_manager.get_script_version(self.props['script_name'])
+
+    def parse_script_obj(self, script_obj):
+        """Parse script object and initialize executor properties"""
+        self.props = script_obj['props']
+        self.actions = script_obj["actionRows"][0]["actions"]
+        self.action_rows = script_obj["actionRows"]
+        self.inputs = script_obj["inputs"]
+        self.outputs = script_obj["outputs"]
+        
+        # Initialize context with action attempts array
+        if 'action_attempts' not in self.context:
+            self.context['action_attempts'] = [0] * len(self.actions)
+
 
     def refresh_start_time(self):
         self.props["script_start_time"] = datetime.datetime.now().astimezone(tz=tz.tzutc())
@@ -315,9 +346,8 @@ class ScriptExecutor:
         script_logger.log(
             'Handling handle action result for action ' + action["actionName"] + '-' + str(action["actionGroup"])
         )
-        update_queue = []
         if action["actionName"] == "detectObject":
-            action, status, state, context, run_queue, update_queue = DetectObjectHelper.handle_detect_action_result(
+            action, status, state, context, run_queue = DetectObjectHelper.handle_detect_action_result(
                 self.device_manager.io_executor, handle_action_result, state, context, run_queue
             )
         else:
@@ -333,18 +363,20 @@ class ScriptExecutor:
         else:
             script_logger.get_action_log().set_status(status.name)
 
-        return action, status, state, context, run_queue, update_queue
+        return action, status, state, context, run_queue, []
 
     def handle_script_reference(self, action, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List]:
         if action["actionName"] == 'scriptReference':
-
-            if 'paused_script' in self.context:
-
-                del self.context['paused_script']
-                pass
-
-            is_new_script = "initializedScript" not in action["actionData"] or action["actionData"][
-                "initializedScript"] is None
+            is_new_script = "initializedScript" not in action["actionData"] or action["actionData"]["initializedScript"] is None
+            
+            if not is_new_script:
+                # Check if initialized script needs hot swapping
+                initialized_script = action["actionData"]["initializedScript"]
+                current_version = self.engine_manager.get_script_version(initialized_script.props['script_name'])
+                if initialized_script.hot_swap_version != current_version:
+                    # Force reinitialization if versions don't match
+                    is_new_script = True
+                    
             if is_new_script:
                 # script_logger.log('context: ', context)
                 child_context = {
@@ -358,13 +390,6 @@ class ScriptExecutor:
             else:
                 child_context = action["actionData"]["initializedScript"].context
             # script_logger.log("child_context: ", child_context, "self context: ", context)
-
-            is_error_handler = 'searchAreaErrorHandler' in child_context["script_attributes"] and \
-                               context["parent_action"] is not None and \
-                               context["parent_action"]["actionName"] == "searchPatternContinueAction"
-            is_object_handler = 'searchAreaObjectHandler' in child_context["script_attributes"] and \
-                                context["parent_action"] is not None and \
-                                context["parent_action"]["actionName"] == "searchPatternContinueAction"
 
             child_state = {}
 
@@ -387,50 +412,28 @@ class ScriptExecutor:
                     ref_script = parse_zip(script_name, False)
                 # script_logger.log(' state (3) : ', state)
 
-                ref_script['include'] = self.include_scripts
                 child_context["actionOrder"] = action["actionData"]["actionOrder"] if "actionOrder" in action["actionData"] else "sequential"
                 child_context["scriptMaxActionAttempts"] = action["actionData"]["scriptMaxActionAttempts"] if "scriptMaxActionAttempts" in action["actionData"] else ""
                 child_context["onOutOfActionAttempts"] = action["actionData"]["onOutOfActionAttempts"] if "onOutOfActionAttempts" in action["actionData"] else "returnFailure"
                 child_context["script_counter"] = self.context["script_counter"]
                 child_context["script_timer"] = self.context["script_timer"]
-
-                if is_error_handler or is_object_handler:
-                    search_area_handler_state = {
-                        "target_search_pattern": context["search_patterns"][
-                            context["parent_action"]["actionData"]["searchPatternID"]
-                        ]
-                    }
-                    if child_state is not None:
-                        child_state.update(search_area_handler_state)
-                    else:
-                        child_state = search_area_handler_state
-                    ref_script_executor = ScriptExecutor(
-                        ref_script,
-                        self.props["timeout"],
-                        self.base_script_name,
-                        self.base_start_time_str,
-                        self.script_id,
-                        self.device_manager,
-                        self.process_executor,
-                        parent_folder=self.log_folder,
-                        context=child_context,
-                        state=child_state,
-                        create_log_folders=False
-                    )
-                else:
-                    ref_script_executor = ScriptExecutor(
-                        ref_script,
-                        self.props["timeout"],
-                        self.base_script_name,
-                        self.base_start_time_str,
-                        self.script_id,
-                        self.device_manager,
-                        self.process_executor,
-                        parent_folder=self.log_folder,
-                        context=child_context,
-                        state=child_state,
-                        create_log_folders=False
-                    )
+                ref_script_executor = ScriptExecutor(
+                    ref_script,
+                    self.include_scripts,
+                    self.props["timeout"],
+                    self.base_script_name,
+                    self.base_start_time_str,
+                    self.script_id,
+                    self.device_manager,
+                    self.engine_manager,
+                    self.process_executor,
+                    call_stack=self.call_stack + ['[{}-scriptReference-{}]'.format(self.context["script_counter"], action["actionGroup"])],
+                    parent_folder=self.log_folder,
+                    context=child_context,
+                    state=child_state,
+                    create_log_folders=False,
+                    screen_plan_server_attached=self.screen_plan_server_attached
+                )
             else:
                 action["actionData"]["initializedScript"].rewind(child_state)
                 ref_script_executor = action["actionData"]["initializedScript"]
@@ -444,22 +447,10 @@ class ScriptExecutor:
                 refresh_start_time=True
             )
             self.script_action_log.set_script_log_folder(child_log_folder)
-            ref_script_executor.parse_inputs(state)
-
-            # I don't know what this does anymore
-            if 'searchAreaObjectHandler' in child_context["script_attributes"]:
-                ref_script_executor.context["object_handler_encountered"] = False
-            if is_error_handler:
-                if context["search_patterns"][
-                    context["parent_action"]["actionData"]["searchPatternID"]
-                ]["stitcher_status"] != "STITCHER_OK":
-                    script_logger.log('launching error handler')
-                    pass
-                else:
-                    script_logger.log('returning without error')
-                    status = ScriptExecutionState.RETURN
-                    return action, status, state, context, run_queue, []
-
+            if self.context['skip_input_parsing'] is not None:
+                self.context['skip_input_parsing'] = None
+            else:
+                ref_script_executor.parse_inputs(state)
             ref_script_executor.set_log_paths()
 
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing child script', action['actionData']['scriptName'])
@@ -471,9 +462,6 @@ class ScriptExecutor:
             elif action["actionData"]["runMode"] == "runToFailure":
                 ref_script_executor.run_to_failure()
 
-            if 'paused_script' in ref_script_executor.context:
-                self.context['paused_script'] = ''#paused script file name
-                #probably set status to something special
 
             self.set_log_paths()
             script_logger.set_log_header(
@@ -491,22 +479,14 @@ class ScriptExecutor:
             self.context["script_timer"] = ref_script_executor.context["script_timer"]
             context["script_timer"] = ref_script_executor.context["script_timer"]
 
-            if is_object_handler:
-                status = ScriptExecutionState.RETURN
-            elif is_error_handler:
-                if ref_script_executor.status == ScriptExecutionState.FINISHED:
-                    status = ScriptExecutionState.RETURN
-                else:
-                    status = ScriptExecutionState.ERROR
+            if ref_script_executor.status == ScriptExecutionState.FINISHED:
+                status = ScriptExecutionState.SUCCESS
+            elif ref_script_executor.status == ScriptExecutionState.FINISHED_FAILURE:
+                status = ScriptExecutionState.FAILURE
+            elif ref_script_executor.status == ScriptExecutionState.FAILURE:
+                status = ScriptExecutionState.FAILURE
             else:
-                if ref_script_executor.status == ScriptExecutionState.FINISHED:
-                    status = ScriptExecutionState.SUCCESS
-                elif ref_script_executor.status == ScriptExecutionState.FINISHED_FAILURE:
-                    status = ScriptExecutionState.FAILURE
-                elif ref_script_executor.status == ScriptExecutionState.FAILURE:
-                    status = ScriptExecutionState.FAILURE
-                else:
-                    status = ScriptExecutionState.ERROR
+                status = ScriptExecutionState.ERROR
             action["actionData"]["initializedScript"] = ref_script_executor
             context["status_detail"] = self.status_detail
             script_logger.log(action["actionData"][
@@ -563,37 +543,40 @@ class ScriptExecutor:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script timeout - ', datetime.datetime.now())
             self.status_detail = ScriptExecutionStatusDetail.TIMED_OUT
             return end_branch,True
-        running_scripts = get_running_scripts()
 
-        if len(running_scripts) == 0:
-            script_logger.log('CONTROL FLOW: running scripts file empty')
-            terminate_request = True
-        else:
-            current_running_script = running_scripts[0]
-            script_id_mismatch = current_running_script["script_id"] != self.script_id
-            start_time_mismatch = current_running_script['start_time_str'] != self.base_start_time_str
-            script_name_mismatch = current_running_script['script_name'] != self.base_script_name
-            terminate_request = (
-                script_id_mismatch or
-                start_time_mismatch or
-                script_name_mismatch
-            )
-            if terminate_request:
-                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script_id_mismatch?', script_id_mismatch,
-                      'start_time_mismatch?', start_time_mismatch,
-                      'script_name_mismatch?', script_name_mismatch)
-            if terminate_request and current_running_script['parallel']:
-                for running_script in running_scripts:
-                    if running_script['parallel']:
-                        terminate_request = (terminate_request and (
-                            running_script['script_id'] != self.script_id) or
-                            running_script['start_time_str'] != self.base_start_time_str or
-                            running_script['script_name'] != self.base_script_name
-                        )
-                        if not terminate_request:
+        terminate_request = False
+        if self.screen_plan_server_attached:
+            running_scripts = get_running_scripts()
+
+            if len(running_scripts) == 0:
+                script_logger.log('CONTROL FLOW: running scripts file empty')
+                terminate_request = True
+            else:
+                current_running_script = running_scripts[0]
+                script_id_mismatch = current_running_script["script_id"] != self.script_id
+                start_time_mismatch = current_running_script['start_time_str'] != self.base_start_time_str
+                script_name_mismatch = current_running_script['script_name'] != self.base_script_name
+                terminate_request = (
+                    script_id_mismatch or
+                    start_time_mismatch or
+                    script_name_mismatch
+                )
+                if terminate_request:
+                    script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script_id_mismatch?', script_id_mismatch,
+                          'start_time_mismatch?', start_time_mismatch,
+                          'script_name_mismatch?', script_name_mismatch)
+                if terminate_request and current_running_script['parallel']:
+                    for running_script in running_scripts:
+                        if running_script['parallel']:
+                            terminate_request = (terminate_request and (
+                                running_script['script_id'] != self.script_id) or
+                                running_script['start_time_str'] != self.base_start_time_str or
+                                running_script['script_name'] != self.base_script_name
+                            )
+                            if not terminate_request:
+                                break
+                        else:
                             break
-                    else:
-                        break
 
         if terminate_request:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: received terminate request')
@@ -632,10 +615,170 @@ class ScriptExecutor:
             return False
         else:
             return True
+    
+    def get_all_children(self, action):
+        return list(map(lambda childGroupLink: self.action_rows[childGroupLink["destRowIndex"]]["actions"][childGroupLink["destActionIndex"]], action["childGroups"]))
 
-    def process_engine_interrupts(self):
-        pass
+    def find_action_paths(self, parent_action_group: int, current_action_group: int) -> List[int]:
+        """Find a path through the action graph that goes through parent_action_group to current_action_group
+        
+        Args:
+            parent_action_group: The first required action group in the path
+            current_action_group: The second required action group in the path
+            
+        Returns:
+            The path as a list of action group IDs, or None if no such path exists
+        """
+        start_actions = self.action_rows[0]["actions"]
+        if parent_action_group is None:
+            found_parent = True
+        
+        for start_action in start_actions:
+            # Add visited set to track nodes we've already seen
+            visited = {start_action["actionGroup"]}
+            queue = [(start_action, [start_action["actionGroup"]], False)]
+            
+            while queue:
+                current_action, current_path, found_parent = queue.pop(0)
+                
+                if current_action["actionGroup"] == parent_action_group:
+                    found_parent = True
+                
+                if found_parent and current_action["actionGroup"] == current_action_group:
+                    return current_path
+                
+                children = self.get_all_children(current_action)
+                
+                for child in children:
+                    # Only add child to queue if we haven't visited it yet
+                    if child["actionGroup"] not in visited:
+                        visited.add(child["actionGroup"])
+                        queue.append((
+                            child,
+                            current_path + [child["actionGroup"]],
+                            found_parent
+                        ))
+        
+        return None
+    
+    def find_action_by_group(self, action_group: int) -> Dict:
+        for row in self.action_rows:
+            for action in row["actions"]:
+                if action["actionGroup"] == action_group:
+                    return action
+        return None
 
+    def process_engine_interrupts(self, reload=False):
+        # you should move clear scripts to an interrupt
+        if self.engine_manager.debug_mode or reload:
+            self.engine_manager.get_interrupts(synchronous=True)
+        
+        if self.engine_manager.debug_mode:
+            full_action_name = '[{}-{}-{}]'.format(
+                self.context["script_counter"],
+                self.context["action"]["actionName"],
+                self.context["action"]["actionGroup"]
+            )
+            call_stack_key = '/'.join(self.call_stack) + '/' + str('[{}]'.format(full_action_name))
+            self.engine_manager.saved_states[call_stack_key] = copy.deepcopy(self.state)
+            self.engine_manager.saved_contexts[call_stack_key] = copy.deepcopy(self.context)            
+        
+        return_status = "none"
+
+        # if the script being swapped is in the call stack: 
+        #       the current script should be assigned a new name
+        #       throw an error
+        # elif the script being swapped is the current script:
+        #       if the current running action was removed:
+        #           a new instance of the current script will start
+        #       else:
+        #           continue from the last action
+        if "hot_swap" in self.engine_manager.interrupt_actions:
+            hot_swap_action = self.engine_manager.interrupt_actions["hot_swap"]
+            if not hot_swap_action["completed"]:
+                swap_script_name = hot_swap_action["script_name"]
+
+                if swap_script_name in self.call_stack:
+                    raise Exception('ScriptName {} is in call stack, please rename the script before swapping'.format(swap_script_name))
+                del self.include_scripts[swap_script_name]
+                if self.props["script_name"] == swap_script_name:
+                    hot_swap_script = parse_zip(swap_script_name, False)
+                    self.parse_script_obj(hot_swap_script)
+                    self.context['action_path'] = self.find_action_paths(
+                        self.context['parent_action']['actionGroup'] if self.context['parent_action'] is not None else None,
+                        self.context['action_group']
+                    )
+                    return_status = "pending"
+                hot_swap_action["completed"] = True
+        
+        if "clear_saves" in self.engine_manager.interrupt_actions:
+            if not self.engine_manager.interrupt_actions["clear_saves"]["completed"]:
+                self.engine_manager.saved_states = {}
+                self.engine_manager.saved_contexts = {}
+                self.engine_manager.interrupt_actions["clear_saves"]["completed"] = True
+        
+        if "engine_context_switch" in self.engine_manager.interrupt_actions:
+            engine_context_switch = self.engine_manager.interrupt_actions["engine_context_switch"]
+            if not engine_context_switch["completed"]:
+                target_call_stack = engine_context_switch["call_stack"]
+                if not self.call_stack[-1] == target_call_stack[-1]:
+                    return "return"
+                target_call_stack_len = len(target_call_stack)
+                call_stack_len = len(self.call_stack)
+                
+                if target_call_stack_len > call_stack_len:
+                    target_action_name = target_call_stack[len(self.call_stack)]
+                    if '[' not in target_action_name:
+                        target_action_name = target_call_stack[len(self.call_stack) + 1]
+                    target_action_name = target_action_name[1:-1]
+                    target_action_type = target_action_name.split('-')[1]
+                    target_action_group = target_action_name.split('-')[-1]
+                    if target_action_type == 'scriptReference' and \
+                        (target_call_stack_len - call_stack_len > 1):
+                        self.context['skip_input_parsing'] = True
+                    self.context['action_path'] = self.find_action_paths(
+                        None,
+                        target_action_group
+                    )
+                    if self.engine_manager.debug_mode:
+                        call_stack_key = '/'.join(self.call_stack) + '/' + str('[{}]'.format(target_action_name))
+                        previous_script_counter = self.context["script_counter"]
+                        self.state.update(self.engine_manager.saved_states[call_stack_key])
+                        self.context.update(self.engine_manager.saved_contexts[call_stack_key])
+                        self.context["script_counter"] = previous_script_counter
+                        self.context['skip_input_parsing'] = None
+                    return_status = "pending"
+                elif len(target_call_stack) == len(self.call_stack):
+                    engine_context_switch['completed'] = True
+
+        
+        if "run_actions" in self.engine_manager.interrupt_actions:
+            run_actions = self.engine_manager.interrupt_actions["run_actions"]
+            if not run_actions['completed']:
+                if run_actions['run_actions_type'] == 'iteration':
+                    return_status = "pending"
+                elif run_actions['run_actions_type'] == 'action':
+                    if run_actions['run_actions_status'] == 'waiting':
+                        run_actions['run_actions_status'] = 'running'
+                        return_status = "pending"
+                    else:
+                        run_actions['run_actions_status'] = 'finished'
+                        run_actions['completed'] = True
+ 
+        
+        
+        if "pause" in self.engine_manager.interrupt_actions:
+            self.engine_manager.pause()
+
+            if "run_actions_complete" in self.context:
+                del self.context['run_actions_complete']
+
+            self.engine_manager.get_interrupts(synchronous=True)
+            if "pause" in self.engine_manager.interrupt_actions:
+                return_status = self.process_engine_interrupts()
+        
+        return return_status
+        
     def parse_update_queue(self, update_queue):
         for [update_type, update_target, update_key, update_payload] in update_queue:
             if update_target == 'context':
@@ -659,6 +802,41 @@ class ScriptExecutor:
             elif update_target == 'status':
                 if update_type == 'update':
                     self.status = update_payload
+
+    def execute_action(self, action, parallel_groups):
+        if action["actionGroup"] in parallel_groups:
+            script_logger.log('parallel group found in ' + str(action['actionGroup']))
+            parallel_group = parallel_groups[action['actionGroup']]
+            for parallel_action in parallel_group:
+                del parallel_groups[parallel_action["actionGroup"]]
+            self.parallelized_executor.start_processes(self, parallel_group)
+
+        self.log_action_details(action)
+        parallel_process = self.parallelized_executor.get_process(action["actionGroup"])
+        if parallel_process is not None:
+            handle_action_result = parallel_process.result()
+            _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_handle_action_result(
+                handle_action_result, self.status, self.state, self.context, self.run_queue
+            )
+        else:
+            self.context["script_counter"] += 1
+            script_logger.configure_action_logger(action, self.context["script_counter"], self.parent_action_log)
+            _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
+            # post_handle_action((self.action, self.status, self.state, self.context, self.run_queue, update_queue))
+        # script_logger.log('debug state', self.state)
+        if 'postActionDelay' in action['actionData'] and len(action['actionData']['postActionDelay']) > 0:
+            RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], self.state)
+
+        script_logger.set_log_header(self.props['script_name'] + '-CONTROL FLOW')
+        self.parse_update_queue(update_queue)
+        script_logger.log('CONTROL FLOW: ',
+            self.props['script_name'],
+            'completed action',
+            action['actionName'],
+            action["actionGroup"],
+            'and returned status ',
+            self.status
+        )
 
 
     #if it is handle all branches then you take the first branch and for the rest you create a context switch action
@@ -724,56 +902,37 @@ class ScriptExecutor:
         self.parallelized_executor.clear_processes()
         for action_index in range(0, n_actions):
             self.context["action_index"] = action_index
-            self.process_engine_interrupts()
+            
             action = self.actions[action_indices[self.context["action_index"]]]
+            self.context["action"] = action
+            self.context["action_group"] = action["actionGroup"]
             child_actions = self.get_children(action)
-            self.context['child_actions'] = child_actions
-
-            if "searchAreaObjectHandler" in self.context["script_attributes"] and \
-                    action["actionName"] == 'detectObject' and \
-                    "searchAreaObjectHandler" in action["actionData"]["detectorAttributes"]:
-                self.context["object_handler_encountered"] = True
-
-            if action["actionGroup"] in parallel_groups:
-                script_logger.log('parallel group found in ' + str(action['actionGroup']))
-                parallel_group = parallel_groups[action['actionGroup']]
-                for parallel_action in parallel_group:
-                    del parallel_groups[parallel_action["actionGroup"]]
-                self.parallelized_executor.start_processes(self, parallel_group)
-
-            self.log_action_details(action)
-            parallel_process = self.parallelized_executor.get_process(action["actionGroup"])
-            if parallel_process is not None:
-                handle_action_result = parallel_process.result()
-                _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_handle_action_result(
-                    handle_action_result, self.status, self.state, self.context, self.run_queue
-                )
-            else:
-                self.context["script_counter"] += 1
-                script_logger.configure_action_logger(action, self.context["script_counter"], self.parent_action_log)
-                _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
-                # post_handle_action((self.action, self.status, self.state, self.context, self.run_queue, update_queue))
-            # script_logger.log('debug state', self.state)
-            if 'postActionDelay' in action['actionData'] and len(action['actionData']['postActionDelay']) > 0:
-                RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], self.state)
-
-            script_logger.set_log_header(self.props['script_name'] + '-CONTROL FLOW')
-            self.parse_update_queue(update_queue)
-            script_logger.log('CONTROL FLOW: ',
-                  self.props['script_name'],
-                  'completed action',
-                  action['actionName'],
-                  action["actionGroup"],
-                  'and returned status ',
-                  self.status
-            )
-
-            self.context["action_attempts"][self.context["action_index"]] += 1
-            if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_FAILURE:
+            interrupt_command = self.process_engine_interrupts()
+            if interrupt_command == "return":
+                self.status = ScriptExecutionState.FINISHED
                 self.context['parent_action'] = action
                 self.context['child_actions'] = None
                 self.actions = []
                 return
+            self.context['child_actions'] = child_actions
+            self.context["action_attempts"][self.context["action_index"]] += 1
+
+            if self.context["action_path"] is not None:
+                if self.context["action_path"][0] != self.context["action_group"]:
+                    continue
+                else:
+                    self.context["action_path"].pop()
+                    if len(self.context["action_path"]) == 0:
+                        self.context["action_path"] = None
+            
+            if self.context["action_path"] is None:
+                self.execute_action(action, parallel_groups)
+
+            if self.status == ScriptExecutionState.FINISHED or self.status == ScriptExecutionState.FINISHED_FAILURE:
+                self.context['parent_action'] = action
+                self.context['child_actions'] = None
+                self.actions = []
+                break
             elif self.status == ScriptExecutionState.SUCCESS:
                 self.context['parent_action'] = action
                 self.context['child_actions'] = None
@@ -782,33 +941,43 @@ class ScriptExecutor:
                 self.context["action_attempts"] = [0] * len(child_actions)
                 # script_logger.log('next: ', self.actions)
                 self.status = ScriptExecutionState.STARTING
-                return
+                break
             elif self.status == ScriptExecutionState.FAILURE:
                 self.context['child_actions'] = None
                 if self.context["run_mode"] == "run_to_failure":
-                    return
+                    break
                 else:
                     continue
-            elif self.status == ScriptExecutionState.RETURN:
-                self.context["child_actions"] = None
-                is_return = True
-                continue
             elif self.status == ScriptExecutionState.FINISHED_BRANCH or self.status == ScriptExecutionState.FINISHED_FAILURE_BRANCH:
                 self.context['parent_action'] = action
                 self.context["child_actions"] = None
                 self.actions = []
-                return
+                break
             else:
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: encountered error in script and returning ', self.status)
                 self.context['child_actions'] = None
                 self.status = ScriptExecutionState.ERROR
-                return
-        if is_return:
-            self.actions = [self.context["parent_action"]]
-            self.context["action_attempts"] = [0]
-            # TODO clearly need to keep track of parent of parent etc
-            self.context["parent_action"] = None
-            self.status = ScriptExecutionState.RETURN
+                break
+        
+        if "run_actions" in self.engine_manager.interrupt_actions:
+            run_actions = self.engine_manager.interrupt_actions["run_actions"]
+            run_actions['completed'] = True
+
+        return_status = "none"
+        if "pause" in self.engine_manager.interrupt_actions:
+            self.engine_manager.pause()
+            self.engine_manager.get_interrupts(synchronous=True)
+            if "pause" in self.engine_manager.interrupt_actions:
+                return_status = self.process_engine_interrupts()
+        
+        if return_status == "return":
+            self.status = ScriptExecutionState.FINISHED
+            self.context['parent_action'] = action
+            self.context['child_actions'] = None
+            self.actions = []
+            return
+        elif return_status != "pending":
+            self.engine_manager.get_interrupts(synchronous=True)
 
 
     def run_to_failure(self):
@@ -997,6 +1166,7 @@ class ScriptExecutor:
                 self.context["success_states"] += [self.state.copy()]
         self.actions.append(self.run_queue.pop())
         self.context["action_attempts"] = len(self.actions) * [0]
+
 
 
 
