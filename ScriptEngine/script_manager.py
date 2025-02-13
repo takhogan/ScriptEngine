@@ -102,7 +102,7 @@ def close_threads_and_processes(io_executor, process_executor, timeout=30):
     script_logger.log('Completed shutting down thread and process pool')
 
 
-def load_and_run(script_name, script_id, timeout, constants=None, start_time_str=None, device_details=None, system_script=False):
+def load_and_run(script_name, script_id, timeout, constants=None, start_time : datetime.datetime=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False):
     # if you want to open zip then you pass .zip in command line args
     # update_running_scripts_file(script_name, 'push')
     script_logger.log('SCRIPT_MANAGER: ', ' script trigger time: ',
@@ -144,28 +144,33 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
     errored = False
     from device_manager import DeviceManager
     from script_executor import ScriptExecutor
+    from engine_manager import EngineManager
 
     with CustomThreadPool(max_workers=50) as io_executor, CustomProcessPool(max_workers=os.cpu_count()) as process_executor:
         device_manager = DeviceManager(script_name, script_object['props'], device_params, io_executor)
-
+        engine_manager = EngineManager(script_id, script_logger.get_log_folder())
         # TODO: might need fixing
         # logger = multiprocessing.log_to_stderr()
         # logger.setLevel(multiprocessing.SUBDEBUG)
 
         base_script_object = script_object.copy()
         base_script_object['inputs'] = constants
+        base_include_scripts = script_object['include']
 
         # action logger for the script running the scriptReference
         script_logger.configure_action_logger(script_object['props']['scriptReference'], 1, None)
         main_script = ScriptExecutor(
             base_script_object,
+            base_include_scripts,
             timeout,
             script_name,
             start_time_str,
             script_id,
             device_manager,
+            engine_manager,
             process_executor,
-            script_start_time=start_time
+            script_start_time=start_time,
+            screen_plan_server_attached=screen_plan_server_attached
         )
 
         try:
@@ -208,50 +213,51 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time_str
 
 print(f"Final Method initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
-if __name__=='__main__':
+def main():
     multiprocessing.freeze_support()
     multiprocessing.set_start_method('spawn')
+    print(f'SCRIPT MANAGER: Process ID: {os.getpid()}')
     print('SCRIPT MANAGER: parsing args ', sys.argv)
-    script_name = sys.argv[1]
-    start_time = None
-    end_time = None
-    n_args = len(sys.argv)
-    constants = {}
-    if n_args > 2:
-        start_time_str = sys.argv[2]
+    import argparse
+    parser = argparse.ArgumentParser(description='Script Manager CLI')
+    
+    # Required arguments
+    parser.add_argument('--script-name', '-s', required=True, help='Name of the script to run')
+    
+    # Optional arguments
+    parser.add_argument('--start-time', '-st', help='Script start time (format: YYYY-MM-DD HH:MM:SS)')
+    parser.add_argument('--end-time', '-et', help='Script end time (format: YYYY-MM-DD HH:MM:SS)')
+    parser.add_argument('--log-level', '-l', default='info', help='Logging level')
+    parser.add_argument('--script-id', '-id', help='Script ID (UUID)')
+    parser.add_argument('--device', '-d', help='Device details')
+    parser.add_argument('--system-script', '-sys', action='store_true', help='Whether this is a system script')
+    parser.add_argument('--screen-plan-server-attached', '-spsa', action='store_true', help='Whether a screenplan client server is attached')
+    parser.add_argument('--constants', '-c', nargs='*', help='Constants in format key:value')
+    
+    args = parser.parse_args()
+    
+    script_name = args.script_name
+    
+    if args.start_time:
+        start_time_str = args.start_time
         start_time = str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')
     else:
         start_time = datetime.datetime.now(datetime.timezone.utc)
         start_time_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
-    if n_args > 3:
-        end_time = str_timeout_to_datetime_timeout(sys.argv[3], src='deployment_server')
-
-    if n_args > 4:
-        log_level = sys.argv[4]
-    else:
-        log_level = 'info'
-    if n_args > 5:
-        script_id = sys.argv[5]
-    else:
-        script_id = uuid.uuid4()
-
-    if n_args > 6:
-        device_details = None if (sys.argv[6] == '' or sys.argv[6] == 'null') else sys.argv[6]
-    else:
-        device_details = None
-
-    if n_args > 7:
-        system_script = (sys.argv[7] if isinstance(sys.argv[7], bool) else sys.argv[7] == 'true')
-    else:
-        system_script = False
-
+    
+    end_time = str_timeout_to_datetime_timeout(args.end_time, src='deployment_server') if args.end_time else None
+    log_level = args.log_level
+    script_id = args.script_id if args.script_id else uuid.uuid4()
+    device_details = None if (not args.device or args.device == '' or args.device == 'null') else args.device
+    system_script = args.system_script
+    
     constants = []
-    args_index = 8
-    if n_args > args_index:
-        for arg_index in range(args_index, n_args):
-            arg_split = sys.argv[arg_index].strip().split(':')
-            constants.append([arg_split[0], arg_split[1], False])
-
+    if args.constants:
+        for const in args.constants:
+            key_value = const.strip().split(':')
+            if len(key_value) == 2:
+                constants.append([key_value[0], key_value[1], False])
+    
     log_folder = './logs/' + str(0).zfill(5) + '-' +\
                  script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/'
     print('log_folder', log_folder, start_time)
@@ -271,8 +277,13 @@ if __name__=='__main__':
         script_name,
         script_id,
         timeout=(start_time + datetime.timedelta(minutes=30)).astimezone(tz=tz.tzutc()) if end_time is None else end_time,
+        start_time=start_time,
         start_time_str=start_time_str,
         constants=constants,
         device_details=device_details,
-        system_script=system_script
+        system_script=system_script,
+        screen_plan_server_attached=args.screen_plan_server_attached
     )
+
+if __name__ == '__main__':
+    main()

@@ -657,7 +657,7 @@ class SystemHostController:
             mid_log = 'Desired Return Status: {}'.format(action["actionData"]["returnStatus"])
             script_logger.log(mid_log)
             status_name = 'undefined'
-            if action["actionData"]["returnStatementType"] == 'exitBranch':
+            if action["actionData"]["returnStatementType"] == 'exitIteration':
                 if action["actionData"]["returnStatus"] == 'failure':
                     status = ScriptExecutionState.FINISHED_FAILURE_BRANCH
                     status_name = 'FINISHED_FAILURE_BRANCH'
