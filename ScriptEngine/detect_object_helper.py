@@ -296,22 +296,30 @@ class DetectObjectHelper:
 
         # Check if image is valid before writing
         if screencap_im_bgr is None or not isinstance(screencap_im_bgr, np.ndarray):
-            script_logger.log('Invalid input image, skipping log image creation')
+            script_logger.log('Invalid input image format, skipping log image creation')
             return
+        
+        if screencap_im_bgr.dtype not in [np.uint8, np.uint16]:
+            script_logger.log('input image corrupted')
 
         input_image_relative_path = 'detectObject-inputImage.png'
+        script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + input_image_relative_path)
         cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
-
+        script_logger.log('Successfully wrote to file: ' + input_image_relative_path)
         script_logger.get_action_log().set_pre_file(
             'image',
             input_image_relative_path
         )
 
+        script_logger.log('Writing template image')
+
 
         template_image_relative_path = 'templateImage.png'
+        script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + template_image_relative_path)
         cv2.imwrite(
             script_logger.get_log_path_prefix() + template_image_relative_path, floating_detect_obj["img"]
         )
+        script_logger.log('Successfully wrote to file: ' + template_image_relative_path)
         script_logger.get_action_log().add_supporting_file_reference(
             'image',
             template_image_relative_path
@@ -330,15 +338,21 @@ class DetectObjectHelper:
             )
 
             matching_overlay_relative_path = 'detectScene-matchOverlayed.png'
+            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + matching_overlay_relative_path)
             cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
+            script_logger.log('Successfully wrote to file: ' + matching_overlay_relative_path)
             script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
 
             masked_img_relative_path = 'detectScene-maskApplied.png'
+            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + masked_img_relative_path)
             cv2.imwrite(script_logger.get_log_path_prefix() + masked_img_relative_path, screencap_masked)
+            script_logger.log('Successfully wrote to file: ' + masked_img_relative_path)
             script_logger.get_action_log().add_supporting_file_reference('image', masked_img_relative_path)
 
             comparison_img_relative_path = 'detectScene-comparisonImage.png'
+            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + comparison_img_relative_path)
             cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, fixed_detect_obj["img"])
+            script_logger.log('Successfully wrote to file: ' + comparison_img_relative_path)
             script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
 
         if log_obj['floatingObject'] is not None:
@@ -356,11 +370,15 @@ class DetectObjectHelper:
             )
 
             matching_overlay_relative_path = 'detectObject-matchOverlayed.png'
+            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + matching_overlay_relative_path)
             cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
+            script_logger.log('Successfully wrote to file: ' + matching_overlay_relative_path)
             script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
 
             comparison_img_relative_path = 'detectObject-matchingHeatMap.png'
+            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + comparison_img_relative_path)
             cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, match_result * 255)
+            script_logger.log('Successfully wrote to file: ' + comparison_img_relative_path)
             script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
 
 
