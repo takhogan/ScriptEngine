@@ -294,8 +294,12 @@ class DetectObjectHelper:
 
         (screencap_im_bgr, floating_detect_obj) = log_obj['base']
 
-        input_image_relative_path = 'detectObject-inputImage.png'
+        # Check if image is valid before writing
+        if screencap_im_bgr is None or not isinstance(screencap_im_bgr, np.ndarray):
+            script_logger.log('Invalid input image, skipping log image creation')
+            return
 
+        input_image_relative_path = 'detectObject-inputImage.png'
         cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
 
         script_logger.get_action_log().set_pre_file(
