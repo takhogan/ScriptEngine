@@ -699,14 +699,21 @@ class adb_host:
         script_logger = ScriptLogger.get_logger()
         script_logger.log('connecting to device', self.full_ip)
         return subprocess.run(
-            self.adb_path + ' connect ' + self.full_ip, cwd="/", shell=True, timeout=30
+            self.adb_path + ' connect ' + self.full_ip, 
+            cwd="/", 
+            shell=True, 
+            timeout=30
         )
 
     def run_disconnect_command(self):
         script_logger = ScriptLogger.get_logger()
         script_logger.log('disconnecting from device', self.full_ip)
         return subprocess.run(
-            self.adb_path + ' disconnect ' + self.full_ip, cwd="/", shell=True, timeout=30
+            self.adb_path + ' disconnect ' + self.full_ip, 
+            cwd="/", 
+            shell=True, 
+            timeout=30,
+            stderr=subprocess.STDOUT
         )
 
     def get_device_list_output(self):
