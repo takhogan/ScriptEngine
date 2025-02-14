@@ -377,7 +377,8 @@ class DetectObjectHelper:
 
             comparison_img_relative_path = 'detectObject-matchingHeatMap.png'
             script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + comparison_img_relative_path)
-            # Convert match_result from [-1,1] to [0,255]
+            # Handle NaN and infinite values before conversion
+            match_result = np.nan_to_num(match_result, nan=-1.0, posinf=1.0, neginf=-1.0)
             match_result_uint8 = ((match_result + 1) * 127.5).astype(np.uint8)
             cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, match_result_uint8)
             script_logger.log('Successfully wrote to file: ' + comparison_img_relative_path)
