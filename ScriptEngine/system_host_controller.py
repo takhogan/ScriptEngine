@@ -126,7 +126,14 @@ class SystemHostController:
 
                 expression = action["actionData"]["inputExpression"].replace("\n", " ")
                 if action["actionData"]["inputParser"] == 'eval':
-                    expression = state_eval(expression, {}, state)
+                    globals = {
+                        'glob': glob,
+                        'datetime': datetime,
+                        'os' : os,
+                        'shutil' : shutil,
+                        'numpy' : np
+                    }
+                    expression = state_eval(expression, globals, state)
                 elif action["actionData"]["inputParser"] == "jsonload":
                     expression = json.loads(expression)
                 late_mid_log = 'parse result: ' + str(expression)
@@ -771,6 +778,9 @@ class SystemHostController:
             )
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "codeBlock":
+            pre_log = 'Running Code Block: \n{}'.format(action["actionData"]["codeBlock"])
+            # statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
+            script_logger.log(pre_log)
             globals = {
                 'glob': glob,
                 'datetime': datetime,
@@ -778,9 +788,7 @@ class SystemHostController:
                 'shutil' : shutil,
                 'numpy' : np
             }
-            pre_log = 'Running Code Block: \n{}'.format(action["actionData"]["codeBlock"])
-            # statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
-            script_logger.log(pre_log)
+
 
             exec(action["actionData"]["codeBlock"],globals,state)
             script_logger.get_action_log().add_post_file(
@@ -802,7 +810,7 @@ class SystemHostController:
             pre_log += 'Writing inputs to variable: ' + action["actionData"]["outputVarName"]
             script_logger.get_action_log().add_pre_file('text', 'inputs.txt', pre_log)
             script_logger.log(pre_log)
-            file_path = state_eval(action["actionData"]["filePath"], {}, state)
+            file_path = state_eval(action["actionData"]["filePath"], globals, state)
             output_var_name = action["actionData"]["outputVarName"]
             file_properties = ''
             if action["actionData"]["fileActionType"] in ["w", "wb", "a"]:
