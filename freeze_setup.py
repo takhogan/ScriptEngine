@@ -4,20 +4,15 @@ import os
 os.environ['CX_FREEZE_LOG_LEVEL'] = 'ERROR'
 sys.path.append(os.path.join(os.path.dirname(__file__), 'ScriptEngine'))
 sys.setrecursionlimit(5000)
-import numpy
-
-numpy_f2py_path = os.path.join(numpy.__path__[0], "f2py")
-
 
 executables = [
-Executable("ScriptEngine/script_manager.py"),
-Executable("ScriptEngine/adb_host_controller.py"), 
-Executable("ScriptEngine/python_host_controller.py"), 
-Executable("ScriptEngine/script_log_preview_generator.py")
+    Executable("ScriptEngine/script_manager.py"),
+    Executable("ScriptEngine/adb_host_controller.py"), 
+    Executable("ScriptEngine/python_host_controller.py"), 
+    Executable("ScriptEngine/script_log_preview_generator.py")
 ]
 model_path = os.path.join(os.path.expanduser("~"), ".EasyOCR")
 include_files = [(model_path, ".EasyOCR")]
-include_files += [(numpy_f2py_path, "numpy/f2py")]  # Ensure numpy.f2py is bundled
 
 
 torch_lib_path = os.path.join("venv", "Lib", "site-packages", "torch", "lib")
@@ -31,7 +26,7 @@ include_files += [
 options = {
     'build_exe': {
         "packages": ["ScriptEngine", "torch", "torchvision", "easyocr", "PIL", "skimage", "numpy", "scipy"],
-        "includes": ["numpy.testing", "numpy.f2py", "numpy._core.tests"],
+        "includes": [],
         "excludes": [],
         "include_files": include_files
     }
