@@ -10,6 +10,9 @@ warnings.filterwarnings(
     "ignore",
     message="Neither CUDA nor MPS are available"
 )
+# below line is due to issue when freezing
+import numpy.f2py.diagnose
+
 import numpy as np
 import re
 import cv2

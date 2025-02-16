@@ -233,7 +233,6 @@ class ImageMatcher:
             if redundant:
                 continue
             else:
-                # script_logger.log('{:f}'.format(match_result[pt[1], pt[0]]))
                 matches.append(
                     (
                         (adjusted_pt_x, adjusted_pt_y),
@@ -241,11 +240,6 @@ class ImageMatcher:
                         match_img_bgr
                     )
                 )
-                # exit(0)
-                # if script_mode == "train" and log_level == 'info':
-                    # change name to fit image format
-                    # cv2.imwrite(logs_path + '-matched-' + str(match_img_index) + '-{:f}'.format(
-                    #     match_result[pt[1], pt[0]]) + '-img.png', match_img_bgr)
                 match_img_index += 1
         matches.sort(reverse=True, key=lambda match: match[1])
         initial_result_log = '{} initial matches meeting threshold. {} matches after pruning.\n'.format(
