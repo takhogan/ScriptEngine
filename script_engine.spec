@@ -16,7 +16,7 @@ log_preview_a = Analysis(
         (os.path.join("venv", "Lib", "site-packages", "torch"), "torch"),
     ],
     hiddenimports=[
-        'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
+        'PIL', 'numpy'
     ],
     hookspath=[],
     hooksconfig={},
@@ -30,7 +30,7 @@ python_controller_a = Analysis(
     binaries=[],
     datas=[],
     hiddenimports=[
-        'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
+        'PIL', 'numpy', 'ScriptEngine'
     ],
     hookspath=[],
     hooksconfig={},
@@ -44,7 +44,7 @@ adb_controller_a = Analysis(
     binaries=[],
     datas=[],
     hiddenimports=[
-        'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
+        'PIL', 'numpy', 'ScriptEngine'
     ],
     hookspath=[],
     hooksconfig={},
