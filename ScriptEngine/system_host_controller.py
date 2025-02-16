@@ -11,7 +11,6 @@ warnings.filterwarnings(
     message="Neither CUDA nor MPS are available"
 )
 import numpy as np
-from PIL import Image
 import re
 import cv2
 import json
@@ -516,6 +515,7 @@ class SystemHostController:
                 outputs = []
                 inputs_log = ''
                 import tesserocr
+                from PIL import Image
                 for [psm_value, character_white_list] in tesseract_params:
                     with tesserocr.PyTessBaseAPI() as api:
                         api.SetImage(Image.fromarray(image_to_text_input))

@@ -6,7 +6,7 @@ import cv2
 import sys
 import numpy as np
 sys.path.append("..")
-from script_engine_utils import generate_context_switch_action, state_eval
+from script_engine_utils import state_eval
 from script_execution_state import ScriptExecutionState
 from image_matcher import ImageMatcher
 from detect_scene_helper import DetectSceneHelper
