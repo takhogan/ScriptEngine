@@ -1,1 +1,1 @@
-venv\Scripts\python freeze_setup.py build_exe
+.\venv\Scripts\activate && pyinstaller --clean -y script_engine.spec

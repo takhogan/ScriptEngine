@@ -1,1 +1,1 @@
-build\exe.win-amd64-3.13\script_manager.exe --script-name Tests_RunAllTests
+dist\script_engine\script_manager.exe --script-name Tests_RunAllTests
