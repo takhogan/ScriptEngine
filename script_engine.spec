@@ -1,13 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), 'ScriptEngine'))
+sys.path.append(os.path.join(os.getcwd(), 'ScriptEngine'))
 
 block_cipher = None
 
-# Define the binaries to create
-a = Analysis(
-    ['ScriptEngine/script_manager.py'],  # Main script
+# Analyses for all executables
+log_preview_a = Analysis(
+    ['ScriptEngine/script_log_preview_generator.py'],
     pathex=[],
     binaries=[],
     datas=[
@@ -16,116 +16,95 @@ a = Analysis(
         (os.path.join("venv", "Lib", "site-packages", "torch"), "torch"),
     ],
     hiddenimports=[
-        'torch',
-        'torchvision',
-        'easyocr',
-        'PIL',
-        'skimage',
-        'numpy',
-        'scipy',
-        'ScriptEngine'
+        'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-# Main script executable
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
-    name='script_manager',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=True,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
+python_controller_a = Analysis(
+    ['ScriptEngine/python_host_controller.py'],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
 )
 
-# Additional executables
-other_executables = [
-    'ScriptEngine/adb_host_controller.py',
-    'ScriptEngine/python_host_controller.py',
-    'ScriptEngine/script_log_preview_generator.py'
-]
+adb_controller_a = Analysis(
+    ['ScriptEngine/adb_host_controller.py'],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+)
 
-other_analyses = []
-other_exes = []
+script_manager_a = Analysis(
+    ['ScriptEngine/script_manager.py'],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+)
 
-for script in other_executables:
-    a = Analysis(
-        [script],
-        pathex=[],
-        binaries=[],
-        datas=[],  # Each exe will share the same data files from the main bundle
-        hiddenimports=[
-            'torch',
-            'torchvision',
-            'easyocr',
-            'PIL',
-            'skimage',
-            'numpy',
-            'scipy',
-            'ScriptEngine'
-        ],
-        hookspath=[],
-        hooksconfig={},
-        runtime_hooks=[],
-        excludes=[],
-        win_no_prefer_redirects=False,
-        win_private_assemblies=False,
-        cipher=block_cipher,
-        noarchive=False,
-    )
-    other_analyses.append(a)
-    
-    pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-    
-    exe = EXE(
-        pyz,
-        a.scripts,
-        [],
-        exclude_binaries=True,
-        name=os.path.splitext(os.path.basename(script))[0],
-        debug=False,
-        bootloader_ignore_signals=False,
-        strip=False,
-        upx=True,
-        console=True,
-        disable_windowed_traceback=False,
-        argv_emulation=False,
-        target_arch=None,
-        codesign_identity=None,
-        entitlements_file=None,
-    )
-    other_exes.append(exe)
+# MERGE to share dependencies
+MERGE(
+    (log_preview_a, 'script_log_preview_generator', 'script_log_preview_generator'),
+    (python_controller_a, 'python_host_controller', 'python_host_controller'),
+    (adb_controller_a, 'adb_host_controller', 'adb_host_controller'),
+    (script_manager_a, 'script_manager', 'script_manager')
+)
 
-# Create the collection including all executables
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    *[exe for exe in other_exes],
-    *[a.binaries for a in other_analyses],
-    *[a.zipfiles for a in other_analyses],
-    *[a.datas for a in other_analyses],
+# Create PYZ archives
+pyz1 = PYZ(log_preview_a.pure, log_preview_a.zipped_data, cipher=block_cipher)
+pyz2 = PYZ(python_controller_a.pure, python_controller_a.zipped_data, cipher=block_cipher)
+pyz3 = PYZ(adb_controller_a.pure, adb_controller_a.zipped_data, cipher=block_cipher)
+pyz4 = PYZ(script_manager_a.pure, script_manager_a.zipped_data, cipher=block_cipher)
+
+# Create EXEs
+exe1 = EXE(pyz1, log_preview_a.scripts, [], name='script_log_preview_generator', debug=False, strip=False, upx=True, console=True)
+exe2 = EXE(pyz2, python_controller_a.scripts, [], name='python_host_controller', debug=False, strip=False, upx=True, console=True)
+exe3 = EXE(pyz3, adb_controller_a.scripts, [], name='adb_host_controller', debug=False, strip=False, upx=True, console=True)
+exe4 = EXE(pyz4, script_manager_a.scripts, [], name='script_manager', debug=False, strip=False, upx=True, console=True)
+
+# COLLECT everything into one directory
+COLLECT(
+    exe1,
+    log_preview_a.binaries,
+    log_preview_a.zipfiles,
+    log_preview_a.datas,
+    exe2,
+    python_controller_a.binaries,
+    python_controller_a.zipfiles,
+    python_controller_a.datas,
+    exe3,
+    adb_controller_a.binaries,
+    adb_controller_a.zipfiles,
+    adb_controller_a.datas,
+    exe4,
+    script_manager_a.binaries,
+    script_manager_a.zipfiles,
+    script_manager_a.datas,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    name='script_engine',
+    name='script_engine'
 ) 
