@@ -1,3 +1,6 @@
 # ScriptEngine
-This is the backend to Script Studio: http://script-studio.s3-website.us-east-2.amazonaws.com/
+This is the backend for Screen Plan Scripts: https://screeplan.io
 
+
+# Example Usage
+python script_manager.py --script-name my_script
