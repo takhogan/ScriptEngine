@@ -3,7 +3,6 @@ import sys
 import json
 import numpy as np
 import os
-sys.path.append("..")
 
 from script_log_tree_generator import ScriptLogTreeGenerator
 bin_path = os.path.abspath("bin")

@@ -2,7 +2,6 @@ import sys
 import pickle
 import time
 import cv2
-sys.path.append("..")
 from detect_object_helper import DetectObjectHelper
 from script_logger import ScriptLogger
 from parallelized_script_executor_helper import ParallelizedScriptExecutorHelper

@@ -27,7 +27,6 @@ from script_engine_utils import is_null, state_eval, DummyFile
 from typing import Callable, Dict, List, Tuple
 import pyautogui
 
-sys.path.append("..")
 from device_action_interpeter import DeviceActionInterpreter
 from script_execution_state import ScriptExecutionState
 from click_path_generator import ClickPathGenerator
