@@ -1,7 +1,6 @@
 import math
 
 import numpy as np
-from scipy.stats import truncnorm
 import random
 import os
 import cv2
@@ -23,6 +22,7 @@ class SearchPatternHelper:
         # else:
         #     script_logger.log("input not recognized " + input_object)
         #     exit(0)
+        from scipy.stats import truncnorm
         origin_point = (0,0)
         search_pattern = np.random.choice(pattern_action["actionData"]["searchPatterns"],
                          p=pattern_action["actionData"]["searchPatternProbabilities"])
