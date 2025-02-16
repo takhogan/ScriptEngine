@@ -1,4 +1,4 @@
-from concurrent.futures import ProcessPoolExecutor, Future
+from concurrent.futures import ProcessPoolExecutor
 
 class CustomProcessPool(ProcessPoolExecutor):
     def __init__(self, max_workers=None):
