@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 
-from skimage.color import rgb2lab
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
@@ -95,7 +94,7 @@ class ColorCompareHelper:
 
     @staticmethod
     def compare_colors(left_color, right_color):
-
+        from skimage.color import rgb2lab
         color1_rgb = np.array([[left_color]], dtype=np.uint8) / 255.0
         color2_rgb = np.array([[right_color]], dtype=np.uint8) / 255.0
         # Convert from RGB to LAB
