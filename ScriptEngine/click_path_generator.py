@@ -6,7 +6,6 @@ import random
 import numpy as np
 import math
 # import matplotlib.pyplot as plt
-from scipy.stats import norm
 from script_engine_utils import dist
 from script_logger import ScriptLogger
 script_logger = ScriptLogger()
@@ -104,6 +103,7 @@ class ClickPathGenerator:
         transition_matrix = np.zeros((10))
         transition_choices = np.arange(0, 10)
         speed_sequence = []
+        from scipy.stats import norm
         for step in range(0, n_deltas):
             transition_center = ((-init_speed / n_deltas * step + init_speed) * min(step / acceleration_time, 1))
             prev_cdf = 0
