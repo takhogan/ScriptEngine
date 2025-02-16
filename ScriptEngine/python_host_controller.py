@@ -11,17 +11,15 @@ sys.path.append("..")
 import numpy as np
 import pyautogui
 import cv2
-import re
 from image_matcher import ImageMatcher
 from script_engine_utils import is_null, apply_state_to_cmd_str, DummyFile
 from typing import Callable, Dict, List, Tuple
-
 import time
+
 from color_compare_helper import ColorCompareHelper
 from click_path_generator import ClickPathGenerator
 from device_action_interpeter import DeviceActionInterpreter
 from script_execution_state import ScriptExecutionState
-from scipy.stats import truncnorm
 from click_action_helper import ClickActionHelper
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
