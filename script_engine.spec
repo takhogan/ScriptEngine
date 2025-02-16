@@ -68,10 +68,10 @@ script_manager_a = Analysis(
 
 # MERGE to share dependencies
 MERGE(
+    (script_manager_a, 'script_manager', 'script_manager'),
     (log_preview_a, 'script_log_preview_generator', 'script_log_preview_generator'),
-    (python_controller_a, 'python_host_controller', 'python_host_controller'),
     (adb_controller_a, 'adb_host_controller', 'adb_host_controller'),
-    (script_manager_a, 'script_manager', 'script_manager')
+    (python_controller_a, 'python_host_controller', 'python_host_controller')
 )
 
 # Create PYZ archives
@@ -81,10 +81,10 @@ pyz3 = PYZ(adb_controller_a.pure, adb_controller_a.zipped_data, cipher=block_cip
 pyz4 = PYZ(script_manager_a.pure, script_manager_a.zipped_data, cipher=block_cipher)
 
 # Create EXEs
-exe1 = EXE(pyz1, log_preview_a.scripts, [], name='script_log_preview_generator', debug=False, strip=False, upx=True, console=True)
-exe2 = EXE(pyz2, python_controller_a.scripts, [], name='python_host_controller', debug=False, strip=False, upx=True, console=True)
-exe3 = EXE(pyz3, adb_controller_a.scripts, [], name='adb_host_controller', debug=False, strip=False, upx=True, console=True)
-exe4 = EXE(pyz4, script_manager_a.scripts, [], name='script_manager', debug=False, strip=False, upx=True, console=True)
+exe1 = EXE(pyz1, log_preview_a.scripts, [], exclude_binaries=True, name='script_log_preview_generator', debug=False, strip=False, upx=True, console=True)
+exe2 = EXE(pyz2, python_controller_a.scripts, [], exclude_binaries=True, name='python_host_controller', debug=False, strip=False, upx=True, console=True)
+exe3 = EXE(pyz3, adb_controller_a.scripts, [], exclude_binaries=True, name='adb_host_controller', debug=False, strip=False, upx=True, console=True)
+exe4 = EXE(pyz4, script_manager_a.scripts, [], exclude_binaries=True, name='script_manager', debug=False, strip=False, upx=True, console=True)
 
 # COLLECT everything into one directory
 COLLECT(
