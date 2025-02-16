@@ -66,9 +66,24 @@ script_manager_a = Analysis(
     excludes=[],
 )
 
+script_scheduler_a = Analysis(
+    ['external/script_scheduler.py'],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+)
+
 # MERGE to share dependencies
 MERGE(
     (script_manager_a, 'script_manager', 'script_manager'),
+    (script_scheduler_a, 'script_scheduler', 'script_scheduler'),
     (log_preview_a, 'script_log_preview_generator', 'script_log_preview_generator'),
     (adb_controller_a, 'adb_host_controller', 'adb_host_controller'),
     (python_controller_a, 'python_host_controller', 'python_host_controller')
@@ -79,12 +94,14 @@ pyz1 = PYZ(log_preview_a.pure, log_preview_a.zipped_data, cipher=block_cipher)
 pyz2 = PYZ(python_controller_a.pure, python_controller_a.zipped_data, cipher=block_cipher)
 pyz3 = PYZ(adb_controller_a.pure, adb_controller_a.zipped_data, cipher=block_cipher)
 pyz4 = PYZ(script_manager_a.pure, script_manager_a.zipped_data, cipher=block_cipher)
+pyz5 = PYZ(script_scheduler_a.pure, script_scheduler_a.zipped_data, cipher=block_cipher)
 
 # Create EXEs
 exe1 = EXE(pyz1, log_preview_a.scripts, [], exclude_binaries=True, name='script_log_preview_generator', debug=False, strip=False, upx=True, console=True)
 exe2 = EXE(pyz2, python_controller_a.scripts, [], exclude_binaries=True, name='python_host_controller', debug=False, strip=False, upx=True, console=True)
 exe3 = EXE(pyz3, adb_controller_a.scripts, [], exclude_binaries=True, name='adb_host_controller', debug=False, strip=False, upx=True, console=True)
 exe4 = EXE(pyz4, script_manager_a.scripts, [], exclude_binaries=True, name='script_manager', debug=False, strip=False, upx=True, console=True)
+exe5 = EXE(pyz5, script_scheduler_a.scripts, [], exclude_binaries=True, name='script_scheduler', debug=False, strip=False, upx=True, console=True)
 
 # COLLECT everything into one directory
 COLLECT(
@@ -104,6 +121,10 @@ COLLECT(
     script_manager_a.binaries,
     script_manager_a.zipfiles,
     script_manager_a.datas,
+    exe5,
+    script_scheduler_a.binaries,
+    script_scheduler_a.zipfiles,
+    script_scheduler_a.datas,
     strip=False,
     upx=True,
     name='script_engine'
