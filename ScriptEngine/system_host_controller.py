@@ -10,21 +10,17 @@ warnings.filterwarnings(
     "ignore",
     message="Neither CUDA nor MPS are available"
 )
-
+import numpy as np
 from PIL import Image
-import tesserocr
 import re
 import cv2
-import easyocr
 import json
 import time
-import numpy as np
 import glob
 import datetime
 import os
 import shutil
 
-from pymongo import MongoClient
 
 from detect_object_helper import DetectObjectHelper
 from rv_helper import RandomVariableHelper
@@ -519,6 +515,7 @@ class SystemHostController:
 
                 outputs = []
                 inputs_log = ''
+                import tesserocr
                 for [psm_value, character_white_list] in tesseract_params:
                     with tesserocr.PyTessBaseAPI() as api:
                         api.SetImage(Image.fromarray(image_to_text_input))
@@ -545,6 +542,7 @@ class SystemHostController:
                             debug_output
                         )
             elif action["actionData"]["conversionEngine"] == "easyOCR":
+                import easyocr
                 post_log = ''
                 inputs_log = ''
 
@@ -865,6 +863,7 @@ class SystemHostController:
         #TODO : unsupported for now
         elif action["actionName"] == "databaseCRUD":
             if action["actionData"]["databaseType"] == "mongoDB":
+                from pymongo import MongoClient
                 with open(SERVICE_CREDENTIALS_FILE_PATH, 'r') as service_credentials_file:
                     mongo_credentials = json.load(service_credentials_file)["mongoDB"]
                 connection_string = "mongodb+srv://{}:{}@scriptenginecluster.44rpgo2.mongodb.net/?retryWrites=true&w=majority".format(

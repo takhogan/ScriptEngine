@@ -1,4 +1,3 @@
-from scipy.stats import truncnorm
 import numpy as np
 import random
 import time
@@ -33,6 +32,7 @@ class RandomVariableHelper:
             maxes = ((
                 delayTypeData["normalDistMax"] if repeats is None else np.repeat(delayTypeData["normalDistMax"], repeats)
             ) - mean) / stddev
+            from scipy.stats import truncnorm
             rv_vals = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)
             rv_vals = [rv_vals] if repeats is None else rv_vals
             return rv_vals

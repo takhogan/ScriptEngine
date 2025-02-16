@@ -5,7 +5,6 @@ import json
 import os
 import asyncio
 import base64
-import shlex
 
 sys.path.append("..")
 
@@ -293,6 +292,11 @@ class python_host:
         return state
 
     def handle_action(self, action, state, context, run_queue, lazy_eval=False) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
+        
+        if action["actionName"] == "shellScript":
+            state = self.run_shell_script(action, state)
+            status = ScriptExecutionState.SUCCESS
+        
         self.initialize_host()
         update_queue = []
         if action["actionName"] == "detectObject":
@@ -462,9 +466,7 @@ class python_host:
             )
 
             status = ScriptExecutionState.SUCCESS
-        elif action["actionName"] == "shellScript":
-            state = self.run_shell_script(action, state)
-            status = ScriptExecutionState.SUCCESS
+        
         elif action["actionName"] == "keyboardAction":
             status, state, context = DeviceActionInterpreter.parse_keyboard_action(
                 self, action, state, context
@@ -507,49 +509,7 @@ class python_host:
                     )
                 )
                 status = ScriptExecutionState.FAILURE
-        elif action["actionName"] == "dragLocationSource":
-            point_choice, point_list, state, context = ClickActionHelper.get_point_choice(
-                action, action['actionData']['inputExpression'], state, context,
-                self.width, self.height
-            )
-            context["dragLocationSource"] = {
-                'point_choice' : point_choice,
-                'point_list' : point_list
-            }
-            thread_script_logger = script_logger.copy()
-            self.io_executor.submit(self.draw_click, thread_script_logger, point_choice, point_list)
-            status = ScriptExecutionState.SUCCESS
-        elif action["actionName"] == "dragLocationTarget":
-            source_point = context["dragLocationSource"]["point_choice"]
-            source_point_list = context["dragLocationSource"]["point_list"]
-            target_point, target_point_list, state, context = ClickActionHelper.get_point_choice(
-                action, action['actionData']['inputExpression'], state, context,
-                self.width, self.height
-            )
-            drag_log = 'Dragging from {} to {}'.format(
-                str(source_point),
-                str(target_point)
-            )
-            script_logger.log(drag_log)
-            delta_x, delta_y = self.click_and_drag(source_point[0], source_point[1], target_point[0], target_point[1])
-            thread_script_logger = script_logger.copy()
-            self.io_executor.submit(
-                self.draw_click_and_drag,
-                thread_script_logger,
-                source_point,
-                source_point_list,
-                target_point,
-                target_point_list,
-                delta_x,
-                delta_y
-            )
-            script_logger.get_action_log().add_supporting_file(
-                'text',
-                'drag-log.txt',
-                drag_log
-            )
-            status = ScriptExecutionState.SUCCESS
-        #TODO: deprecated
+        
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
                 log_image = self.screenshot()
