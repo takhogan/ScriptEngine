@@ -1,7 +1,6 @@
 import sys
 import json
 import os
-sys.path.append("..")
 
 bin_path = os.path.abspath("bin")
 os.environ["PATH"] += os.pathsep + bin_path

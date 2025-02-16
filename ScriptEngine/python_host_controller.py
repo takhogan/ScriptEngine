@@ -6,7 +6,6 @@ import os
 import asyncio
 import base64
 
-sys.path.append("..")
 
 import numpy as np
 import pyautogui

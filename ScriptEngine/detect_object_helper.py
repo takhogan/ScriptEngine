@@ -5,7 +5,6 @@ start_time = time.time()
 import cv2
 import sys
 import numpy as np
-sys.path.append("..")
 from script_engine_utils import state_eval
 from script_execution_state import ScriptExecutionState
 from image_matcher import ImageMatcher

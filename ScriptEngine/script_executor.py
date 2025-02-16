@@ -7,7 +7,6 @@ import random
 import re
 import glob
 
-sys.path.append("..")
 from device_manager import DeviceManager
 from engine_manager import EngineManager
 from detect_object_helper import DetectObjectHelper
@@ -1167,18 +1166,3 @@ class ScriptExecutor:
         self.actions.append(self.run_queue.pop())
         self.context["action_attempts"] = len(self.actions) * [0]
 
-
-
-
-
-
-
-
-if __name__ == '__main__':
-    # TODO DONT LEAVE PASSCODE IN ANY SOURCE CONTORL
-    '''
-        
-        ./adb shell wm size
-        ./adb devices | grep "\<device\>"
-        
-    '''
