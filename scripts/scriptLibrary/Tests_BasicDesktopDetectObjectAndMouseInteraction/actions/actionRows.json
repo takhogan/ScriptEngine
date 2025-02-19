@@ -1,0 +1,272 @@
+[
+    {
+        "actions": [
+            {
+                "actionName": "detectObject",
+                "actionGroup": 0,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 0,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 0,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 10,
+                "childGroups": [
+                    {
+                        "index": 0,
+                        "srcGroup": 0,
+                        "srcRowIndex": 0,
+                        "srcActionIndex": 0,
+                        "destGroup": 1,
+                        "destRowIndex": 1,
+                        "destActionIndex": 0,
+                        "type": "firstMatch",
+                        "typePayload": null,
+                        "highlight": ""
+                    }
+                ],
+                "parentGroups": [],
+                "actionIcon": {
+                    "iconType": "imageIcon",
+                    "iconVersion": 1,
+                    "iconURL": null,
+                    "icon": "actions/0-row/0-detectObject/assets/actionIcon.png",
+                    "iconDims": [
+                        80,
+                        80
+                    ],
+                    "innerBorder": ""
+                },
+                "actionData": {
+                    "icon": null,
+                    "detectorName": "pixelDifference",
+                    "includeContainedAreaInOutput": false,
+                    "excludeMatchedAreaFromOutput": false,
+                    "resuseScreenshotBetweenActions": true,
+                    "useColor": false,
+                    "useOriginalImageOnly": false,
+                    "useImageRescaledToScreenOnly": false,
+                    "threshold": "0.3",
+                    "inputExpression": "",
+                    "outputVarName": "detectObject_0_output",
+                    "detectorMode": "active",
+                    "positiveExamples": [
+                        {
+                            "detectType": "floatingObject",
+                            "pairIndex": 0,
+                            "img": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-img.png",
+                            "mask": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-mask.png",
+                            "containedAreaMask": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-containedAreaMask.png",
+                            "icon": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-icon.png",
+                            "centerPoint": [
+                                54.5,
+                                54.5
+                            ],
+                            "sourceScreenWidth": 3024,
+                            "sourceScreenHeight": 1964
+                        },
+                        {
+                            "detectType": "fixedObject",
+                            "pairIndex": 1,
+                            "img": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/1-img.png",
+                            "mask": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/1-mask.png",
+                            "containedAreaMask": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/1-containedAreaMask.png",
+                            "icon": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/1-icon.png",
+                            "centerPoint": [
+                                54.5,
+                                54.5
+                            ],
+                            "sourceScreenWidth": 3024,
+                            "sourceScreenHeight": 1964
+                        }
+                    ],
+                    "negativeExamples": [],
+                    "srcImg": "actions/0-row/0-detectObject/assets/detectTypeObject/srcImg.png",
+                    "srcShape": [
+                        [],
+                        [
+                            {
+                                "shape": "rectangle",
+                                "shapeX": 644,
+                                "shapeY": 95,
+                                "width": 26,
+                                "height": 26,
+                                "fillType": "fill"
+                            }
+                        ]
+                    ],
+                    "srcScaleFactor": 4.2,
+                    "sceneLocation": [
+                        [
+                            2704,
+                            399
+                        ],
+                        [
+                            2813,
+                            508
+                        ]
+                    ],
+                    "maskLocation": [
+                        [
+                            109,
+                            109
+                        ],
+                        [
+                            0,
+                            0
+                        ]
+                    ],
+                    "matchMode": "bestMatch",
+                    "detectActionType": "floatingObject",
+                    "skipDetection": false,
+                    "searchArea": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            0,
+                            0
+                        ]
+                    ],
+                    "targetSystem": "python",
+                    "targetContext": "screen",
+                    "maxMatches": 1,
+                    "heightScale": "",
+                    "widthScale": ""
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            },
+            {
+                "actionName": "sleepStatement",
+                "actionGroup": 2,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 0,
+                "actionRowActionIndex": 1,
+                "visualizerRowIndex": 0,
+                "visualizerActionIndex": 1,
+                "visualizerX": 150,
+                "visualizerY": 10,
+                "childGroups": [],
+                "parentGroups": [],
+                "actionIcon": {
+                    "iconType": "symbolIcon",
+                    "iconSymbol": "sleepStatementIcon",
+                    "iconDims": [
+                        80,
+                        80
+                    ],
+                    "iconVersion": 1
+                },
+                "actionData": {
+                    "inputExpression": "0",
+                    "targetSystem": "none"
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 0,
+        "actionRowIndex": 0,
+        "selected": false
+    },
+    {
+        "actions": [
+            {
+                "actionName": "mouseInteractionAction",
+                "actionGroup": 1,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 1,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 1,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 150,
+                "childGroups": [],
+                "parentGroups": [
+                    0
+                ],
+                "actionIcon": {
+                    "iconType": "symbolIcon",
+                    "iconVersion": 0,
+                    "iconSymbol": "mouseInteractionActionIcon",
+                    "iconDims": [
+                        80,
+                        80
+                    ]
+                },
+                "actionData": {
+                    "sourceDetectTypeData": {
+                        "icon": null,
+                        "detectorName": "pixelDifference",
+                        "includeContainedAreaInOutput": false,
+                        "excludeMatchedAreaFromOutput": false,
+                        "resuseScreenshotBetweenActions": true,
+                        "useColor": false,
+                        "useOriginalImageOnly": false,
+                        "useImageRescaledToScreenOnly": false,
+                        "threshold": 0.7,
+                        "inputExpression": "detectObject_0_output",
+                        "outputVarName": "defaultOutputVarName",
+                        "detectorMode": "active",
+                        "positiveExamples": [],
+                        "negativeExamples": [],
+                        "srcImg": null,
+                        "srcShape": null,
+                        "srcScaleFactor": 1,
+                        "sceneLocation": null,
+                        "maskLocation": null,
+                        "matchMode": "bestMatch",
+                        "detectActionType": "fixedObject",
+                        "skipDetection": false
+                    },
+                    "sourcePointList": [],
+                    "targetSystem": "python",
+                    "clickCount": 1,
+                    "mouseButton": "left",
+                    "postActionDelay": "0",
+                    "scrollDistance": -100,
+                    "mouseActionType": "click",
+                    "betweenClickDelay": true,
+                    "randomVariableTypeData": {
+                        "distributionType": "normal",
+                        "outputVarName": "",
+                        "normalDistMin": 0.05,
+                        "normalDistMax": 0.3,
+                        "normalDistMean": 0.1,
+                        "normalDistStdDev": 0.1,
+                        "uniformDistMax": 0.3,
+                        "uniformDistMin": 0.05
+                    }
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 1,
+        "actionRowIndex": 1,
+        "selected": false
+    }
+]

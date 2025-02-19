@@ -1,0 +1,223 @@
+[
+    {
+        "actions": [
+            {
+                "actionName": "variableAssignment",
+                "actionGroup": 0,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 0,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 0,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 10,
+                "childGroups": [
+                    {
+                        "index": 0,
+                        "srcGroup": 0,
+                        "srcRowIndex": 0,
+                        "srcActionIndex": 0,
+                        "destGroup": 4,
+                        "destRowIndex": 1,
+                        "destActionIndex": 0,
+                        "type": "firstMatch",
+                        "typePayload": null,
+                        "highlight": ""
+                    }
+                ],
+                "parentGroups": [],
+                "actionIcon": {
+                    "iconType": "textIcon",
+                    "iconVersion": 2,
+                    "iconText": "var1\n\n    :=\n  \n1",
+                    "iconTextSize": 10,
+                    "iconDims": [
+                        80,
+                        80
+                    ]
+                },
+                "actionData": {
+                    "targetSystem": "none",
+                    "outputVarName": "var1",
+                    "inputExpression": "1",
+                    "expressionLanguage": "python",
+                    "inputParser": "eval",
+                    "setIfNull": false
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 0,
+        "actionRowIndex": 0,
+        "selected": false
+    },
+    {
+        "actions": [
+            {
+                "actionName": "scriptReference",
+                "actionGroup": 4,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 1,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 1,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 150,
+                "childGroups": [
+                    {
+                        "index": 0,
+                        "srcGroup": 4,
+                        "srcRowIndex": 1,
+                        "srcActionIndex": 0,
+                        "destGroup": 2,
+                        "destRowIndex": 2,
+                        "destActionIndex": 0,
+                        "type": "firstMatch",
+                        "typePayload": null,
+                        "highlight": ""
+                    },
+                    {
+                        "index": 1,
+                        "srcGroup": 4,
+                        "srcRowIndex": 1,
+                        "srcActionIndex": 0,
+                        "destGroup": 3,
+                        "destRowIndex": 2,
+                        "destActionIndex": 1,
+                        "type": "firstMatch",
+                        "typePayload": null,
+                        "highlight": ""
+                    }
+                ],
+                "parentGroups": [
+                    0
+                ],
+                "actionIcon": {
+                    "iconType": "textIcon",
+                    "iconText": "Tests_SetVar1To2WithReturn",
+                    "iconTextSize": 10,
+                    "iconDims": [
+                        80,
+                        80
+                    ],
+                    "iconVersion": 1
+                },
+                "actionData": {
+                    "targetSystem": "none",
+                    "scriptName": "Tests_SetVar1To2WithReturn",
+                    "scriptAttributes": [],
+                    "branchingBehavior": "firstMatch",
+                    "actionOrder": "sequential",
+                    "scriptMaxActionAttempts": "50",
+                    "onOutOfActionAttempts": "returnFailure",
+                    "runMode": "runOne",
+                    "libraryScript": true,
+                    "postActionDelay": "0"
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 1,
+        "actionRowIndex": 1,
+        "selected": false
+    },
+    {
+        "actions": [
+            {
+                "actionName": "conditionalStatement",
+                "actionGroup": 2,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 2,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 2,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 290,
+                "childGroups": [],
+                "parentGroups": [
+                    4
+                ],
+                "actionIcon": {
+                    "iconType": "textIcon",
+                    "iconVersion": 2,
+                    "iconText": "\n  ⬋ ? ⬊\n  \nvar1 == 2",
+                    "iconTextSize": 10,
+                    "iconDims": [
+                        80,
+                        80
+                    ]
+                },
+                "actionData": {
+                    "targetSystem": "none",
+                    "condition": "var1 == 2"
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            },
+            {
+                "actionName": "returnStatement",
+                "actionGroup": 3,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 2,
+                "actionRowActionIndex": 1,
+                "visualizerRowIndex": 2,
+                "visualizerActionIndex": 1,
+                "visualizerX": 150,
+                "visualizerY": 290,
+                "childGroups": [],
+                "parentGroups": [
+                    4
+                ],
+                "actionIcon": {
+                    "iconType": "symbolIcon",
+                    "iconSymbol": "returnStatementIcon",
+                    "iconDims": [
+                        80,
+                        80
+                    ],
+                    "iconVersion": 1
+                },
+                "actionData": {
+                    "returnStatementType": "exitProgram",
+                    "returnStatus": "failure",
+                    "targetSystem": "none"
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 2,
+        "actionRowIndex": 2,
+        "selected": false
+    }
+]

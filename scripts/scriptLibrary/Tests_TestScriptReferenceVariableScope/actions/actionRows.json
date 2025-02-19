@@ -1,0 +1,235 @@
+[
+    {
+        "actions": [
+            {
+                "actionName": "scriptReference",
+                "actionGroup": 0,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 0,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 0,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 10,
+                "childGroups": [
+                    {
+                        "index": 0,
+                        "srcGroup": 0,
+                        "srcRowIndex": 0,
+                        "srcActionIndex": 0,
+                        "destGroup": 2,
+                        "destRowIndex": 1,
+                        "destActionIndex": 0,
+                        "type": "firstMatch",
+                        "typePayload": null,
+                        "highlight": ""
+                    }
+                ],
+                "parentGroups": [],
+                "actionIcon": {
+                    "iconType": "textIcon",
+                    "iconText": "Tests_SetVar1To2WithoutReturn",
+                    "iconTextSize": 10,
+                    "iconDims": [
+                        80,
+                        80
+                    ],
+                    "iconVersion": 1
+                },
+                "actionData": {
+                    "targetSystem": "none",
+                    "scriptName": "Tests_SetVar1To2WithoutReturn",
+                    "scriptAttributes": [],
+                    "branchingBehavior": "firstMatch",
+                    "actionOrder": "sequential",
+                    "scriptMaxActionAttempts": "50",
+                    "onOutOfActionAttempts": "returnFailure",
+                    "runMode": "runOne",
+                    "libraryScript": true,
+                    "postActionDelay": "0"
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 0,
+        "actionRowIndex": 0,
+        "selected": false
+    },
+    {
+        "actions": [
+            {
+                "actionName": "conditionalStatement",
+                "actionGroup": 2,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 1,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 1,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 150,
+                "childGroups": [
+                    {
+                        "index": 0,
+                        "srcGroup": 2,
+                        "srcRowIndex": 1,
+                        "srcActionIndex": 0,
+                        "destGroup": 1,
+                        "destRowIndex": 2,
+                        "destActionIndex": 0,
+                        "type": "firstMatch",
+                        "typePayload": null,
+                        "highlight": ""
+                    }
+                ],
+                "parentGroups": [
+                    0
+                ],
+                "actionIcon": {
+                    "iconType": "textIcon",
+                    "iconVersion": 2,
+                    "iconText": "\n  ⬋ ? ⬊\n  \nvar1 == 1",
+                    "iconTextSize": 10,
+                    "iconDims": [
+                        80,
+                        80
+                    ]
+                },
+                "actionData": {
+                    "targetSystem": "none",
+                    "condition": "var1 == 1"
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 1,
+        "actionRowIndex": 1,
+        "selected": false
+    },
+    {
+        "actions": [
+            {
+                "actionName": "scriptReference",
+                "actionGroup": 1,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 2,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 2,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 290,
+                "childGroups": [
+                    {
+                        "index": 0,
+                        "srcGroup": 1,
+                        "srcRowIndex": 2,
+                        "srcActionIndex": 0,
+                        "destGroup": 4,
+                        "destRowIndex": 3,
+                        "destActionIndex": 0,
+                        "type": "firstMatch",
+                        "typePayload": null,
+                        "highlight": ""
+                    }
+                ],
+                "parentGroups": [
+                    2
+                ],
+                "actionIcon": {
+                    "iconType": "textIcon",
+                    "iconText": "Tests_SetVar1To2WithReturn",
+                    "iconTextSize": 10,
+                    "iconDims": [
+                        80,
+                        80
+                    ],
+                    "iconVersion": 1
+                },
+                "actionData": {
+                    "targetSystem": "none",
+                    "scriptName": "Tests_SetVar1To2WithReturn",
+                    "scriptAttributes": [],
+                    "branchingBehavior": "firstMatch",
+                    "actionOrder": "sequential",
+                    "scriptMaxActionAttempts": "50",
+                    "onOutOfActionAttempts": "returnFailure",
+                    "runMode": "runOne",
+                    "libraryScript": true,
+                    "postActionDelay": "0"
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 2,
+        "actionRowIndex": 2,
+        "selected": false
+    },
+    {
+        "actions": [
+            {
+                "actionName": "conditionalStatement",
+                "actionGroup": 4,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 3,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 3,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 430,
+                "childGroups": [],
+                "parentGroups": [
+                    1
+                ],
+                "actionIcon": {
+                    "iconType": "textIcon",
+                    "iconVersion": 2,
+                    "iconText": "\n  ⬋ ? ⬊\n  \nvar1==2",
+                    "iconTextSize": 10,
+                    "iconDims": [
+                        80,
+                        80
+                    ]
+                },
+                "actionData": {
+                    "targetSystem": "none",
+                    "condition": "var1==2"
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 3,
+        "actionRowIndex": 3,
+        "selected": false
+    }
+]

@@ -1,0 +1,49 @@
+[
+    {
+        "actions": [
+            {
+                "actionName": "variableAssignment",
+                "actionGroup": 0,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 0,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 0,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 10,
+                "childGroups": [],
+                "parentGroups": [],
+                "actionIcon": {
+                    "iconType": "textIcon",
+                    "iconVersion": 2,
+                    "iconText": "var1\n\n    :=\n  \nvar1 + 1",
+                    "iconTextSize": 10,
+                    "iconDims": [
+                        80,
+                        80
+                    ]
+                },
+                "actionData": {
+                    "targetSystem": "none",
+                    "outputVarName": "var1",
+                    "inputExpression": "var1 + 1",
+                    "expressionLanguage": "python",
+                    "inputParser": "eval",
+                    "setIfNull": false
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 0,
+        "actionRowIndex": 0,
+        "selected": false
+    }
+]

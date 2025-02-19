@@ -1,0 +1,123 @@
+[
+    {
+        "actions": [
+            {
+                "actionName": "keyboardAction",
+                "actionGroup": 0,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 0,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 0,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 10,
+                "childGroups": [
+                    {
+                        "index": 0,
+                        "srcGroup": 0,
+                        "srcRowIndex": 0,
+                        "srcActionIndex": 0,
+                        "destGroup": 1,
+                        "destRowIndex": 1,
+                        "destActionIndex": 0,
+                        "type": "firstMatch",
+                        "typePayload": null,
+                        "highlight": ""
+                    }
+                ],
+                "parentGroups": [],
+                "actionIcon": {
+                    "iconType": "symbolIcon",
+                    "iconSymbol": "keyboardActionIcon",
+                    "iconDims": [
+                        80,
+                        80
+                    ],
+                    "iconVersion": 1
+                },
+                "actionData": {
+                    "keyboardExpression": "{ctrl}{alt}{delete}",
+                    "keyboardActionType": "keyPress",
+                    "targetSystem": "python",
+                    "postActionDelay": "0",
+                    "isHotKey": true,
+                    "distributionType": "normal",
+                    "outputVarName": "",
+                    "normalDistMin": 0.05,
+                    "normalDistMax": 0.3,
+                    "normalDistMean": 0.1,
+                    "normalDistStdDev": 0.1,
+                    "uniformDistMax": 0.3,
+                    "uniformDistMin": 0.05
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 0,
+        "actionRowIndex": 0,
+        "selected": false
+    },
+    {
+        "actions": [
+            {
+                "actionName": "keyboardAction",
+                "actionGroup": 1,
+                "actionVersion": 0,
+                "actionVersionCode": "",
+                "actionLabel": null,
+                "actionRowRowIndex": 1,
+                "actionRowActionIndex": 0,
+                "visualizerRowIndex": 1,
+                "visualizerActionIndex": 0,
+                "visualizerX": 10,
+                "visualizerY": 150,
+                "childGroups": [],
+                "parentGroups": [
+                    0
+                ],
+                "actionIcon": {
+                    "iconType": "symbolIcon",
+                    "iconSymbol": "keyboardActionIcon",
+                    "iconDims": [
+                        80,
+                        80
+                    ],
+                    "iconVersion": 1
+                },
+                "actionData": {
+                    "keyboardExpression": "{command}{option}{esc}",
+                    "keyboardActionType": "keyPress",
+                    "targetSystem": "python",
+                    "postActionDelay": "0",
+                    "isHotKey": true,
+                    "distributionType": "normal",
+                    "outputVarName": "",
+                    "normalDistMin": 0.05,
+                    "normalDistMax": 0.3,
+                    "normalDistMean": 0.1,
+                    "normalDistStdDev": 0.1,
+                    "uniformDistMax": 0.3,
+                    "uniformDistMin": 0.05
+                },
+                "displayables": [],
+                "configurables": [],
+                "linkingBehaviors": [],
+                "selected": false,
+                "draggable": true,
+                "highlight": "",
+                "helpTipExpanded": false
+            }
+        ],
+        "rowID": 1,
+        "actionRowIndex": 1,
+        "selected": false
+    }
+]
