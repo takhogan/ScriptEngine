@@ -1,0 +1,51 @@
+{
+    "targetSystem": "none",
+    "width": null,
+    "height": null,
+    "scriptMode": "train",
+    "deploymentToLibrary": true,
+    "scriptReference": {
+        "actionName": "scriptReference",
+        "actionGroup": 0,
+        "actionVersion": 0,
+        "actionVersionCode": "",
+        "actionLabel": null,
+        "actionRowRowIndex": null,
+        "actionRowActionIndex": null,
+        "visualizerRowIndex": 0,
+        "visualizerActionIndex": 0,
+        "visualizerX": 0,
+        "visualizerY": 0,
+        "childGroups": [],
+        "parentGroups": [],
+        "actionIcon": {
+            "iconType": "textIcon",
+            "iconTextSize": 10,
+            "iconDims": [
+                80,
+                80
+            ],
+            "iconVersion": 1
+        },
+        "actionData": {
+            "targetSystem": "none",
+            "scriptName": "Tests_DependentSubScriptState",
+            "scriptAttributes": [],
+            "branchingBehavior": "firstMatch",
+            "actionOrder": "sequential",
+            "scriptMaxActionAttempts": "50",
+            "onOutOfActionAttempts": "returnFailure",
+            "runMode": "run",
+            "libraryScript": true,
+            "postActionDelay": "0"
+        },
+        "displayables": [],
+        "configurables": [],
+        "linkingBehaviors": [],
+        "selected": false,
+        "draggable": true,
+        "highlight": "",
+        "helpTipExpanded": false
+    },
+    "scriptType": "library"
+}

@@ -1,0 +1,14 @@
+[
+    "Tests_RunAllTests",
+    "Tests_IndependentSubScriptState",
+    "Tests_DependentSubScriptState",
+    "Tests_OutOfOrderLinearLinks",
+    "Tests_basicLinearLinks",
+    "Tests_conditionalLinks",
+    "Tests_attemptOutOfAttemptsWithDifferentTimeouts",
+    "Tests_BasicDesktopDetectObjectAndMouseInteraction",
+    "Tests_BasicImageToTextAndImageTransformation",
+    "Tests_BasicKeyboardExpression",
+    "Tests_SetVar1To2WithReturn",
+    "Tests_SetVar1To2WithoutReturn"
+]

@@ -11,7 +11,6 @@ data/
 venv/
 venv_host_server/
 venv_scheduling_server/
-scripts/
 tmp/
 assets/viber_credentials.json
 viber_credentials.json
