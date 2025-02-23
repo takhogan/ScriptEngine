@@ -1,10 +1,8 @@
 import cv2
-import sys
-import json
 import numpy as np
 import os
 
-from script_log_tree_generator import ScriptLogTreeGenerator
+from .script_log_tree_generator import ScriptLogTreeGenerator
 bin_path = os.path.abspath("bin")
 os.environ["PATH"] += os.pathsep + bin_path
 

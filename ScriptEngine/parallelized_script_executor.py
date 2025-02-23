@@ -2,16 +2,19 @@ import sys
 import pickle
 import time
 import cv2
-from detect_object_helper import DetectObjectHelper
-from script_logger import ScriptLogger
-from parallelized_script_executor_helper import ParallelizedScriptExecutorHelper
+from .helpers.detect_object_helper import DetectObjectHelper
+from ScriptEngine.common.logging.script_logger import ScriptLogger
+from .helpers.parallelized_script_executor_helper import ParallelizedScriptExecutorHelper
 script_logger = ScriptLogger()
+from .device_controller import DeviceController
+from .custom_process_pool import CustomProcessPool
 
 
 
 class ParallelizedScriptExecutor:
-    def __init__(self, executor):
-        self.executor = executor
+    def __init__(self, device_controller : DeviceController, process_executor : CustomProcessPool):
+        self.device_controller = device_controller
+        self.process_executor = process_executor
         self.processes = {}
 
     def clear_processes(self):
@@ -45,39 +48,25 @@ class ParallelizedScriptExecutor:
             if input_obj['screencap_im_bgr'] is None:
                 script_logger.log('No input expression, using cached screenshot')
                 target_system = parallel_action['actionData']['targetSystem']
-                if target_system == 'adb':
-                    if "adb" in system_inputs:
-                        input_obj = system_inputs['adb']
-                    else:
-                        input_obj['screencap_im_bgr'] = script_executor.device_manager.adb_host.screenshot()
-                        original_image = cv2.copyMakeBorder(input_obj['screencap_im_bgr'].copy(), 15, 15, 15, 15,cv2.BORDER_REPLICATE)
-                        original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
-                        input_obj["original_image"] = original_image[15:-15, 15:-15]
-                        input_obj['original_height'] = input_obj['screencap_im_bgr'].shape[0]
-                        input_obj['original_width'] = input_obj['screencap_im_bgr'].shape[1]
-                        input_obj['fixed_scale'] = False
-                        system_inputs['adb'] = input_obj
-                elif target_system == 'python' or target_system == 'none':
-                    if "python" in system_inputs:
-                        input_obj = system_inputs['python']
-                    else:
-                        input_obj['screencap_im_bgr'] = script_executor.device_manager.python_host.screenshot()
-                        original_image = cv2.copyMakeBorder(input_obj['screencap_im_bgr'].copy(), 15, 15, 15, 15,cv2.BORDER_REPLICATE)
-                        original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
-                        input_obj["original_image"] = original_image[15:-15, 15:-15]
-                        input_obj['original_height'] = input_obj['screencap_im_bgr'].shape[0]
-                        input_obj['original_width'] = input_obj['screencap_im_bgr'].shape[1]
-                        input_obj['fixed_scale'] = False
-                        system_inputs['python'] = input_obj
+                if target_system in system_inputs:
+                    input_obj = system_inputs[target_system]
                 else:
-                    raise Exception('unimplemented target system: ' + target_system)
+                    input_obj['screencap_im_bgr'] = self.device_controller.get_device_action(target_system, 'screenshot')()
+                    original_image = cv2.copyMakeBorder(input_obj['screencap_im_bgr'].copy(), 15, 15, 15, 15,cv2.BORDER_REPLICATE)
+                    original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
+                    input_obj["original_image"] = original_image[15:-15, 15:-15]
+                    input_obj['original_height'] = input_obj['screencap_im_bgr'].shape[0]
+                    input_obj['original_width'] = input_obj['screencap_im_bgr'].shape[1]
+                    input_obj['fixed_scale'] = False
+                    system_inputs[target_system] = input_obj
+                
             script_logger.log('Generating parallel action handler for ' + str(parallel_action["actionGroup"]))
             parallel_action["input_obj"] = input_obj
             (action_handler, action_handler_args) = script_executor.handle_action(parallel_action, lazy_eval=True)
             helper = ParallelizedScriptExecutorHelper(action_handler)
             script_logger.log('Started parallel process for ' + str(parallel_action["actionGroup"]))
 
-            future = self.executor.submit(
+            future = self.process_executor.submit(
                 helper.handle_parallel_action,
                 action_handler_args
             )

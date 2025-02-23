@@ -16,15 +16,15 @@ import datetime
 import sys
 print(f"builtin initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
-from custom_thread_pool import CustomThreadPool
-from custom_process_pool import CustomProcessPool
-from script_engine_constants import *
-from script_engine_utils import datetime_to_local_str, imageFileExtensions
-from script_execution_state import ScriptExecutionState
-from system_script_handler import SystemScriptHandler
+from .custom_thread_pool import CustomThreadPool
+from .custom_process_pool import CustomProcessPool
+from ScriptEngine.common.constants.script_engine_constants import *
+from ScriptEngine.common.script_engine_utils import datetime_to_local_str, imageFileExtensions
+from ScriptEngine.common.enums import ScriptExecutionState
+from .system_script_handler import SystemScriptHandler
 print(f"non builtin initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
-from script_logger import ScriptLogger
+from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
@@ -103,17 +103,13 @@ def close_threads_and_processes(io_executor, process_executor, timeout=30):
 
 
 def load_and_run(script_name, script_id, timeout, constants=None, start_time : datetime.datetime=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False):
-    # if you want to open zip then you pass .zip in command line args
-    # update_running_scripts_file(script_name, 'push')
     script_logger.log('SCRIPT_MANAGER: ', ' script trigger time: ',
           datetime_to_local_str(str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')),
           'actual script start time: ', datetime.datetime.now(), ' scheduled end time: ',
           datetime_to_local_str(timeout))
     script_logger.log('constants : ', constants)
-    from script_loader import parse_zip
+    from .script_loader import parse_zip
     script_object = parse_zip(script_name, system_script)
-    #https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-objec
-    # exit(0)
     device_params = {}
     if device_details is not None and device_details != '' and device_details != 'null':
         if device_details.startswith('file'):
@@ -142,13 +138,17 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
                     script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
     errored = False
-    from device_manager import DeviceManager
-    from script_executor import ScriptExecutor
-    from engine_manager import EngineManager
+    from ScriptEngine.device_controller import DeviceController
+    from .script_executor import ScriptExecutor
+    from .engine_manager import EngineManager
+    from .script_action_executor import ScriptActionExecutor
+    from .parallelized_script_executor import ParallelizedScriptExecutor
 
     with CustomThreadPool(max_workers=50) as io_executor, CustomProcessPool(max_workers=os.cpu_count()) as process_executor:
-        device_manager = DeviceManager(script_name, script_object['props'], device_params, io_executor)
+        device_controller = DeviceController(script_name, script_object['props'], device_params, io_executor)
         engine_manager = EngineManager(script_id, script_logger.get_log_folder())
+        script_action_executor = ScriptActionExecutor(device_controller, io_executor, script_object['props'])
+        parallelized_executor = ParallelizedScriptExecutor(device_controller, process_executor)
         # TODO: might need fixing
         # logger = multiprocessing.log_to_stderr()
         # logger.setLevel(multiprocessing.SUBDEBUG)
@@ -166,9 +166,11 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
             script_name,
             start_time_str,
             script_id,
-            device_manager,
+            device_controller,
             engine_manager,
-            process_executor,
+            io_executor,
+            script_action_executor,
+            parallelized_executor,
             script_start_time=start_time,
             screen_plan_server_attached=screen_plan_server_attached
         )
@@ -184,7 +186,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
             )
             script_logger.get_action_log().add_supporting_file_reference('text', 'global-stdout.txt', log_header=False)
             if system_script:
-                handle_result = SystemScriptHandler.handle_system_script(device_manager, script_name, {})
+                handle_result = SystemScriptHandler.handle_system_script(device_controller, script_name, {})
                 if handle_result == "return":
                     script_logger.get_action_log().set_status(ScriptExecutionState.SUCCESS.name)
                 else:
