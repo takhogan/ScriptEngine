@@ -1,0 +1,1741 @@
+[
+    {
+        "actions": [
+            {
+                "actionName": "sleepStatement",
+                "actionGroup": 6,
+                "actionLabel": null,
+                "rowIndex": 0,
+                "actionIndex": 0,
+                "childGroups": [
+                    {
+                        "srcGroup": 6,
+                        "srcRowIndex": 0,
+                        "srcActionIndex": 0,
+                        "destGroup": 4,
+                        "destRowIndex": 1,
+                        "destActionIndex": 0,
+                        "coords": [
+                            [
+                                70,
+                                0
+                            ],
+                            [
+                                210,
+                                39.12652114433654
+                            ]
+                        ],
+                        "long": false,
+                        "isPipeLink": false,
+                        "type": "firstMatch",
+                        "typePayload": null
+                    },
+                    {
+                        "srcGroup": 6,
+                        "srcRowIndex": 0,
+                        "srcActionIndex": 0,
+                        "destGroup": 1,
+                        "destRowIndex": 1,
+                        "destActionIndex": 1,
+                        "coords": [
+                            [
+                                70,
+                                0
+                            ],
+                            [
+                                350,
+                                40.51659547069755
+                            ]
+                        ],
+                        "long": false,
+                        "isPipeLink": false,
+                        "type": "firstMatch",
+                        "typePayload": null
+                    },
+                    {
+                        "srcGroup": 6,
+                        "srcRowIndex": 0,
+                        "srcActionIndex": 0,
+                        "destGroup": 9,
+                        "destRowIndex": 1,
+                        "destActionIndex": 2,
+                        "coords": [
+                            [
+                                70,
+                                0
+                            ],
+                            [
+                                490,
+                                41.00496280979001
+                            ]
+                        ],
+                        "long": false,
+                        "isPipeLink": false,
+                        "type": "firstMatch",
+                        "typePayload": null
+                    }
+                ],
+                "actionIcon": {
+                    "iconType": "symbolIcon",
+                    "iconSymbol": "sleepStatementIcon",
+                    "iconDims": [
+                        80,
+                        80
+                    ]
+                },
+                "actionData": {
+                    "inputExpression": "1",
+                    "targetSystem": "none"
+                },
+                "displayables": [],
+                "configurables": [
+                    {
+                        "configurableID": "targetSystemConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target System",
+                        "inputTarget": "targetSystem",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Python",
+                                "optionValue": "python",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "adb",
+                                "optionValue": "adb",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "None",
+                                "optionValue": "none",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "inputExpressionConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Input Expression",
+                        "inputTarget": "inputExpression",
+                        "inputValue": "",
+                        "onChange": null
+                    }
+                ],
+                "linkingBehaviors": [
+                    {
+                        "linkingBehaviorID": "randomVariableConsumerLinkingBehavior",
+                        "behaviorType": "variableLink",
+                        "sourceTypes": [
+                            "randomVariable"
+                        ],
+                        "sourcePayload": [
+                            [
+                                "actionData",
+                                "outputVarName"
+                            ]
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "inputExpression"
+                        ]
+                    }
+                ],
+                "selected": false,
+                "draggable": true
+            }
+        ],
+        "rowIndex": 1,
+        "selected": false
+    },
+    {
+        "actions": [
+            {
+                "actionName": "detectObject",
+                "actionGroup": 4,
+                "actionLabel": null,
+                "rowIndex": 1,
+                "actionIndex": 0,
+                "childGroups": [
+                    {
+                        "srcGroup": 4,
+                        "srcRowIndex": 1,
+                        "srcActionIndex": 0,
+                        "destGroup": 3,
+                        "destRowIndex": 2,
+                        "destActionIndex": 0,
+                        "coords": [
+                            [
+                                210,
+                                0
+                            ],
+                            [
+                                210,
+                                32
+                            ]
+                        ],
+                        "long": false,
+                        "isPipeLink": false,
+                        "type": "firstMatch",
+                        "typePayload": null
+                    },
+                    {
+                        "srcGroup": 4,
+                        "srcRowIndex": 1,
+                        "srcActionIndex": 0,
+                        "destGroup": 12,
+                        "destRowIndex": 2,
+                        "destActionIndex": 1,
+                        "coords": [
+                            [
+                                210,
+                                0
+                            ],
+                            [
+                                350,
+                                39.12652114433654
+                            ]
+                        ],
+                        "long": false,
+                        "isPipeLink": false,
+                        "type": "firstMatch",
+                        "typePayload": null
+                    }
+                ],
+                "actionIcon": {
+                    "iconType": "imageIcon",
+                    "iconURL": null,
+                    "iconDims": [
+                        3024,
+                        1964
+                    ]
+                },
+                "actionData": {
+                    "searchArea": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            3024,
+                            1964
+                        ]
+                    ],
+                    "icon": "actions/1-row/0-detectObject/assets/icon.png",
+                    "targetSystem": "python",
+                    "targetContext": "detectResult",
+                    "detectorName": "pixelDifference",
+                    "detectorAttributes": [],
+                    "threshold": 0.65,
+                    "maxMatches": 1,
+                    "outputVarName": "detectObject_4",
+                    "detectorMode": "active",
+                    "positiveExamples": [
+                        {
+                            "pairIndex": 0,
+                            "img": "actions/1-row/0-detectObject/assets/positiveExamples/0-img.png",
+                            "mask": "actions/1-row/0-detectObject/assets/positiveExamples/0-mask.png",
+                            "containedAreaMask": "actions/1-row/0-detectObject/assets/positiveExamples/0-containedAreaMask.png"
+                        }
+                    ],
+                    "negativeExamples": [],
+                    "maskLocation": [
+                        [
+                            84,
+                            46
+                        ],
+                        [
+                            0,
+                            0
+                        ]
+                    ],
+                    "inputExpression": "",
+                    "heightScale": "",
+                    "widthScale": ""
+                },
+                "displayables": [],
+                "configurables": [
+                    {
+                        "configurableID": "outputVarNameConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "text",
+                        "inputName": "Output Var Name",
+                        "inputTarget": "outputVarName",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "thresholdConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "float",
+                        "inputName": "Threshold",
+                        "inputTarget": "threshold",
+                        "inputValue": 0.8,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetContextConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target Context",
+                        "inputTarget": "targetContext",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Screen",
+                                "optionValue": "screen",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Search Area",
+                                "optionValue": "searchArea",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Detect Result",
+                                "optionValue": "detectResult",
+                                "optionSelected": true
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "maxMatchesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "integer",
+                        "inputName": "Max Matches",
+                        "inputTarget": "maxMatches",
+                        "inputValue": 1,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetSystemConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target System",
+                        "inputTarget": "targetSystem",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Python",
+                                "optionValue": "python",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "adb",
+                                "optionValue": "adb",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "None",
+                                "optionValue": "none",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectorAttributesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "checkboxOptions",
+                        "inputName": "Detector Attributes",
+                        "inputTarget": "detectorAttributes",
+                        "targetType": "array",
+                        "maxOptions": 1000,
+                        "inputValue": [
+                            {
+                                "optionName": "Object Handler",
+                                "optionValue": "searchAreaObjectHandler",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Include Contained Area in Output",
+                                "optionValue": "includeContainedAreaInOutput",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Exclude Matched Area from Output",
+                                "optionValue": "excludeMatchedAreaFromOutput",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "inputExpressionConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Input Expression",
+                        "inputTarget": "inputExpression",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectObjectWidthScaleConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Width Scale",
+                        "inputTarget": "widthScale",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectObjectHeightScaleConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Height Scale",
+                        "inputTarget": "heightScale",
+                        "inputValue": "",
+                        "onChange": null
+                    }
+                ],
+                "linkingBehaviors": [
+                    {
+                        "linkingBehaviorID": "detectObjectToDetectObjectLinkingBehavior",
+                        "behaviorType": "variableChain",
+                        "sourceTypes": [
+                            "detectObject"
+                        ],
+                        "sourcePayload": [
+                            "actionData",
+                            "outputVarName"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "inputExpression"
+                        ]
+                    },
+                    {
+                        "linkingBehaviorID": "detectObjectToDetectObjectContextLinkingBehavior",
+                        "behaviorType": "variableLink",
+                        "sourceTypes": [
+                            "detectObject"
+                        ],
+                        "sourcePayload": [
+                            "detectResult"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "targetContext"
+                        ]
+                    }
+                ],
+                "selected": false,
+                "draggable": true
+            },
+            {
+                "actionName": "detectObject",
+                "actionGroup": 1,
+                "actionLabel": null,
+                "rowIndex": 1,
+                "actionIndex": 1,
+                "childGroups": [
+                    {
+                        "srcGroup": 1,
+                        "srcRowIndex": 1,
+                        "srcActionIndex": 1,
+                        "destGroup": 2,
+                        "destRowIndex": 2,
+                        "destActionIndex": 2,
+                        "coords": [
+                            [
+                                350,
+                                0
+                            ],
+                            [
+                                490,
+                                39.12652114433654
+                            ]
+                        ],
+                        "long": false,
+                        "isPipeLink": false,
+                        "type": "firstMatch",
+                        "typePayload": null
+                    }
+                ],
+                "actionIcon": {
+                    "iconType": "imageIcon",
+                    "iconURL": null,
+                    "iconDims": [
+                        3024,
+                        1964
+                    ]
+                },
+                "actionData": {
+                    "searchArea": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            3024,
+                            1964
+                        ]
+                    ],
+                    "icon": "actions/1-row/1-detectObject/assets/icon.png",
+                    "targetSystem": "python",
+                    "targetContext": "screen",
+                    "detectorName": "pixelDifference",
+                    "detectorAttributes": [],
+                    "threshold": 0.65,
+                    "maxMatches": 1,
+                    "outputVarName": "detectObject_1",
+                    "detectorMode": "active",
+                    "positiveExamples": [
+                        {
+                            "pairIndex": 0,
+                            "img": "actions/1-row/1-detectObject/assets/positiveExamples/0-img.png",
+                            "mask": "actions/1-row/1-detectObject/assets/positiveExamples/0-mask.png",
+                            "containedAreaMask": "actions/1-row/1-detectObject/assets/positiveExamples/0-containedAreaMask.png"
+                        }
+                    ],
+                    "negativeExamples": [],
+                    "maskLocation": [
+                        [
+                            80,
+                            63
+                        ],
+                        [
+                            0,
+                            0
+                        ]
+                    ],
+                    "inputExpression": "",
+                    "heightScale": "",
+                    "widthScale": ""
+                },
+                "displayables": [],
+                "configurables": [
+                    {
+                        "configurableID": "outputVarNameConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "text",
+                        "inputName": "Output Var Name",
+                        "inputTarget": "outputVarName",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "thresholdConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "float",
+                        "inputName": "Threshold",
+                        "inputTarget": "threshold",
+                        "inputValue": 0.8,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetContextConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target Context",
+                        "inputTarget": "targetContext",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Screen",
+                                "optionValue": "screen",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "Search Area",
+                                "optionValue": "searchArea",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Detect Result",
+                                "optionValue": "detectResult",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "maxMatchesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "integer",
+                        "inputName": "Max Matches",
+                        "inputTarget": "maxMatches",
+                        "inputValue": 1,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetSystemConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target System",
+                        "inputTarget": "targetSystem",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Python",
+                                "optionValue": "python",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "adb",
+                                "optionValue": "adb",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "None",
+                                "optionValue": "none",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectorAttributesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "checkboxOptions",
+                        "inputName": "Detector Attributes",
+                        "inputTarget": "detectorAttributes",
+                        "targetType": "array",
+                        "maxOptions": 1000,
+                        "inputValue": [
+                            {
+                                "optionName": "Object Handler",
+                                "optionValue": "searchAreaObjectHandler",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Include Contained Area in Output",
+                                "optionValue": "includeContainedAreaInOutput",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Exclude Matched Area from Output",
+                                "optionValue": "excludeMatchedAreaFromOutput",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "inputExpressionConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Input Expression",
+                        "inputTarget": "inputExpression",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectObjectWidthScaleConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Width Scale",
+                        "inputTarget": "widthScale",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectObjectHeightScaleConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Height Scale",
+                        "inputTarget": "heightScale",
+                        "inputValue": "",
+                        "onChange": null
+                    }
+                ],
+                "linkingBehaviors": [
+                    {
+                        "linkingBehaviorID": "detectObjectToDetectObjectLinkingBehavior",
+                        "behaviorType": "variableChain",
+                        "sourceTypes": [
+                            "detectObject"
+                        ],
+                        "sourcePayload": [
+                            "actionData",
+                            "outputVarName"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "inputExpression"
+                        ]
+                    },
+                    {
+                        "linkingBehaviorID": "detectObjectToDetectObjectContextLinkingBehavior",
+                        "behaviorType": "variableLink",
+                        "sourceTypes": [
+                            "detectObject"
+                        ],
+                        "sourcePayload": [
+                            "detectResult"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "targetContext"
+                        ]
+                    }
+                ],
+                "selected": false,
+                "draggable": true
+            },
+            {
+                "actionName": "sleepStatement",
+                "actionGroup": 9,
+                "actionLabel": null,
+                "rowIndex": 1,
+                "actionIndex": 2,
+                "childGroups": [],
+                "actionIcon": {
+                    "iconType": "symbolIcon",
+                    "iconSymbol": "sleepStatementIcon",
+                    "iconDims": [
+                        80,
+                        80
+                    ]
+                },
+                "actionData": {
+                    "inputExpression": 0,
+                    "targetSystem": "none"
+                },
+                "displayables": [],
+                "configurables": [
+                    {
+                        "configurableID": "targetSystemConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target System",
+                        "inputTarget": "targetSystem",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Python",
+                                "optionValue": "python",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "adb",
+                                "optionValue": "adb",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "None",
+                                "optionValue": "none",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "inputExpressionConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Input Expression",
+                        "inputTarget": "inputExpression",
+                        "inputValue": "",
+                        "onChange": null
+                    }
+                ],
+                "linkingBehaviors": [
+                    {
+                        "linkingBehaviorID": "randomVariableConsumerLinkingBehavior",
+                        "behaviorType": "variableLink",
+                        "sourceTypes": [
+                            "randomVariable"
+                        ],
+                        "sourcePayload": [
+                            [
+                                "actionData",
+                                "outputVarName"
+                            ]
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "inputExpression"
+                        ]
+                    }
+                ],
+                "selected": false,
+                "draggable": true
+            }
+        ],
+        "rowIndex": 2,
+        "selected": false
+    },
+    {
+        "actions": [
+            {
+                "actionName": "detectObject",
+                "actionGroup": 3,
+                "actionLabel": null,
+                "rowIndex": 2,
+                "actionIndex": 0,
+                "childGroups": [
+                    {
+                        "srcGroup": 3,
+                        "srcRowIndex": 2,
+                        "srcActionIndex": 0,
+                        "destGroup": 5,
+                        "destRowIndex": 3,
+                        "destActionIndex": 0,
+                        "coords": [
+                            [
+                                210,
+                                0
+                            ],
+                            [
+                                70,
+                                39.12652114433654
+                            ]
+                        ],
+                        "long": false,
+                        "isPipeLink": false,
+                        "type": "firstMatch",
+                        "typePayload": null
+                    }
+                ],
+                "actionIcon": {
+                    "iconType": "imageIcon",
+                    "iconURL": null,
+                    "iconDims": [
+                        3024,
+                        1964
+                    ]
+                },
+                "actionData": {
+                    "searchArea": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            3024,
+                            1964
+                        ]
+                    ],
+                    "icon": "actions/2-row/0-detectObject/assets/icon.png",
+                    "targetSystem": "python",
+                    "targetContext": "detectResult",
+                    "detectorName": "pixelDifference",
+                    "detectorAttributes": [],
+                    "threshold": 0.7,
+                    "maxMatches": 1,
+                    "outputVarName": "detectObject_4",
+                    "detectorMode": "active",
+                    "positiveExamples": [
+                        {
+                            "pairIndex": 0,
+                            "img": "actions/2-row/0-detectObject/assets/positiveExamples/0-img.png",
+                            "mask": "actions/2-row/0-detectObject/assets/positiveExamples/0-mask.png",
+                            "containedAreaMask": "actions/2-row/0-detectObject/assets/positiveExamples/0-containedAreaMask.png"
+                        }
+                    ],
+                    "negativeExamples": [],
+                    "maskLocation": [
+                        [
+                            17,
+                            21
+                        ],
+                        [
+                            0,
+                            0
+                        ]
+                    ],
+                    "inputExpression": "detectObject_4",
+                    "heightScale": "",
+                    "widthScale": ""
+                },
+                "displayables": [],
+                "configurables": [
+                    {
+                        "configurableID": "outputVarNameConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "text",
+                        "inputName": "Output Var Name",
+                        "inputTarget": "outputVarName",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "thresholdConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "float",
+                        "inputName": "Threshold",
+                        "inputTarget": "threshold",
+                        "inputValue": 0.8,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetContextConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target Context",
+                        "inputTarget": "targetContext",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Screen",
+                                "optionValue": "screen",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Search Area",
+                                "optionValue": "searchArea",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Detect Result",
+                                "optionValue": "detectResult",
+                                "optionSelected": true
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "maxMatchesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "integer",
+                        "inputName": "Max Matches",
+                        "inputTarget": "maxMatches",
+                        "inputValue": 1,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetSystemConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target System",
+                        "inputTarget": "targetSystem",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Python",
+                                "optionValue": "python",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "adb",
+                                "optionValue": "adb",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "None",
+                                "optionValue": "none",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectorAttributesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "checkboxOptions",
+                        "inputName": "Detector Attributes",
+                        "inputTarget": "detectorAttributes",
+                        "targetType": "array",
+                        "maxOptions": 1000,
+                        "inputValue": [
+                            {
+                                "optionName": "Object Handler",
+                                "optionValue": "searchAreaObjectHandler",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Include Contained Area in Output",
+                                "optionValue": "includeContainedAreaInOutput",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Exclude Matched Area from Output",
+                                "optionValue": "excludeMatchedAreaFromOutput",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "inputExpressionConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Input Expression",
+                        "inputTarget": "inputExpression",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectObjectWidthScaleConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Width Scale",
+                        "inputTarget": "widthScale",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectObjectHeightScaleConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Height Scale",
+                        "inputTarget": "heightScale",
+                        "inputValue": "",
+                        "onChange": null
+                    }
+                ],
+                "linkingBehaviors": [
+                    {
+                        "linkingBehaviorID": "detectObjectToDetectObjectLinkingBehavior",
+                        "behaviorType": "variableChain",
+                        "sourceTypes": [
+                            "detectObject"
+                        ],
+                        "sourcePayload": [
+                            "actionData",
+                            "outputVarName"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "inputExpression"
+                        ]
+                    },
+                    {
+                        "linkingBehaviorID": "detectObjectToDetectObjectContextLinkingBehavior",
+                        "behaviorType": "variableLink",
+                        "sourceTypes": [
+                            "detectObject"
+                        ],
+                        "sourcePayload": [
+                            "detectResult"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "targetContext"
+                        ]
+                    }
+                ],
+                "selected": false,
+                "draggable": true
+            },
+            {
+                "actionName": "detectObject",
+                "actionGroup": 12,
+                "actionLabel": null,
+                "rowIndex": 2,
+                "actionIndex": 1,
+                "childGroups": [
+                    {
+                        "srcGroup": 12,
+                        "srcRowIndex": 2,
+                        "srcActionIndex": 1,
+                        "destGroup": 5,
+                        "destRowIndex": 3,
+                        "destActionIndex": 0,
+                        "coords": [
+                            [
+                                350,
+                                0
+                            ],
+                            [
+                                70,
+                                40.51659547069755
+                            ]
+                        ],
+                        "long": false,
+                        "isPipeLink": false,
+                        "type": "firstMatch",
+                        "typePayload": null
+                    }
+                ],
+                "actionIcon": {
+                    "iconType": "imageIcon",
+                    "iconURL": null,
+                    "iconDims": [
+                        3024,
+                        1964
+                    ]
+                },
+                "actionData": {
+                    "searchArea": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            3024,
+                            1964
+                        ]
+                    ],
+                    "icon": "actions/2-row/1-detectObject/assets/icon.png",
+                    "targetSystem": "python",
+                    "targetContext": "detectResult",
+                    "detectorName": "pixelDifference",
+                    "detectorAttributes": [],
+                    "threshold": 0.7,
+                    "maxMatches": 1,
+                    "outputVarName": "detectObject_4",
+                    "detectorMode": "active",
+                    "positiveExamples": [
+                        {
+                            "pairIndex": 0,
+                            "img": "actions/2-row/1-detectObject/assets/positiveExamples/0-img.png",
+                            "mask": "actions/2-row/1-detectObject/assets/positiveExamples/0-mask.png",
+                            "containedAreaMask": "actions/2-row/1-detectObject/assets/positiveExamples/0-containedAreaMask.png"
+                        }
+                    ],
+                    "negativeExamples": [],
+                    "maskLocation": [
+                        [
+                            20,
+                            21
+                        ],
+                        [
+                            0,
+                            0
+                        ]
+                    ],
+                    "inputExpression": "detectObject_4",
+                    "heightScale": "",
+                    "widthScale": ""
+                },
+                "displayables": [],
+                "configurables": [
+                    {
+                        "configurableID": "outputVarNameConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "text",
+                        "inputName": "Output Var Name",
+                        "inputTarget": "outputVarName",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "thresholdConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "float",
+                        "inputName": "Threshold",
+                        "inputTarget": "threshold",
+                        "inputValue": 0.8,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetContextConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target Context",
+                        "inputTarget": "targetContext",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Screen",
+                                "optionValue": "screen",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Search Area",
+                                "optionValue": "searchArea",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Detect Result",
+                                "optionValue": "detectResult",
+                                "optionSelected": true
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "maxMatchesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "integer",
+                        "inputName": "Max Matches",
+                        "inputTarget": "maxMatches",
+                        "inputValue": 1,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetSystemConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target System",
+                        "inputTarget": "targetSystem",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Python",
+                                "optionValue": "python",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "adb",
+                                "optionValue": "adb",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "None",
+                                "optionValue": "none",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectorAttributesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "checkboxOptions",
+                        "inputName": "Detector Attributes",
+                        "inputTarget": "detectorAttributes",
+                        "targetType": "array",
+                        "maxOptions": 1000,
+                        "inputValue": [
+                            {
+                                "optionName": "Object Handler",
+                                "optionValue": "searchAreaObjectHandler",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Include Contained Area in Output",
+                                "optionValue": "includeContainedAreaInOutput",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Exclude Matched Area from Output",
+                                "optionValue": "excludeMatchedAreaFromOutput",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "inputExpressionConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Input Expression",
+                        "inputTarget": "inputExpression",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectObjectWidthScaleConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Width Scale",
+                        "inputTarget": "widthScale",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectObjectHeightScaleConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Height Scale",
+                        "inputTarget": "heightScale",
+                        "inputValue": "",
+                        "onChange": null
+                    }
+                ],
+                "linkingBehaviors": [
+                    {
+                        "linkingBehaviorID": "detectObjectToDetectObjectLinkingBehavior",
+                        "behaviorType": "variableChain",
+                        "sourceTypes": [
+                            "detectObject"
+                        ],
+                        "sourcePayload": [
+                            "actionData",
+                            "outputVarName"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "inputExpression"
+                        ]
+                    },
+                    {
+                        "linkingBehaviorID": "detectObjectToDetectObjectContextLinkingBehavior",
+                        "behaviorType": "variableLink",
+                        "sourceTypes": [
+                            "detectObject"
+                        ],
+                        "sourcePayload": [
+                            "detectResult"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "targetContext"
+                        ]
+                    }
+                ],
+                "selected": false,
+                "draggable": true
+            },
+            {
+                "actionName": "detectObject",
+                "actionGroup": 2,
+                "actionLabel": null,
+                "rowIndex": 2,
+                "actionIndex": 2,
+                "childGroups": [
+                    {
+                        "srcGroup": 2,
+                        "srcRowIndex": 2,
+                        "srcActionIndex": 2,
+                        "destGroup": 5,
+                        "destRowIndex": 3,
+                        "destActionIndex": 0,
+                        "coords": [
+                            [
+                                490,
+                                0
+                            ],
+                            [
+                                70,
+                                41.00496280979001
+                            ]
+                        ],
+                        "long": false,
+                        "isPipeLink": false,
+                        "type": "firstMatch",
+                        "typePayload": null
+                    }
+                ],
+                "actionIcon": {
+                    "iconType": "imageIcon",
+                    "iconURL": null,
+                    "iconDims": [
+                        3024,
+                        1964
+                    ]
+                },
+                "actionData": {
+                    "searchArea": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            3024,
+                            1964
+                        ]
+                    ],
+                    "icon": "actions/2-row/2-detectObject/assets/icon.png",
+                    "targetSystem": "python",
+                    "targetContext": "detectResult",
+                    "detectorName": "pixelDifference",
+                    "detectorAttributes": [],
+                    "threshold": 0.7,
+                    "maxMatches": 1,
+                    "outputVarName": "detectObject_4",
+                    "detectorMode": "active",
+                    "positiveExamples": [
+                        {
+                            "pairIndex": 0,
+                            "img": "actions/2-row/2-detectObject/assets/positiveExamples/0-img.png",
+                            "mask": "actions/2-row/2-detectObject/assets/positiveExamples/0-mask.png",
+                            "containedAreaMask": "actions/2-row/2-detectObject/assets/positiveExamples/0-containedAreaMask.png"
+                        }
+                    ],
+                    "negativeExamples": [],
+                    "maskLocation": [
+                        [
+                            21,
+                            25
+                        ],
+                        [
+                            0,
+                            0
+                        ]
+                    ],
+                    "inputExpression": "detectObject_1",
+                    "heightScale": "",
+                    "widthScale": ""
+                },
+                "displayables": [],
+                "configurables": [
+                    {
+                        "configurableID": "outputVarNameConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "text",
+                        "inputName": "Output Var Name",
+                        "inputTarget": "outputVarName",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "thresholdConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "float",
+                        "inputName": "Threshold",
+                        "inputTarget": "threshold",
+                        "inputValue": 0.8,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetContextConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target Context",
+                        "inputTarget": "targetContext",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Screen",
+                                "optionValue": "screen",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Search Area",
+                                "optionValue": "searchArea",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Detect Result",
+                                "optionValue": "detectResult",
+                                "optionSelected": true
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "maxMatchesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "integer",
+                        "inputName": "Max Matches",
+                        "inputTarget": "maxMatches",
+                        "inputValue": 1,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetSystemConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target System",
+                        "inputTarget": "targetSystem",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Python",
+                                "optionValue": "python",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "adb",
+                                "optionValue": "adb",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "None",
+                                "optionValue": "none",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectorAttributesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "checkboxOptions",
+                        "inputName": "Detector Attributes",
+                        "inputTarget": "detectorAttributes",
+                        "targetType": "array",
+                        "maxOptions": 1000,
+                        "inputValue": [
+                            {
+                                "optionName": "Object Handler",
+                                "optionValue": "searchAreaObjectHandler",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Include Contained Area in Output",
+                                "optionValue": "includeContainedAreaInOutput",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Exclude Matched Area from Output",
+                                "optionValue": "excludeMatchedAreaFromOutput",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "inputExpressionConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Input Expression",
+                        "inputTarget": "inputExpression",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectObjectWidthScaleConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Width Scale",
+                        "inputTarget": "widthScale",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectObjectHeightScaleConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Height Scale",
+                        "inputTarget": "heightScale",
+                        "inputValue": "",
+                        "onChange": null
+                    }
+                ],
+                "linkingBehaviors": [
+                    {
+                        "linkingBehaviorID": "detectObjectToDetectObjectLinkingBehavior",
+                        "behaviorType": "variableChain",
+                        "sourceTypes": [
+                            "detectObject"
+                        ],
+                        "sourcePayload": [
+                            "actionData",
+                            "outputVarName"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "inputExpression"
+                        ]
+                    },
+                    {
+                        "linkingBehaviorID": "detectObjectToDetectObjectContextLinkingBehavior",
+                        "behaviorType": "variableLink",
+                        "sourceTypes": [
+                            "detectObject"
+                        ],
+                        "sourcePayload": [
+                            "detectResult"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "targetContext"
+                        ]
+                    }
+                ],
+                "selected": false,
+                "draggable": true
+            }
+        ],
+        "rowIndex": 3,
+        "selected": false
+    },
+    {
+        "actions": [
+            {
+                "actionName": "clickAction",
+                "actionGroup": 5,
+                "actionLabel": null,
+                "childGroups": [
+                    {
+                        "srcGroup": 5,
+                        "srcRowIndex": 3,
+                        "srcActionIndex": 0,
+                        "destGroup": 6,
+                        "destRowIndex": 0,
+                        "destActionIndex": 0,
+                        "coords": [],
+                        "long": true,
+                        "isPipeLink": false,
+                        "type": "firstMatch",
+                        "typePayload": null
+                    }
+                ],
+                "actionIcon": {
+                    "iconType": "imageIcon",
+                    "iconURL": null,
+                    "iconDims": [
+                        80,
+                        80
+                    ]
+                },
+                "actionData": {
+                    "pointList": [],
+                    "icon": "actions/3-row/0-clickAction/assets/icon.png",
+                    "inputExpression": "detectObject_4",
+                    "targetSystem": "python",
+                    "targetContext": "screen",
+                    "clickCount": 1,
+                    "delayState": "active",
+                    "distType": "normal",
+                    "mean": 0.1,
+                    "stddev": 0.1,
+                    "min": 0,
+                    "max": 0.3,
+                    "detectorName": "pixelDifference",
+                    "detectorAttributes": [],
+                    "threshold": 0.7,
+                    "outputVarName": "clickAction_0",
+                    "detectorMode": "inactive",
+                    "positiveExamples": [],
+                    "negativeExamples": [],
+                    "mouseButton": "left"
+                },
+                "displayables": [],
+                "configurables": [
+                    {
+                        "configurableID": "inputExpressionConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "textarea",
+                        "inputName": "Input Expression",
+                        "inputTarget": "inputExpression",
+                        "inputValue": "",
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "clickActionClickCount",
+                        "configurableVersion": 1,
+                        "inputType": "integer",
+                        "inputName": "Click Count",
+                        "inputTarget": "clickCount",
+                        "inputValue": 1,
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetContextConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target Context",
+                        "inputTarget": "targetContext",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Screen",
+                                "optionValue": "screen",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "Search Area",
+                                "optionValue": "searchArea",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Detect Result",
+                                "optionValue": "detectResult",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "targetSystemConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Target System",
+                        "inputTarget": "targetSystem",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Python",
+                                "optionValue": "python",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "adb",
+                                "optionValue": "adb",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "None",
+                                "optionValue": "none",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "detectorAttributesConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "checkboxOptions",
+                        "inputName": "Detector Attributes",
+                        "inputTarget": "detectorAttributes",
+                        "targetType": "array",
+                        "maxOptions": 1000,
+                        "inputValue": [
+                            {
+                                "optionName": "Object Handler",
+                                "optionValue": "searchAreaObjectHandler",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Include Contained Area in Output",
+                                "optionValue": "includeContainedAreaInOutput",
+                                "optionSelected": false
+                            },
+                            {
+                                "optionName": "Exclude Matched Area from Output",
+                                "optionValue": "excludeMatchedAreaFromOutput",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    },
+                    {
+                        "configurableID": "clickActionMouseButtonConfigurable",
+                        "configurableVersion": 1,
+                        "inputType": "dropdownOptions",
+                        "inputName": "Mouse Button",
+                        "inputTarget": "mouseButton",
+                        "targetType": "scalar",
+                        "maxOptions": 1,
+                        "inputValue": [
+                            {
+                                "optionName": "Left",
+                                "optionValue": "left",
+                                "optionSelected": true
+                            },
+                            {
+                                "optionName": "Right",
+                                "optionValue": "right",
+                                "optionSelected": false
+                            }
+                        ],
+                        "onChange": null
+                    }
+                ],
+                "linkingBehaviors": [
+                    {
+                        "linkingBehaviorID": "mouseActionLinkingBehaviors",
+                        "behaviorType": "variableChain",
+                        "sourceTypes": [
+                            "detectObject",
+                            "declareScene"
+                        ],
+                        "sourcePayload": [
+                            "actionData",
+                            "outputVarName"
+                        ],
+                        "targetPayload": [
+                            "actionData",
+                            "inputExpression"
+                        ]
+                    }
+                ],
+                "selected": false,
+                "draggable": true,
+                "rowIndex": 3,
+                "actionIndex": 0
+            }
+        ],
+        "rowIndex": 4,
+        "selected": false
+    },
+    {
+        "actions": [],
+        "rowIndex": 5,
+        "selected": false
+    }
+]

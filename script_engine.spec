@@ -1,9 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
+import platform
 sys.path.append(os.path.join(os.getcwd(), 'ScriptEngine'))
 
 block_cipher = None
+
+# Platform-specific path adjustments
+if platform.system() == 'Darwin':  # Mac OS
+    torch_lib_path = os.path.join("venv", "lib", "python3.x", "site-packages", "torch", "lib")
+    torch_path = os.path.join("venv", "lib", "python3.x", "site-packages", "torch")
+else:  # Windows
+    torch_lib_path = os.path.join("venv", "Lib", "site-packages", "torch", "lib")
+    torch_path = os.path.join("venv", "Lib", "site-packages", "torch")
 
 # Analyses for all executables
 log_preview_a = Analysis(
@@ -12,8 +21,8 @@ log_preview_a = Analysis(
     binaries=[],
     datas=[
         (os.path.join(os.path.expanduser("~"), ".EasyOCR"), ".EasyOCR"),
-        (os.path.join("venv", "Lib", "site-packages", "torch", "lib"), "torch/lib"),
-        (os.path.join("venv", "Lib", "site-packages", "torch"), "torch"),
+        (torch_lib_path, "torch/lib"),
+        (torch_path, "torch"),
     ],
     hiddenimports=[
         'PIL', 'numpy'

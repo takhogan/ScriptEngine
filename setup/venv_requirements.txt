@@ -24,6 +24,7 @@ pillow
 psutil
 PyAutoGUI
 PyGetWindow
+pyinstaller
 pymongo
 PyMsgBox
 PyMySQL

@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from zipfile import ZipFile
-from script_logger import ScriptLogger
+from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
 

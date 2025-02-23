@@ -1,7 +1,6 @@
 import json
 import os
-import time
-from script_engine_constants import ENGINE_INTERRUPTS_FILE
+from ScriptEngine.common.constants.script_engine_constants import ENGINE_INTERRUPTS_FILE
 from typing import Dict, Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileModifiedEvent

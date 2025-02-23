@@ -1,5 +1,4 @@
 import copy
-import sys
 import datetime
 from dateutil import tz
 
@@ -7,19 +6,21 @@ import random
 import re
 import glob
 
-from device_manager import DeviceManager
-from engine_manager import EngineManager
-from detect_object_helper import DetectObjectHelper
-from parallelized_script_executor import ParallelizedScriptExecutor
-from script_engine_constants import *
-from script_execution_state import ScriptExecutionState
-from script_execution_status_detail import ScriptExecutionStatusDetail
-from script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str, state_eval
-from script_loader import parse_zip
-from system_script_handler import SystemScriptHandler
-from script_logger import ScriptLogger
-from script_action_log import ScriptActionLog
-from rv_helper import RandomVariableHelper
+from ScriptEngine.device_controller import DeviceController
+from .engine_manager import EngineManager
+from .helpers.detect_object_helper import DetectObjectHelper
+from .parallelized_script_executor import ParallelizedScriptExecutor
+from .script_action_executor import ScriptActionExecutor
+from ScriptEngine.common.constants.script_engine_constants import *
+from ScriptEngine.common.enums import ScriptExecutionState, ScriptExecutionStatusDetail
+from ScriptEngine.common.script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str, state_eval
+from .script_loader import parse_zip
+from .system_script_handler import SystemScriptHandler
+from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.logging.script_action_log import ScriptActionLog
+from .helpers.random_variable_helper import RandomVariableHelper
+from .custom_thread_pool import CustomThreadPool
+from .custom_process_pool import CustomProcessPool
 from typing import Callable, Dict, List, Tuple
 script_logger = ScriptLogger()
 
@@ -56,9 +57,11 @@ class ScriptExecutor:
                  base_script_name,
                  base_start_time_str,
                  script_id,
-                 device_manager : DeviceManager,
+                 device_controller : DeviceController,
                  engine_manager : EngineManager,
-                 process_executor,
+                 io_executor : CustomThreadPool,
+                 script_action_executor : ScriptActionExecutor,
+                 parallelized_executor : ParallelizedScriptExecutor,
                  call_stack=None,
                  parent_folder='',
                  script_start_time : datetime.datetime=None,
@@ -70,11 +73,12 @@ class ScriptExecutor:
         self.script_id = script_id
         self.base_script_name = base_script_name
         self.base_start_time_str = base_start_time_str
-        self.device_manager = device_manager
+        self.device_controller = device_controller
         self.engine_manager = engine_manager
-        self.process_executor = process_executor
-        self.parallelized_executor = ParallelizedScriptExecutor(self.process_executor)
+        self.io_executor = io_executor
         self.screen_plan_server_attached = screen_plan_server_attached
+        self.script_action_executor = script_action_executor
+        self.parallelized_executor = parallelized_executor
         self.state = {
             'SCRIPT_CONTEXT': {
                 'script_id': script_id,
@@ -306,23 +310,11 @@ class ScriptExecutor:
             script_logger.log('returning parallel handle action handler')
         else:
             script_logger.log('sequential handle action')
-        if "targetSystem" in action["actionData"]:
-            if action["actionData"]["targetSystem"] == "adb":
-                handle_action_result = self.device_manager.adb_host.handle_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
-            elif action["actionData"]["targetSystem"] == "python":
-                handle_action_result = self.device_manager.python_host.handle_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
-            elif action["actionData"]["targetSystem"] == "none":
-                if action["actionName"] == "scriptReference":
-                    handle_action_result = self.handle_script_reference(action, self.state, self.context, self.run_queue)
-                else:
-                    handle_action_result = self.device_manager.system_host.handle_action(action, self.state, self.context, self.run_queue)
-            else:
-                exception_text = "target system " + action["actionData"]["targetSystem"] + " unimplemented!"
-                script_logger.log(exception_text)
-                raise Exception(exception_text)
+        
+        if action["actionData"]["targetSystem"] == "none" and action["actionName"] == "scriptReference":
+            handle_action_result = self.handle_script_reference(action, self.state, self.context, self.run_queue)
         else:
-            exception_text = "script formatting error, targetSystem not present!"
-            raise Exception(exception_text)
+            handle_action_result = self.script_action_executor.execute_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
 
         if not lazy_eval:
             _, status, _, context, _, _ = handle_action_result
@@ -347,7 +339,7 @@ class ScriptExecutor:
         )
         if action["actionName"] == "detectObject":
             action, status, state, context, run_queue = DetectObjectHelper.handle_detect_action_result(
-                self.device_manager.io_executor, handle_action_result, state, context, run_queue
+                self.io_executor, handle_action_result, state, context, run_queue
             )
         else:
             pass
@@ -401,7 +393,7 @@ class ScriptExecutor:
                     script_name = script_name[1:-1]
                     system_script = True
                     script_details = script_name.split(':')
-                    handle_status = SystemScriptHandler.handle_system_script(self.device_manager, script_details[0], script_details[1])
+                    handle_status = SystemScriptHandler.handle_system_script(self.device_controller, script_details[0], script_details[1])
                     if handle_status == 'return':
                         return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
                     ref_script = parse_zip(script_details[0], system_script)
@@ -423,9 +415,11 @@ class ScriptExecutor:
                     self.base_script_name,
                     self.base_start_time_str,
                     self.script_id,
-                    self.device_manager,
+                    self.device_controller,
                     self.engine_manager,
-                    self.process_executor,
+                    self.io_executor,
+                    self.script_action_executor,
+                    self.parallelized_executor,
                     call_stack=self.call_stack + ['[{}-scriptReference-{}]'.format(self.context["script_counter"], action["actionGroup"])],
                     parent_folder=self.log_folder,
                     context=child_context,

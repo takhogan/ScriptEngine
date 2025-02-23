@@ -1,0 +1,221 @@
+[
+    [
+        {
+            "srcGroup": 6,
+            "srcRowIndex": 0,
+            "srcActionIndex": 0,
+            "destGroup": 4,
+            "destRowIndex": 1,
+            "destActionIndex": 0,
+            "coords": [
+                [
+                    70,
+                    0
+                ],
+                [
+                    210,
+                    39.12652114433654
+                ]
+            ],
+            "long": false,
+            "isPipeLink": false,
+            "type": "firstMatch",
+            "typePayload": null
+        },
+        {
+            "srcGroup": 6,
+            "srcRowIndex": 0,
+            "srcActionIndex": 0,
+            "destGroup": 1,
+            "destRowIndex": 1,
+            "destActionIndex": 1,
+            "coords": [
+                [
+                    70,
+                    0
+                ],
+                [
+                    350,
+                    40.51659547069755
+                ]
+            ],
+            "long": false,
+            "isPipeLink": false,
+            "type": "firstMatch",
+            "typePayload": null
+        },
+        {
+            "srcGroup": 6,
+            "srcRowIndex": 0,
+            "srcActionIndex": 0,
+            "destGroup": 9,
+            "destRowIndex": 1,
+            "destActionIndex": 2,
+            "coords": [
+                [
+                    70,
+                    0
+                ],
+                [
+                    490,
+                    41.00496280979001
+                ]
+            ],
+            "long": false,
+            "isPipeLink": false,
+            "type": "firstMatch",
+            "typePayload": null
+        }
+    ],
+    [
+        {
+            "srcGroup": 4,
+            "srcRowIndex": 1,
+            "srcActionIndex": 0,
+            "destGroup": 3,
+            "destRowIndex": 2,
+            "destActionIndex": 0,
+            "coords": [
+                [
+                    210,
+                    0
+                ],
+                [
+                    210,
+                    32
+                ]
+            ],
+            "long": false,
+            "isPipeLink": false,
+            "type": "firstMatch",
+            "typePayload": null
+        },
+        {
+            "srcGroup": 1,
+            "srcRowIndex": 1,
+            "srcActionIndex": 1,
+            "destGroup": 2,
+            "destRowIndex": 2,
+            "destActionIndex": 2,
+            "coords": [
+                [
+                    350,
+                    0
+                ],
+                [
+                    490,
+                    39.12652114433654
+                ]
+            ],
+            "long": false,
+            "isPipeLink": false,
+            "type": "firstMatch",
+            "typePayload": null
+        },
+        {
+            "srcGroup": 4,
+            "srcRowIndex": 1,
+            "srcActionIndex": 0,
+            "destGroup": 12,
+            "destRowIndex": 2,
+            "destActionIndex": 1,
+            "coords": [
+                [
+                    210,
+                    0
+                ],
+                [
+                    350,
+                    39.12652114433654
+                ]
+            ],
+            "long": false,
+            "isPipeLink": false,
+            "type": "firstMatch",
+            "typePayload": null
+        }
+    ],
+    [
+        {
+            "srcGroup": 5,
+            "srcRowIndex": 3,
+            "srcActionIndex": 0,
+            "destGroup": 6,
+            "destRowIndex": 0,
+            "destActionIndex": 0,
+            "coords": [],
+            "long": true,
+            "isPipeLink": false,
+            "type": "firstMatch",
+            "typePayload": null
+        },
+        {
+            "srcGroup": 3,
+            "srcRowIndex": 2,
+            "srcActionIndex": 0,
+            "destGroup": 5,
+            "destRowIndex": 3,
+            "destActionIndex": 0,
+            "coords": [
+                [
+                    210,
+                    0
+                ],
+                [
+                    70,
+                    39.12652114433654
+                ]
+            ],
+            "long": false,
+            "isPipeLink": false,
+            "type": "firstMatch",
+            "typePayload": null
+        },
+        {
+            "srcGroup": 2,
+            "srcRowIndex": 2,
+            "srcActionIndex": 2,
+            "destGroup": 5,
+            "destRowIndex": 3,
+            "destActionIndex": 0,
+            "coords": [
+                [
+                    490,
+                    0
+                ],
+                [
+                    70,
+                    41.00496280979001
+                ]
+            ],
+            "long": false,
+            "isPipeLink": false,
+            "type": "firstMatch",
+            "typePayload": null
+        },
+        {
+            "srcGroup": 12,
+            "srcRowIndex": 2,
+            "srcActionIndex": 1,
+            "destGroup": 5,
+            "destRowIndex": 3,
+            "destActionIndex": 0,
+            "coords": [
+                [
+                    350,
+                    0
+                ],
+                [
+                    70,
+                    40.51659547069755
+                ]
+            ],
+            "long": false,
+            "isPipeLink": false,
+            "type": "firstMatch",
+            "typePayload": null
+        }
+    ],
+    [],
+    []
+]
