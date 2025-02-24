@@ -1,0 +1,1 @@
+C:\Users\takho\ScriptEngine\build\exe.win-amd64-3.11\script_manager.exe scriptEngineTest

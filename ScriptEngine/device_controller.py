@@ -22,10 +22,10 @@ class DeviceController:
     def initialize_device(self, device_type):
         if (device_type == 'python'):
             from ScriptEngine.managers.desktop_device_manager import DesktopDeviceManager
-            self.devices[device_type] = DesktopDeviceManager(self.props.copy(), self.io_executor, self.input_source)
+            self.devices[device_type] = DesktopDeviceManager(self.props.copy(), self.input_source)
         elif (device_type == 'adb'):
             from ScriptEngine.managers.adb_device_manager import ADBDeviceManager
-            self.devices[device_type] = ADBDeviceManager(self.props.copy(), self.io_executor, self.input_source)
+            self.devices[device_type] = ADBDeviceManager(self.props.copy(), self.device_params, self.input_source)
 
     def get_device_action(self, device_type, action_type):
         self.initialize_device(device_type)
@@ -51,6 +51,10 @@ class DeviceController:
             return self.devices[device_type].click_and_drag
         elif action_type == 'scroll':
             return self.devices[device_type].scroll
+        elif action_type == 'start_device':
+            return self.devices[device_type].start_device
+        elif action_type == 'stop_device':
+            return self.devices[device_type].stop_device
             
     
     def get_device_attribute(self, device_type, attribute_name):

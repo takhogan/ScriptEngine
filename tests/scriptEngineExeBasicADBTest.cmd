@@ -1,0 +1,1 @@
+C:\Users\takho\ScriptEngine\build\exe.win-amd64-3.11\script_manager.exe "DeviceToWaoLoadingScreen" "2024-11-23 02:28:17" "2024-11-23 02:58:17" "info" "77747255-d9e9-43da-954e-1e98f4fec7f9" "bluestacks:Rvc64_4" false

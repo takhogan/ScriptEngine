@@ -10,7 +10,6 @@ import base64
 import numpy as np
 import pyautogui 
 import cv2
-from ..helpers.image_matcher import ImageMatcher
 from ScriptEngine.common.script_engine_utils import is_null, DummyFile
 from typing import Callable, Dict, List, Tuple
 import time
@@ -30,13 +29,11 @@ script_logger = ScriptLogger()
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
 class DesktopDeviceManager(DeviceManager):
-    def __init__(self, props, io_executor, input_source=None):
+    def __init__(self, props, input_source=None):
         script_logger.log('Initializing Python Host')
         self.width = None
         self.height = None
         self.props = props
-        self.io_executor = io_executor
-        self.image_matcher = ImageMatcher()
         self.click_path_generator = None
 
         self.xmax = self.width
@@ -45,21 +42,19 @@ class DesktopDeviceManager(DeviceManager):
         if input_source is not None:
             self.dummy_mode = True
             self.input_source = input_source
-            self.width = input_source["width"]
-            self.props['width'] = self.width
-            self.height = input_source["height"]
-            self.props['height'] = self.height
         else:
             self.dummy_mode = False
         
-        self.initialize_host()
 
-
-    def initialize_host(self):
-        if self.dummy_mode:
-            script_logger.log('PythonHostController: script in dummy mode, returning from intialize host')
-            return
+    def ensure_device_initialized(self):
         if self.width is None or self.height is None:
+            if self.dummy_mode:
+                self.width = input_source["width"]
+                self.props['width'] = self.width
+                self.height = input_source["height"]
+                self.props['height'] = self.height
+                script_logger.log('PythonHostController: script in dummy mode, initialized to input source')
+                return
             script_logger.log('PythonHostController: Taking screenshot to initialize python host')
             host_dimensions = pyautogui.size()
             self.width = host_dimensions.width
@@ -77,27 +72,40 @@ class DesktopDeviceManager(DeviceManager):
             self.click_path_generator = ClickPathGenerator(2, 3, self.width, self.height, 45, 0.4)
 
     def screenshot(self):
+        self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning screenshot from input source')
             return self.input_source['screenshot']()
         return cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR)
 
     def keyUp(self, key):
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from keyUp')
         pyautogui.keyUp(key)
 
     def keyDown(self, key):
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from keyDown')
         pyautogui.keyDown(key)
 
     def press(self, key):
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from press')
         pyautogui.press(key)
 
     def hotkey(self, keys):
-        script_logger.log('keys : ', keys)
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from hotKey')
         pyautogui.hotkey(*keys)
 
     def mouse_up(self, x, y, button):
+        self.ensure_device_initialized()
         if self.dummy_mode:
-            script_logger.log('PythonHostController: script in dummy mode, returning from click')
+            script_logger.log('PythonHostController: script in dummy mode, returning from mouse_up')
             return
         # if (self.width != self.props['width'] or self.height != self.props['height']):
         #     x = (self.width / self.props['width']) * x
@@ -110,8 +118,9 @@ class DesktopDeviceManager(DeviceManager):
 
 
     def mouse_down(self, x, y, button):
+        self.ensure_device_initialized()
         if self.dummy_mode:
-            script_logger.log('PythonHostController: script in dummy mode, returning from click')
+            script_logger.log('PythonHostController: script in dummy mode, returning from mouse_down')
             return
         # if (self.width != self.props['width'] or self.height != self.props['height']):
         #     x = (self.width / self.props['width']) * x
@@ -124,6 +133,7 @@ class DesktopDeviceManager(DeviceManager):
 
 
     def scroll(self, x, y, distance):
+        self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from click')
             return
@@ -136,6 +146,7 @@ class DesktopDeviceManager(DeviceManager):
 
 
     def click(self, x, y, button):
+        self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from click')
             return
@@ -146,6 +157,7 @@ class DesktopDeviceManager(DeviceManager):
         pyautogui.click(x=x, y=y, button=button)
 
     def smooth_move(self, source_x, source_y, target_x, target_y, drag=False, button='left'):
+        self.ensure_device_initialized()
         # if (self.width != self.props['width'] or self.height != self.props['height']):
         #     source_x = (self.width / self.props['width']) * source_x
         #     source_y = (self.height / self.props['height']) * source_y
@@ -182,6 +194,7 @@ class DesktopDeviceManager(DeviceManager):
         return delta_x, delta_y
 
     def click_and_drag(self, source_x, source_y, target_x, target_y, mouse_down=True, mouse_up=True):
+        self.ensure_device_initialized()
         script_logger.log('pyautogui size', pyautogui.size())
         script_logger.log(
             'moving from initial position {} to click and drag start {}'.format(
@@ -215,7 +228,7 @@ def parse_inputs(process_host, inputs):
             "data": base64_encoded_string
         }
     elif device_action == "click":
-        process_host.initialize_host()
+        process_host.ensure_device_initialized()
         script_logger.log('clicked location', inputs[3], inputs[4], flush=True)
         process_host.click(int(float(inputs[3])), int(float(inputs[4])), 'left')
         return {
@@ -224,7 +237,7 @@ def parse_inputs(process_host, inputs):
     elif device_action == "click_and_drag":
         # process_host.click_and_drag(inputs[3], inputs[4], inputs[5], inputs[6])
         script_logger.log('click and drag not implemented on python host')
-        process_host.initialize_host()
+        process_host.ensure_device_initialized()
         return {
             "data" : "failure"
         }

@@ -138,7 +138,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
                     script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
     errored = False
-    from ScriptEngine.device_controller import DeviceController
+    from .device_controller import DeviceController
     from .script_executor import ScriptExecutor
     from .engine_manager import EngineManager
     from .script_action_executor import ScriptActionExecutor
