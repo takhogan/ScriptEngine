@@ -8,7 +8,7 @@ warnings.filterwarnings(
 )
 warnings.filterwarnings(
     "ignore",
-    message="Neither CUDA nor MPS are available"
+    message=r"Neither CUDA nor MPS are available.*"
 )
 
 import numpy as np

@@ -35,7 +35,7 @@ class DeviceController:
             return self.devices[device_type].keyDown
         elif action_type == 'key_up':
             return self.devices[device_type].keyUp
-        elif action_type == 'key_press':
+        elif action_type == 'press':
             return self.devices[device_type].press
         elif action_type == 'hotkey':
             return self.devices[device_type].hotkey

@@ -22,7 +22,7 @@ class PikvmDeviceManager(DeviceManager):
     def keyUp(self):
         return super().keyUp()
     
-    def press(self, key):
+    def keyPress(self, key):
         return self.websocket.send_key_press(key)
     
     def hotkey(self):

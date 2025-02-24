@@ -16,8 +16,8 @@ class DeviceManager(ABC):
         raise NotImplementedError(f"key_up not implemented for {self.__class__.__name__}")
 
     @abstractmethod
-    def press(self):
-        raise NotImplementedError(f"key_press not implemented for {self.__class__.__name__}")
+    def keyPress(self):
+        raise NotImplementedError(f"key press not implemented for {self.__class__.__name__}")
 
     @abstractmethod
     def hotkey(self):
