@@ -49,9 +49,9 @@ class DesktopDeviceManager(DeviceManager):
     def ensure_device_initialized(self):
         if self.width is None or self.height is None:
             if self.dummy_mode:
-                self.width = input_source["width"]
+                self.width = self.input_source["width"]
                 self.props['width'] = self.width
-                self.height = input_source["height"]
+                self.height = self.input_source["height"]
                 self.props['height'] = self.height
                 script_logger.log('PythonHostController: script in dummy mode, initialized to input source')
                 return
