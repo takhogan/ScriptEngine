@@ -121,11 +121,9 @@ script_logger = ScriptLogger()
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
 class ADBDeviceManager(DeviceManager):
-    def __init__(self, props, host_os, adb_args, io_executor, input_source=None):
+    def __init__(self, props, adb_args, input_source=None):
         script_logger.log('Configuring ADB with adb_args', adb_args)
-        self.io_executor = io_executor
         self.stop_command_gather = False
-        self.host_os = host_os
         self.search_pattern_helper = SearchPatternHelper()
         self.status = 'uninitialized'
         self.props = props
@@ -186,8 +184,6 @@ class ADBDeviceManager(DeviceManager):
             script_logger.log('ADB HOST CONTROLLER: adb configuration failed')
             raise Exception('ADB configuration failed')
     
-        self.init_system()
-
     def configure_adb(self, configurationAction, state, context):
         emulator_type = state_eval(configurationAction['actionData']['emulatorType'], {}, state)
         self.emulator_type = emulator_type
@@ -551,7 +547,7 @@ class ADBDeviceManager(DeviceManager):
         self.run_connect_command()
         time.sleep(3)
 
-    def init_system(self, reinitialize=False):
+    def ensure_device_initialized(self, reinitialize=False):
         script_logger = ScriptLogger.get_logger()
         if self.dummy_mode:
             script_logger.log('skipping adb init system. script running in mock mode')
@@ -900,6 +896,7 @@ class ADBDeviceManager(DeviceManager):
 
     def screenshot(self, compress_png=False):
         script_logger = ScriptLogger.get_logger()
+        self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('ADB CONTROLLER: script running in dummy mode, returning screenshot of input source')
             return self.input_source['screenshot']()
@@ -912,20 +909,21 @@ class ADBDeviceManager(DeviceManager):
                 return source_im
             except Exception as e:
                 script_logger.log('ADB CONTROLLER: screencap retry failed', e)
-            source_im = self.init_system(reinitialize=True)
+            source_im = self.ensure_device_initialized(reinitialize=True)
             if source_im is None:
                 raise Exception('ADB connection failed')
         return source_im
 
     def keyUp(self, key):
-        script_logger.log('adb keypress and hold unimplemented!')
+        script_logger.log('adb keypress and hold unimplemented! defaulting to pyautogui')
         pyautogui.keyUp(key)
 
     def keyDown(self, key):
-        script_logger.log('adb keypress and hold unimplemented!')
+        script_logger.log('adb keypress and hold unimplemented! defaulting to pyautogui')
         pyautogui.keyDown(key)
 
     def press(self, key):
+        self.ensure_device_initialized()
         if key not in KEY_TO_KEYCODE:
             script_logger.log('key not found!', key)
             return
@@ -941,7 +939,7 @@ class ADBDeviceManager(DeviceManager):
         shell_process.communicate(key_input_string.encode('utf-8'))
 
     def hotkey(self, keys):
-        script_logger.log('adb hotkey unimplemented!')
+        script_logger.log('adb hotkey unimplemented! defaulting to pyautogui')
         pyautogui.hotkey(keys)
 
     def save_screenshot(self, save_name):
@@ -958,6 +956,7 @@ class ADBDeviceManager(DeviceManager):
 
     def click(self, x, y, important=True, mouse_up=True):
         # 1st point always the og x,y
+        self.ensure_device_initialized()
         script_logger.log('clicking')
         if self.dummy_mode:
             script_logger.log('ADB CONTROLLER: script running in dummy mode, adb click returning')
@@ -1075,6 +1074,9 @@ class ADBDeviceManager(DeviceManager):
     def scroll(self, x, y, scroll_distance):
         raise Exception('Scroll Action unsupported on device type Android')
 
+    def smooth_move(self, x1, y1, x2, y2):
+        return super().smooth_move()
+
     def delta_sequence_to_commands(self, x_pos, y_pos, delta_xs, delta_ys, unmap=False, split=True):
         script_logger.log('sequence len', len(delta_xs))
         commands = []
@@ -1123,6 +1125,7 @@ class ADBDeviceManager(DeviceManager):
         return commands
 
     def click_and_drag(self, source_x, source_y, target_x, target_y, mouse_up=True):
+        self.ensure_device_initialized()
         if self.dummy_mode:
             frac_source_x = (source_x / self.width)
             frac_target_x = (target_x / self.width)
@@ -1249,7 +1252,7 @@ def parse_inputs(process_adb_host, inputs):
 
             }
         try:
-            process_adb_host.init_system()
+            process_adb_host.ensure_device_initialized()
             screenshot = process_adb_host.screenshot()
         except subprocess.TimeoutExpired as t:
             script_logger.log('ADB CONTROLLER: timeout while capturing screenshot', t)
@@ -1267,7 +1270,7 @@ def parse_inputs(process_adb_host, inputs):
             return {
 
             }
-        process_adb_host.init_system()
+        process_adb_host.ensure_device_initialized()
         process_adb_host.get_screen_orientation()
         process_adb_host.click(int(float(inputs[3])), int(float(inputs[4])))
         return {
@@ -1278,14 +1281,14 @@ def parse_inputs(process_adb_host, inputs):
             return {
 
             }
-        process_adb_host.init_system()
+        process_adb_host.ensure_device_initialized()
         process_adb_host.get_screen_orientation()
         process_adb_host.click_and_drag(int(float(inputs[3])), int(float(inputs[4])), int(float(inputs[5])), int(float(inputs[6])))
         return {
             "data" : "success"
         }
     elif device_action == "send_keys":
-        process_adb_host.init_system()
+        process_adb_host.ensure_device_initialized()
         DeviceActionInterpreter.parse_keyboard_action(
             process_adb_host, json.loads(inputs[3]), {}, {}
         )
