@@ -4,6 +4,10 @@ import requests
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 import json
 from ScriptEngine.common.constants.script_engine_constants import *
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import os
+
 
 script_logger = ScriptLogger()
 
@@ -23,12 +27,51 @@ class ScreenPlanAPI:
 
     def get_server_token(self):
         try:
+            # Define handler that watches for both creation and modification
+            class TokenFileHandler(FileSystemEventHandler):
+                def __init__(self, callback, file_path):
+                    self.callback = callback
+                    self.file_path = file_path
+                
+                def on_created(self, event):
+                    if event.src_path == self.file_path:
+                        self.callback()
+                        
+                def on_modified(self, event):
+                    if event.src_path == self.file_path:
+                        self.callback()
+
+            # If file doesn't exist, wait for creation
+            if not os.path.exists(SERVER_AUTH_HASH_PATH):
+                observer = Observer()
+                event_handler = TokenFileHandler(lambda: observer.stop(), SERVER_AUTH_HASH_PATH)
+                observer.schedule(event_handler, path=os.path.dirname(SERVER_AUTH_HASH_PATH), recursive=False)
+                observer.start()
+                observer.join()
+
+            # Read current token
             with open(SERVER_AUTH_HASH_PATH, 'r') as server_auth_file:
                 auth_json = json.load(server_auth_file)
-                self.server_token = auth_json['server_auth_hash']
-            return True
+                new_token = auth_json['server_auth_hash']
+                
+                # If token is the same, wait for file changes
+                if self.server_token == new_token:
+                    observer = Observer()
+                    event_handler = TokenFileHandler(lambda: observer.stop(), SERVER_AUTH_HASH_PATH)
+                    observer.schedule(event_handler, path=os.path.dirname(SERVER_AUTH_HASH_PATH), recursive=False)
+                    observer.start()
+                    observer.join()
+                    
+                    # Re-read the token after file change
+                    with open(SERVER_AUTH_HASH_PATH, 'r') as server_auth_file:
+                        auth_json = json.load(server_auth_file)
+                        new_token = auth_json['server_auth_hash']
+                
+                self.server_token = new_token
+                return True
         except Exception as e:
-            script_logger.log('Warning: error while getting server token', e)
+            script_logger.log('Warning: error while getting server token')
+            script_logger.log(e)
             return False
 
     def send_request(self, request: ScreenPlanAPIRequest) -> Optional[Dict]:
