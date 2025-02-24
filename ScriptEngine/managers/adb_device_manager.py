@@ -922,7 +922,7 @@ class ADBDeviceManager(DeviceManager):
         script_logger.log('adb keypress and hold unimplemented! defaulting to pyautogui')
         pyautogui.keyDown(key)
 
-    def press(self, key):
+    def keyPress(self, key):
         self.ensure_device_initialized()
         if key not in KEY_TO_KEYCODE:
             script_logger.log('key not found!', key)
