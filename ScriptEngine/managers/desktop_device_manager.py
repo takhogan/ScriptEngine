@@ -90,7 +90,7 @@ class DesktopDeviceManager(DeviceManager):
             script_logger.log('PythonHostController: script in dummy mode, returning from keyDown')
         pyautogui.keyDown(key)
 
-    def press(self, key):
+    def keyPress(self, key):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from press')
