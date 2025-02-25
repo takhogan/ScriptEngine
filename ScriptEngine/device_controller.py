@@ -32,11 +32,11 @@ class DeviceController:
         if action_type == 'screenshot':
             return self.devices[device_type].screenshot
         elif action_type == 'key_down':
-            return self.devices[device_type].keyDown
+            return self.devices[device_type].key_down
         elif action_type == 'key_up':
-            return self.devices[device_type].keyUp
-        elif action_type == 'press':
-            return self.devices[device_type].press
+            return self.devices[device_type].key_up
+        elif action_type == 'key_press':
+            return self.devices[device_type].key_press
         elif action_type == 'hotkey':
             return self.devices[device_type].hotkey
         elif action_type == 'mouse_down':

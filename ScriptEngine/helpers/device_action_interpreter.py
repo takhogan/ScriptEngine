@@ -56,14 +56,14 @@ class DeviceActionInterpreter:
                 typed_chars_log += ' '.join(hot_key_keys)
             elif keyboard_action["actionData"]["keyboardActionType"] == "keyPressAndHold":
                 hotKeyKeys = keyboard_action["actionData"]["keyboardExpression"].split(",")
-                key_down_func = device_controller.get_device_action(target_system, 'keyDown')
+                key_down_func = device_controller.get_device_action(target_system, 'key_down')
                 for hotKeyKey in hotKeyKeys:
                     key_down_func(hotKeyKey)
                 typed_chars_log += ' '.join(hotKeyKeys)
                 delay_val = RandomVariableHelper.get_rv_val(keyboard_action["actionData"])[0]
                 script_logger.log('Sleeping for {} seconds'.format(delay_val))
                 time.sleep(delay_val)
-                key_up_func = device_controller.get_device_action(target_system, 'keyUp')
+                key_up_func = device_controller.get_device_action(target_system, 'key_up')
                 for hotKeyKey in reversed(hotKeyKeys):
                     key_up_func(hotKeyKey)
         else:
@@ -91,7 +91,7 @@ class DeviceActionInterpreter:
                 else:
                     keyPressKeys.append(expression_char)
             if keyboard_action["actionData"]["keyboardActionType"] == "keyPress":
-                press_func = device_controller.get_device_action(target_system, 'press')
+                press_func = device_controller.get_device_action(target_system, 'key_press')
                 for keyPressKey in keyPressKeys:
                     press_func(keyPressKey)
                     if not is_secret:
@@ -99,7 +99,7 @@ class DeviceActionInterpreter:
                     else:
                         typed_chars_log += '* '
             elif keyboard_action["actionData"]["keyboardActionType"] == "keyPressAndHold":
-                key_down_func = device_controller.get_device_action(target_system, 'keyDown')
+                key_down_func = device_controller.get_device_action(target_system, 'key_down')
                 for keyPressKey in keyPressKeys:
                     key_down_func(keyPressKey)
                     if not is_secret:
@@ -109,7 +109,7 @@ class DeviceActionInterpreter:
                 delay_val = RandomVariableHelper.get_rv_val(keyboard_action["actionData"])[0]
                 script_logger.log('Sleeping for {} seconds'.format(delay_val))
                 time.sleep(delay_val)
-                key_up_func = device_controller.get_device_action(target_system, 'keyUp')
+                key_up_func = device_controller.get_device_action(target_system, 'key_up')
                 for keyPressKey in keyPressKeys:
                     key_up_func(keyPressKey)
         script_logger.log(typed_chars_log)
