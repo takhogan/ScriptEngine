@@ -914,11 +914,11 @@ class ADBDeviceManager(DeviceManager):
                 raise Exception('ADB connection failed')
         return source_im
 
-    def keyUp(self, key):
+    def key_up(self, key):
         script_logger.log('adb keypress and hold unimplemented! defaulting to pyautogui')
         pyautogui.keyUp(key)
 
-    def keyDown(self, key):
+    def key_down(self, key):
         script_logger.log('adb keypress and hold unimplemented! defaulting to pyautogui')
         pyautogui.keyDown(key)
 

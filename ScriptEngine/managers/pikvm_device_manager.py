@@ -16,13 +16,13 @@ class PikvmDeviceManager(DeviceManager):
     def screenshot(self):
         return self.instance.get_streamer_image()
     
-    def keyDown(self, key):
+    def key_down(self, key):
         return self.websocket.send_key(key)
     
-    def keyUp(self):
-        return super().keyUp()
+    def key_up(self):
+        return super().key_up()
     
-    def keyPress(self, key):
+    def key_press(self, key):
         return self.websocket.send_key_press(key)
     
     def hotkey(self):

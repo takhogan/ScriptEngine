@@ -78,19 +78,19 @@ class DesktopDeviceManager(DeviceManager):
             return self.input_source['screenshot']()
         return cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR)
 
-    def keyUp(self, key):
+    def key_up(self, key):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from keyUp')
         pyautogui.keyUp(key)
 
-    def keyDown(self, key):
+    def key_down(self, key):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from keyDown')
         pyautogui.keyDown(key)
 
-    def keyPress(self, key):
+    def key_press(self, key):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from press')

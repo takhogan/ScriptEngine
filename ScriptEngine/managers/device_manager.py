@@ -8,15 +8,15 @@ class DeviceManager(ABC):
         raise NotImplementedError(f"screenshot not implemented for {self.__class__.__name__}")
 
     @abstractmethod
-    def keyDown(self):
+    def key_down(self):
         raise NotImplementedError(f"key_down not implemented for {self.__class__.__name__}")
 
     @abstractmethod
-    def keyUp(self):
+    def key_up(self):
         raise NotImplementedError(f"key_up not implemented for {self.__class__.__name__}")
 
     @abstractmethod
-    def keyPress(self):
+    def key_press(self):
         raise NotImplementedError(f"key press not implemented for {self.__class__.__name__}")
 
     @abstractmethod
