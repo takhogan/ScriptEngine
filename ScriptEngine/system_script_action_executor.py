@@ -19,6 +19,7 @@ import time
 import glob
 import datetime
 import os
+import platform
 import shutil
 
 
@@ -41,6 +42,7 @@ class SystemScriptActionExecutor:
         self.props = props
         self.io_executor = io_executor
         self.messaging_helper = MessagingHelper()
+        self.user_secrets_helper = UserSecretsHelper()
         self.easy_ocr_reader = None
     
     def handle_action(self, action, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
@@ -74,7 +76,15 @@ class SystemScriptActionExecutor:
             statement_strip = sanitize_input(condition, state)
             pre_log = 'condition: {} {}'.format(condition, statement_strip)
             script_logger.log(pre_log)
-            if state_eval('(' + condition + ')',{}, state):
+            globals = {
+                'glob': glob,
+                'datetime': datetime,
+                'os' : os,
+                'platform' : platform,
+                'shutil' : shutil,
+                'numpy' : np
+            }
+            if state_eval('(' + condition + ')',globals, state):
                 post_log = 'condition successful'
                 script_logger.log(post_log)
                 status = ScriptExecutionState.SUCCESS
@@ -130,6 +140,7 @@ class SystemScriptActionExecutor:
                         'glob': glob,
                         'datetime': datetime,
                         'os' : os,
+                        'platform' : platform,
                         'shutil' : shutil,
                         'numpy' : np
                     }
@@ -933,7 +944,7 @@ class SystemScriptActionExecutor:
             # // outputVarName: string
             pass
         elif action["actionName"] == "userSecretManagementAction":
-            status, state = UserSecretsHelper.handle_action(action, state)
+            status, state = self.user_secrets_helper.handle_action(action, state)
 
 
         return action, status, state, context, run_queue, []

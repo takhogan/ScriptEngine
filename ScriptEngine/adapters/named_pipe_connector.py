@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import threading
-from typing import Callable, Optional
+from typing import Callable, Optional, Union, TextIO
 import queue
 
 if sys.platform == "win32":
@@ -29,7 +29,7 @@ class NamedPipeAdapter:
         self.running = False
         self.message_queue = queue.Queue()
         
-    def _create_pipe(self, pipe_name: str, is_input: bool) -> None:
+    def _create_pipe(self, pipe_name: str, is_input: bool) -> Union[int, TextIO]:
         """Create a named pipe in a cross-platform way."""
         if sys.platform == "win32":
             pipe_handle = win32pipe.CreateNamedPipe(

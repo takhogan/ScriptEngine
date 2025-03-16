@@ -1,16 +1,14 @@
-import asyncio
-import base64
+
+
 import threading
 import datetime
 import queue
 import subprocess
 import os
-import json
 import platform
 import re
 
 
-DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
 
 
 from configobj import ConfigObj 
@@ -118,7 +116,6 @@ KEY_TO_KEYCODE = {
 from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_storage
 script_logger = ScriptLogger()
 
-formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
 class ADBDeviceManager(DeviceManager):
     def __init__(self, props, adb_args, input_source=None):
@@ -922,7 +919,7 @@ class ADBDeviceManager(DeviceManager):
         script_logger.log('adb keypress and hold unimplemented! defaulting to pyautogui')
         pyautogui.keyDown(key)
 
-    def keyPress(self, key):
+    def key_press(self, key):
         self.ensure_device_initialized()
         if key not in KEY_TO_KEYCODE:
             script_logger.log('key not found!', key)
@@ -1221,138 +1218,3 @@ class ADBDeviceManager(DeviceManager):
         )
         self.event_counter += 1
         return delta_x, delta_y
-
-@staticmethod
-def set_adb_args(device_key):
-    adb_args = None
-    with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
-        devices_config = json.load(devices_config_file)
-        if device_key in devices_config:
-            adb_args = devices_config[device_key]
-        else:
-            script_logger.log('ADB HOST CONTROLLER: device config for ', device_key, ' not found! ')
-    script_logger.log('ADB HOST CONTROLLER: loading args', adb_args)
-    return adb_args
-
-@staticmethod
-def parse_inputs(process_adb_host, inputs):
-    device_action = inputs[2]
-    if device_action == 'check_status':
-        status = process_adb_host.get_status()
-        script_logger.log('device {} returned status {}'.format(
-            process_adb_host.device_name,
-            status
-        ))
-        return {
-            "data": status
-        }
-    elif device_action == 'screen_capture':
-        if process_adb_host.get_status() == 'offline':
-            return {
-
-            }
-        try:
-            process_adb_host.ensure_device_initialized()
-            screenshot = process_adb_host.screenshot()
-        except subprocess.TimeoutExpired as t:
-            script_logger.log('ADB CONTROLLER: timeout while capturing screenshot', t)
-            return {
-                
-            }
-        _, buffer = cv2.imencode('.jpg', screenshot)
-        byte_array = buffer.tobytes()
-        base64_encoded_string = base64.b64encode(byte_array).decode('utf-8')
-        return {
-            "data": base64_encoded_string
-        }
-    elif device_action == "click":
-        if process_adb_host.get_status() == 'offline':
-            return {
-
-            }
-        process_adb_host.ensure_device_initialized()
-        process_adb_host.get_screen_orientation()
-        process_adb_host.click(int(float(inputs[3])), int(float(inputs[4])))
-        return {
-            "data" : "success"
-        }
-    elif device_action == "click_and_drag":
-        if process_adb_host.get_status() == 'offline':
-            return {
-
-            }
-        process_adb_host.ensure_device_initialized()
-        process_adb_host.get_screen_orientation()
-        process_adb_host.click_and_drag(int(float(inputs[3])), int(float(inputs[4])), int(float(inputs[5])), int(float(inputs[6])))
-        return {
-            "data" : "success"
-        }
-    elif device_action == "send_keys":
-        process_adb_host.ensure_device_initialized()
-        DeviceActionInterpreter.parse_keyboard_action(
-            process_adb_host, json.loads(inputs[3]), {}, {}
-        )
-        return {
-            "data": "success"
-        }
-
-
-
-async def read_input():
-    script_logger.log("ADB CONTROLLER PROCESS: listening for input")
-    process_adb_host = None
-    device_key = None
-    while True:
-        input_line = await asyncio.to_thread(sys.stdin.readline)
-        # Process the input
-        if not input_line:  # EOF, if the pipe is closed
-            break
-        inputs = input_line.strip().split('###')
-        inputs = inputs[0:2] + inputs[2].split(' ')
-        script_logger.log('ADB CONTROLLER PROCESS: received inputs ', inputs)
-        if device_key is None:
-            device_key = inputs[1]
-        elif device_key != inputs[1]:
-            script_logger.log('ADB CONTROLLER: device key mismatch ', device_key, inputs[1])
-            continue
-        if process_adb_host is None:
-            script_logger.set_log_file_path('./logs/{}-adb-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
-            script_logger.log('ADB CONTROLLER PROCESS: starting process for device {}'.format(device_key))
-            script_logger.log('ADB CONTROLLER PROCESS: processing inputs ', inputs)
-            script_logger.set_log_header('{}-adb-host-controller-{}-process-'.format(formatted_today, device_key.replace(':', '-')))
-            script_logger.set_action_log(ScriptActionLog(
-                {
-                    'actionName': 'configurationAction',
-                    'actionGroup': 0,
-                    'actionData': {
-                        'targetSystem': 'adb'
-                    }
-                },
-                script_logger.get_log_folder(),
-                script_logger.get_log_header(),
-                0
-            ))
-                # process_file.write(json.dumps(adb_args) + '\n')
-            adb_args = set_adb_args(inputs[1])
-            process_adb_host = ADBDeviceManager({
-                "dir_path": "./",
-                "width" : None,
-                "height" : None
-            }, None, adb_args, None)
-        if len(inputs) > 2:
-            input_response = json.dumps(parse_inputs(process_adb_host, inputs))
-            script_logger.log('ADB CONTROLLER: Sending response for {}'.format(inputs[0]), flush=True)
-            script_logger.log('<--{}-->'.format(inputs[0]) + input_response + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
-            script_logger.log('ADB CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
-
-async def adb_controller_main():
-    await asyncio.gather(read_input())
-
-if __name__ == '__main__':
-    os.makedirs('./logs', exist_ok=True)
-    script_logger.set_log_file_path('./logs/{}-adb-host-controller-main.txt'.format(formatted_today))
-    script_logger.set_log_header('{}-adb-host-controller-main-'.format(formatted_today))
-    script_logger.set_log_folder('./logs/')
-
-
-    asyncio.run(adb_controller_main())

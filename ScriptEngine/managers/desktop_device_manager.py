@@ -24,6 +24,7 @@ from ..helpers.random_variable_helper import RandomVariableHelper
 from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_storage
 from ScriptEngine.common.logging.script_action_log import ScriptActionLog
 from .device_manager import DeviceManager
+import mss
 
 script_logger = ScriptLogger()
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
@@ -45,6 +46,7 @@ class DesktopDeviceManager(DeviceManager):
         else:
             self.dummy_mode = False
         
+        self.sct = mss.mss()
 
     def ensure_device_initialized(self):
         if self.width is None or self.height is None:
@@ -70,13 +72,18 @@ class DesktopDeviceManager(DeviceManager):
             self.props['width'] = width
             self.props['height'] = height
             self.click_path_generator = ClickPathGenerator(2, 3, self.width, self.height, 45, 0.4)
+    
+    def get_status(self):
+        return super().get_status()
 
     def screenshot(self):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning screenshot from input source')
             return self.input_source['screenshot']()
-        return cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR)
+        
+        img = np.array(self.sct.grab(self.sct.monitors[1]))
+        return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
     def key_up(self, key):
         self.ensure_device_initialized()

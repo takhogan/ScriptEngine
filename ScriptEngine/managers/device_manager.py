@@ -4,6 +4,14 @@ from abc import ABC, abstractmethod
 class DeviceManager(ABC):
 
     @abstractmethod
+    def ensure_device_initialized(self):
+        raise NotImplementedError(f"ensure_device_initialized not implemented for {self.__class__.__name__}")
+
+    @abstractmethod
+    def get_status(self):
+        raise NotImplementedError(f"get_status not implemented for {self.__class__.__name__}")
+
+    @abstractmethod
     def screenshot(self):
         raise NotImplementedError(f"screenshot not implemented for {self.__class__.__name__}")
 
