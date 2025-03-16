@@ -1,8 +1,7 @@
 import json
 import keyring
 import sys
-from typing import Dict, Any, Optional, Union
-from namedpipe import NPopen
+from typing import Dict, Any, Optional
 
 class DeviceSecretsManager:
     """
