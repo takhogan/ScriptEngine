@@ -19,7 +19,7 @@ class SecureSecret:
 
 class UserSecretsHelper:
     def __init__(self):
-        self.api = ScreenPlanAPI()
+        self.api_client = ScreenPlanAPI()
 
     def handle_action(self, action, state):
         if action["actionData"]["userSecretActionType"] == "getSecret":
@@ -27,15 +27,14 @@ class UserSecretsHelper:
                 request_id=None,
                 method='GET',
                 request_type='getUserSecret',
-                path=f'script-studio/getUserSecret/{action["actionData"]["secretName"]}',
+                path=f'getUserSecret/{action["actionData"]["secretName"]}',
                 payload={}
             )
             
-            api_client = ScreenPlanAPI()
-            success = api_client.send_request(request)
+            response = self.api_client.send_request(request)
             
-            if success:
-                state[action["actionData"]["outputVarName"]] = SecureSecret(request.response.get('secret'))
+            if response is not None:
+                state[action["actionData"]["outputVarName"]] = SecureSecret(response.get('secret'))
                 script_logger.get_action_log().add_post_file(
                     'text',
                     'getUserSecret-log.txt',
@@ -55,17 +54,16 @@ class UserSecretsHelper:
                 request_id=None,
                 method='POST',
                 request_type='updateUserSecret',
-                path='script-studio/updateUserSecret',
+                path='updateUserSecret',
                 payload={
                     'secretName': action["actionData"]["secretName"],
                     'secretValue': state_eval(action["actionData"]["inputExpression"], {}, state).get_value() if isinstance(state_eval(action["actionData"]["inputExpression"], {}, state), SecureSecret) else state_eval(action["actionData"]["inputExpression"], {}, state)
                 }
             )
             
-            api_client = ScreenPlanAPI()
-            success = api_client.send_request(request)
+            response = self.api_client.send_request(request)
             
-            if success:
+            if response is not None:
                 script_logger.get_action_log().add_post_file(
                     'text',
                     'updateUserSecret-log.txt', 
@@ -79,5 +77,5 @@ class UserSecretsHelper:
                     f'Failed to update secret {action["actionData"]["secretName"]}'
                 )
                 status = ScriptExecutionState.FAILURE
-        return state, status
+        return status, state
 

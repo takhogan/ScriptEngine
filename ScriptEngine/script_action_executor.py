@@ -65,6 +65,7 @@ class ScriptActionExecutor:
 
 
         elif action["actionName"] == "mouseInteractionAction":
+            self.device_controller.ensure_device_initialized(action['actionData']['targetSystem'])
             point_choice, log_point_choice, point_list, log_point_list = ClickActionHelper.get_point_choice(
                 action["actionData"]["sourceDetectTypeData"],
                 action["actionData"]["sourceDetectTypeData"]["inputExpression"],
@@ -116,6 +117,7 @@ class ScriptActionExecutor:
                 scroll_func(*point_choice, scroll_distance)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "mouseMoveAction":
+            self.device_controller.ensure_device_initialized(action['actionData']['targetSystem'])
             source_point, log_source_point_choice, point_list, log_source_point_list = ClickActionHelper.get_point_choice(
                 action["actionData"]["sourceDetectTypeData"],
                 action["actionData"]["sourceDetectTypeData"]["inputExpression"],

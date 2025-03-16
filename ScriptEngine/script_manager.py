@@ -2,11 +2,9 @@ import time
 
 start_time = time.time()
 import os
-from concurrent.futures import ALL_COMPLETED, wait
+import asyncio
 
 
-
-from contextlib import redirect_stderr
 from dateutil import tz
 import json
 import traceback
@@ -78,29 +76,8 @@ def update_running_scripts_file(scriptname, action):
                 with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
                     json.dump(running_scripts, running_script_file)
 
-def close_threads_and_processes(io_executor, process_executor, timeout=30):
-    thread_futures = io_executor.active_tasks
-    process_futures = process_executor.active_tasks
-
-
-    thread_done, thread_not_done = wait(thread_futures, timeout=timeout, return_when=ALL_COMPLETED)
-    process_done, process_not_done = wait(process_futures, timeout=timeout, return_when=ALL_COMPLETED)
-    # Shutdown pools
-    script_logger.log("Shutting down thread pool...")
-    io_executor.shutdown(wait=False)
-    script_logger.log("Shutting down process pool...")
-    process_executor.shutdown(wait=False)
-
-    # Handle any unfinished tasks
-    if thread_not_done or process_not_done:
-        script_logger.log(
-            f"Timeout reached. Cancelling unfinished threads/processes. {len(thread_not_done)} threads and {len(process_not_done)} processes are still active.")
-        for future in thread_not_done:
-            future.cancel()
-        for future in process_not_done:
-            future.cancel()
-    script_logger.log('Completed shutting down thread and process pool')
-
+async def close_threads_and_processes(io_executor, process_executor, timeout=30):
+    await asyncio.gather(io_executor.soft_shutdown(script_logger, timeout), process_executor.soft_shutdown(script_logger, timeout))
 
 def load_and_run(script_name, script_id, timeout, constants=None, start_time : datetime.datetime=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False):
     script_logger.log('SCRIPT_MANAGER: ', ' script trigger time: ',
@@ -143,9 +120,10 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
     from .engine_manager import EngineManager
     from .script_action_executor import ScriptActionExecutor
     from .parallelized_script_executor import ParallelizedScriptExecutor
-
+    from .managers.device_secrets_manager import DeviceSecretsManager
     with CustomThreadPool(max_workers=50) as io_executor, CustomProcessPool(max_workers=os.cpu_count()) as process_executor:
-        device_controller = DeviceController(script_name, script_object['props'], device_params, io_executor)
+        secrets_manager = DeviceSecretsManager()
+        device_controller = DeviceController(script_object['props'], device_params, io_executor, secrets_manager)
         engine_manager = EngineManager(script_id, script_logger.get_log_folder())
         script_action_executor = ScriptActionExecutor(device_controller, io_executor, script_object['props'])
         parallelized_executor = ParallelizedScriptExecutor(device_controller, process_executor)
@@ -199,13 +177,13 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
                 )
         except:
             script_logger.log('Script Execution interrupted by exception')
-            close_threads_and_processes(io_executor, process_executor)
+            asyncio.run(close_threads_and_processes(io_executor, process_executor))
 
             traceback.print_exc()
             errored = True
         else:
             script_logger.log('Script Execution completed')
-            close_threads_and_processes(io_executor, process_executor)
+            asyncio.run(close_threads_and_processes(io_executor, process_executor))
     script_logger.log('Script Manager process completed')
     if errored:
         exit(1)
