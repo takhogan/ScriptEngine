@@ -182,7 +182,7 @@ class DeviceController:
 
                 }
             # process_adb_host.get_screen_orientation()
-            self.get_device_action(device_type, 'click', device_params)(int(float(inputs[3])), int(float(inputs[4])))
+            self.get_device_action(device_type, 'click', device_params)(int(float(inputs[3])), int(float(inputs[4])), 'left')
             return {
                 "data" : "success"
             }
