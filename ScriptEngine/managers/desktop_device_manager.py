@@ -74,7 +74,7 @@ class DesktopDeviceManager(DeviceManager):
             self.click_path_generator = ClickPathGenerator(2, 3, self.width, self.height, 45, 0.4)
     
     def get_status(self):
-        return super().get_status()
+        return "online"
 
     def screenshot(self):
         self.ensure_device_initialized()
