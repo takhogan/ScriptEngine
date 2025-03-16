@@ -951,7 +951,7 @@ class ADBDeviceManager(DeviceManager):
     def y_command_func(self, y_val):
         return self.sendevent_command.format(3, int('36', 16), y_val)
 
-    def click(self, x, y, important=True, mouse_up=True):
+    def click(self, x, y, button='left', important=True, mouse_up=True):
         # 1st point always the og x,y
         self.ensure_device_initialized()
         script_logger.log('clicking')
@@ -1063,7 +1063,7 @@ class ADBDeviceManager(DeviceManager):
         self.event_counter += 1
 
     def mouse_down(self, x, y):
-        self.click(x, y, important=True, mouse_up=False)
+        self.click(x, y, button='left',important=True, mouse_up=False)
 
     def mouse_up(self, x, y):
         self.click(x, y)

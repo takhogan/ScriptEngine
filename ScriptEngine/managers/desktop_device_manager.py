@@ -109,7 +109,7 @@ class DesktopDeviceManager(DeviceManager):
             script_logger.log('PythonHostController: script in dummy mode, returning from hotKey')
         pyautogui.hotkey(*keys)
 
-    def mouse_up(self, x, y, button):
+    def mouse_up(self, x, y, button='left'):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from mouse_up')
@@ -124,7 +124,7 @@ class DesktopDeviceManager(DeviceManager):
         pyautogui.mouseUp(x=x, y=y, button=button)
 
 
-    def mouse_down(self, x, y, button):
+    def mouse_down(self, x, y, button='left'):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from mouse_down')
