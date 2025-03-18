@@ -8,14 +8,14 @@ import os
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.common.logging.script_action_log import ScriptActionLog
-from .custom_thread_pool import CustomThreadPool
+from ScriptEngine.custom_thread_pool import CustomThreadPool
 script_logger = ScriptLogger()
 from typing import Dict
-from .managers.device_manager import DeviceManager
-from .managers.device_secrets_manager import DeviceSecretsManager
+from ScriptEngine.managers.device_manager import DeviceManager
+from ScriptEngine.managers.device_secrets_manager import DeviceSecretsManager
 from ScriptEngine.common.script_engine_utils import DummyFile
 
-from .helpers.device_action_interpreter import DeviceActionInterpreter
+from ScriptEngine.helpers.device_action_interpreter import DeviceActionInterpreter
 
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'

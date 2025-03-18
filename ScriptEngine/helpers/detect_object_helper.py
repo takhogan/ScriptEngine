@@ -24,6 +24,7 @@ class DetectObjectHelper:
         original_width = 0
         original_height = 0
         fixed_scale = False
+        script_logger.log('Getting detect area for action', action["actionName"] + "-" + str(action["actionGroup"]))
         var_name = action["actionData"]["inputExpression"]
         mid_log = ''
         if var_name is not None and len(var_name) > 0:
@@ -193,7 +194,7 @@ class DetectObjectHelper:
         )
 
         log_objs = {
-            'base': (screencap_im_bgr.copy(), floating_detect_obj),
+            'base': (screencap_im_bgr.copy(), floating_detect_obj, match_point),
             'fixedObject' : None,
             'floatingObject' : None
         }
@@ -288,9 +289,9 @@ class DetectObjectHelper:
     def create_detect_action_log_images(thread_script_logger, action, log_obj):
         thread_local_storage.script_logger = thread_script_logger
         script_logger = ScriptLogger.get_logger()
-        script_logger.log('Creating log images for action', action["actionGroup"], script_logger.get_action_log().name)
+        script_logger.log('Creating log images for action', action["actionGroup"])
 
-        (screencap_im_bgr, floating_detect_obj) = log_obj['base']
+        (screencap_im_bgr, floating_detect_obj, source_match_point) = log_obj['base']
 
         # Check if image is valid before writing
         if screencap_im_bgr is None or not isinstance(screencap_im_bgr, np.ndarray):
@@ -329,6 +330,7 @@ class DetectObjectHelper:
             result_im_bgr = ImageMatcher.create_result_im(
                 action,
                 screencap_im_bgr,
+                source_match_point,
                 floating_detect_obj["mask_single_channel"],
                 matches,
                 None,
@@ -361,6 +363,7 @@ class DetectObjectHelper:
             result_im_bgr = ImageMatcher.create_result_im(
                 action,
                 screencap_im_bgr,
+                source_match_point,
                 floating_detect_obj["img"],
                 matches,
                 match_result,
@@ -390,8 +393,20 @@ class DetectObjectHelper:
         if script_logger.get_log_level() == 'info':
             script_logger.log('DetectObjectHelper: starting detect object log thread')
             thread_script_logger = script_logger.copy()
-            # DetectObjectHelper.create_detect_action_log_images(thread_script_logger, action, log_obj)
-            io_executor.submit(DetectObjectHelper.create_detect_action_log_images, thread_script_logger, action, log_obj)
+            # def catch_err():
+            #     try:
+            #         DetectObjectHelper.create_detect_action_log_images(thread_script_logger, action, log_obj)
+            #     except Exception as e:
+            #         import traceback
+            #         traceback.print_exc()
+            #         script_logger.log('Error creating detect action log images', e)
+            # io_executor.submit(catch_err)
+            io_executor.submit(
+                DetectObjectHelper.create_detect_action_log_images,
+                thread_script_logger,
+                action,
+                log_obj
+            )
 
         if len(matches) > 0:
             status = ScriptExecutionState.SUCCESS

@@ -155,6 +155,24 @@ class ScriptActionExecutor:
                 )
 
                 thread_script_logger = script_logger.copy()
+                # def catch_exc():
+                #     try:
+                #         self.draw_click_and_drag(
+                #             action,
+                #             thread_script_logger,
+                #             log_source_point_choice,
+                #             log_source_point_list,
+                #             log_target_point_choice,
+                #             log_target_point_list,
+                #             delta_x,
+                #             delta_y
+                #         )
+                #     except Exception as e:
+                #         import traceback
+                #         traceback.print_exc()
+                #         script_logger.log(f'Error in draw_click_and_drag: {e}')
+                # self.io_executor.submit(catch_exc)
+
                 self.io_executor.submit(
                     self.draw_click_and_drag,
                     action,

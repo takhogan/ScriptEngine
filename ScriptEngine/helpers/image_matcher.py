@@ -266,7 +266,7 @@ class ImageMatcher:
         )
 
     @staticmethod
-    def create_result_im(detectObject, screencap_im_bgr, screencap_search_bgr, matches, match_result, input_rescaled):
+    def create_result_im(detectObject, screencap_im_bgr, source_match_point, screencap_search_bgr, matches, match_result, input_rescaled):
         script_logger = ScriptLogger.get_logger()
         best_point = 'None'
         best_point_score = 0
@@ -288,7 +288,7 @@ class ImageMatcher:
                 if max_valid_point != -np.inf:
                     best_point = np.unravel_index(np.argmax(valid_matched_points), valid_matched_points.shape)
                     best_point_score = float(match_result[best_point])
-                    best_point = (best_point[1], best_point[0])
+                    best_point = (best_point[1] - source_match_point[1], best_point[0] - source_match_point[0])
                     box_w, box_h = ImageMatcher.adjust_box_to_bounds(best_point, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
                     end_y = min(best_point[1] + box_h, result_im_bgr.shape[0])
                     end_x = min(best_point[0] + box_w, result_im_bgr.shape[1])
@@ -309,10 +309,10 @@ class ImageMatcher:
         else:
             cv2.rectangle(
                 screencap_im_bgr,
-                matches[0]['point'],
+                (matches[0]['point'][0] - source_match_point[0], matches[0]['point'][1] - source_match_point[1]),
                 (
-                    matches[0]['point'][0] + w,
-                    matches[0]['point'][1] + h,
+                    matches[0]['point'][0] + w - source_match_point[0],
+                    matches[0]['point'][1] + h - source_match_point[1],
                 ), (0, 0, int(255 * matches[0]['score'])), 2
             )
 
@@ -335,6 +335,7 @@ class ImageMatcher:
         if detectObject['actionData']['detectActionType'] == "floatingObject":
             for match_obj in matches:
                 pt = tuple(map(int, match_obj['point']))
+                pt = (pt[0] - source_match_point[0], pt[1] - source_match_point[1])
                 box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
                 end_y = min(pt[1] + box_h, result_im_bgr.shape[0])
                 end_x = min(pt[0] + box_w, result_im_bgr.shape[1])
@@ -349,6 +350,8 @@ class ImageMatcher:
         # color in match area of matches above threshold with red
         for match_obj in matches:
             pt = tuple(map(int, match_obj['point']))
+            pt = (pt[0] - source_match_point[0], pt[1] - source_match_point[1])
+
             score = match_obj['score']
             if score < threshold:
                 continue
@@ -370,6 +373,8 @@ class ImageMatcher:
         # draw blue rectangle around matches above threshold
         for match_index in range(0, min(max_matches, len(matches))):
             pt = tuple(map(int, matches[match_index]['point']))
+            pt = (pt[0] - source_match_point[0], pt[1] - source_match_point[1])
+
             score = matches[match_index]['score']
             if score < threshold:
                 continue

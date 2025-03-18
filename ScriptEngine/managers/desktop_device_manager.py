@@ -1,4 +1,3 @@
-import subprocess
 import sys
 import datetime
 import json
@@ -11,17 +10,11 @@ import numpy as np
 import pyautogui 
 import cv2
 from ScriptEngine.common.script_engine_utils import is_null, DummyFile
-from typing import Callable, Dict, List, Tuple
-import time
 
-from ..helpers.color_compare_helper import ColorCompareHelper
 from ..helpers.click_path_generator import ClickPathGenerator
 from ..helpers.device_action_interpreter import DeviceActionInterpreter
-from ScriptEngine.common.enums import ScriptExecutionState
-from ..helpers.click_action_helper import ClickActionHelper
-from ..helpers.detect_object_helper import DetectObjectHelper
-from ..helpers.random_variable_helper import RandomVariableHelper
-from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_storage
+
+from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.common.logging.script_action_log import ScriptActionLog
 from .device_manager import DeviceManager
 import mss
@@ -185,7 +178,6 @@ class DesktopDeviceManager(DeviceManager):
 
         traverse_x = source_x
         traverse_y = source_y
-        script_logger.log('delta_x', delta_x, 'delta_y', delta_y)
         for delta_pair in zip(delta_x, delta_y):
             if drag and sys.platform == 'darwin':
                 pyautogui.dragTo(
