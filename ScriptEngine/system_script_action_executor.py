@@ -28,8 +28,6 @@ from .helpers.random_variable_helper import RandomVariableHelper
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.script_engine_utils import generate_context_switch_action, state_eval
-from .helpers.messaging_helper import MessagingHelper
-from .helpers.user_secrets_helper import UserSecretsHelper
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from typing import Callable, Dict, List, Tuple
 script_logger = ScriptLogger()
@@ -37,12 +35,19 @@ script_logger = ScriptLogger()
 
 
 class SystemScriptActionExecutor:
-    def __init__(self, base_script_name, props, io_executor):
+    def __init__(self, base_script_name, props, io_executor, screen_plan_server_attached):
         self.base_script_name = base_script_name
         self.props = props
         self.io_executor = io_executor
-        self.messaging_helper = MessagingHelper()
-        self.user_secrets_helper = UserSecretsHelper()
+        self.screen_plan_server_attached = screen_plan_server_attached
+        if screen_plan_server_attached:
+            from .helpers.messaging_helper import MessagingHelper
+            self.messaging_helper = MessagingHelper()
+            from .helpers.user_secrets_helper import UserSecretsHelper
+            self.user_secrets_helper = UserSecretsHelper()
+
+        else:
+            self.messaging_helper = None
         self.easy_ocr_reader = None
     
     def handle_action(self, action, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
@@ -644,35 +649,38 @@ class SystemScriptActionExecutor:
             )
 
         elif action["actionName"] == "sendMessageAction":
-            message = state_eval(action["actionData"]["inputExpression"], {}, state)
-
-            pre_log = 'Sending message through ' + str(action["actionData"]["messagingProvider"]) +\
-                      ' of type ' + str(action["actionData"]["messageType"])
-            script_logger.log(pre_log)
-
-            mid_log = 'Message Contents: ' + str(message)
-            script_logger.log(mid_log)
-
-            messaging_successful = self.messaging_helper.send_message({
-                "action" : "sendMessage",
-                "messagingChannelName" : action["actionData"]["messagingChannelName"],
-                "messagingProvider" : action["actionData"]["messagingProvider"],
-                "messageType" : action["actionData"]["messageType"],
-                "message" : message
-            })
-
-            if messaging_successful:
-                status = ScriptExecutionState.SUCCESS
-                post_log = 'Message Send Successful'
-            else:
+            if not self.screen_plan_server_attached:
+                script_logger.log('unable to send message, screen plan server not active')
                 status = ScriptExecutionState.FAILURE
-                post_log = 'Message Send Failed'
-            script_logger.log(post_log)
-            script_logger.get_action_log().add_post_file(
-                'text',
-                'sendMessage-log.txt',
-                pre_log + '\n' + mid_log + '\n' + post_log
-            )
+            else:
+                message = state_eval(action["actionData"]["inputExpression"], {}, state)
+                pre_log = 'Sending message through ' + str(action["actionData"]["messagingProvider"]) +\
+                        ' of type ' + str(action["actionData"]["messageType"])
+                script_logger.log(pre_log)
+
+                mid_log = 'Message Contents: ' + str(message)
+                script_logger.log(mid_log)
+
+                messaging_successful = self.messaging_helper.send_message({
+                    "action" : "sendMessage",
+                    "messagingChannelName" : action["actionData"]["messagingChannelName"],
+                    "messagingProvider" : action["actionData"]["messagingProvider"],
+                    "messageType" : action["actionData"]["messageType"],
+                    "message" : message
+                })
+
+                if messaging_successful:
+                    status = ScriptExecutionState.SUCCESS
+                    post_log = 'Message Send Successful'
+                else:
+                    status = ScriptExecutionState.FAILURE
+                    post_log = 'Message Send Failed'
+                script_logger.log(post_log)
+                script_logger.get_action_log().add_post_file(
+                    'text',
+                    'sendMessage-log.txt',
+                    pre_log + '\n' + mid_log + '\n' + post_log
+                )
         elif action["actionName"] == "returnStatement":
             pre_log = 'Return Statement Type: {}'.format(action["actionData"]["returnStatementType"])
             script_logger.log(pre_log)
@@ -944,7 +952,11 @@ class SystemScriptActionExecutor:
             # // outputVarName: string
             pass
         elif action["actionName"] == "userSecretManagementAction":
-            status, state = self.user_secrets_helper.handle_action(action, state)
+            if not self.screen_plan_server_attached:
+                script_logger.log('unable to send message, screen plan server not active')
+                status = ScriptExecutionState.FAILURE
+            else:
+                status, state = self.user_secrets_helper.handle_action(action, state)
 
 
         return action, status, state, context, run_queue, []

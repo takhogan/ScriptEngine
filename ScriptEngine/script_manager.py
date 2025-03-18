@@ -125,7 +125,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
         secrets_manager = DeviceSecretsManager()
         device_controller = DeviceController(script_object['props'], device_params, io_executor, secrets_manager)
         engine_manager = EngineManager(script_id, script_logger.get_log_folder())
-        script_action_executor = ScriptActionExecutor(device_controller, io_executor, script_object['props'])
+        script_action_executor = ScriptActionExecutor(device_controller, io_executor, script_object['props'], screen_plan_server_attached)
         parallelized_executor = ParallelizedScriptExecutor(device_controller, process_executor)
         # TODO: might need fixing
         # logger = multiprocessing.log_to_stderr()
