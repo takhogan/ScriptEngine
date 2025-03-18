@@ -1,9 +1,11 @@
 from .device_manager import DeviceManager
-from pikvm_lib import PiKVMWebsocket,PiKVM
+from pikvm_lib import PiKVM
 import cv2
 import numpy
-from ScriptEngine.common.logging import script_logger
+from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.helpers.click_path_generator import ClickPathGenerator
 
+script_logger = ScriptLogger()
 
 class PiKVMDeviceManager(DeviceManager):
     def __init__(self, hostname, username, password, input_source=None):
@@ -15,17 +17,26 @@ class PiKVMDeviceManager(DeviceManager):
             self.dummy_mode = False
         self.width = None
         self.height = None
+        self.xmax = None
+        self.ymax = None
+
     
     def ensure_device_initialized(self):
         if self.width is None or self.height is None:
             if self.dummy_mode:
                 self.width = self.input_source["width"]
                 self.height = self.input_source["height"]
+                self.xmax = self.width
+                self.ymax = self.height
                 script_logger.log('PiKVMDeviceManager: script in dummy mode, initialized to input source')
                 return
             screenshot = self.screenshot()
             self.width = screenshot.shape[1]
             self.height = screenshot.shape[0]
+            self.xmax = self.width
+            self.ymax = self.height
+            self.click_path_generator = ClickPathGenerator(2, 3, self.width, self.height, 45, 0.4)
+
     
     def get_status(self):
         try:
@@ -61,24 +72,45 @@ class PiKVMDeviceManager(DeviceManager):
         return self.instance.hotkey(*keys)
     
     def mouse_down(self, x, y, button="left"):
-        self.smooth_move(x, y)
+        self.instance.send_mouse_move_event(x, y)
         return self.instance.send_mouse_event(button, "true")
     
     def mouse_up(self, x, y, button="left"):
-        self.smooth_move(x, y)
+        self.instance.send_mouse_move_event(x, y)
         return self.instance.send_mouse_event(button, "false")
     
-    def smooth_move(self, x, y):
-        return self.instance.send_mouse_move_event(x, y)
+    def smooth_move(self, source_x, source_y, target_x, target_y, drag=False,button="left"):
+        frac_source_x = (source_x / self.width)
+        frac_target_x = (target_x / self.width)
+        frac_source_y = (source_y / self.height)
+        frac_target_y = (target_y / self.height)
+        delta_x, delta_y = self.click_path_generator.generate_click_path(
+            frac_source_x, frac_source_y,
+            frac_target_x, frac_target_y
+        )
+        if self.dummy_mode:
+            script_logger.log('PiKVM CONTROLLER: script running in dummy mode, adb click and drag returning')
+            return delta_x, delta_y
+
+        traverse_x = source_x
+        traverse_y = source_y
+        for delta_pair in zip(delta_x, delta_y):
+            self.instance.send_mouse_move_event(traverse_x + delta_pair[0], traverse_y + delta_pair[1])
+            traverse_x += delta_pair[0]
+            traverse_y += delta_pair[1]
+        return delta_x, delta_y
     
     def click(self, x, y, button="left"):
-        self.smooth_move(x, y)
+        self.instance.send_mouse_move_event(x, y)
         return self.instance.send_click(button)
     
-    def click_and_drag(self, x1, y1, x2, y2):
-        self.mouse_down(x1, y1)
-        self.smooth_move(x2, y2)
-        self.mouse_up(x2, y2)
+    def click_and_drag(self, x1, y1, x2, y2, mouse_down=True, mouse_up=True):
+        if mouse_down:
+            self.mouse_down(x1, y1)
+        delta_x, delta_y = self.smooth_move(x1, y1, x2, y2)
+        if mouse_up:
+            self.mouse_up(x2, y2)
+        return delta_x, delta_y
     
     def scroll(self, delta):
         return self.instance.send_mouse_wheel_event(delta)

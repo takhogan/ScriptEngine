@@ -1121,7 +1121,7 @@ class ADBDeviceManager(DeviceManager):
             ))
         return commands
 
-    def click_and_drag(self, source_x, source_y, target_x, target_y, mouse_up=True):
+    def click_and_drag(self, source_x, source_y, target_x, target_y, mouse_down=True, mouse_up=True):
         self.ensure_device_initialized()
         if self.dummy_mode:
             frac_source_x = (source_x / self.width)

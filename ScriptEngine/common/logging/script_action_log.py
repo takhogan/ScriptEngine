@@ -156,13 +156,15 @@ class ScriptActionLog:
            self.default_path_header if log_header else self.base_path
         ) + relative_path
         for supporting_file_type,supporting_file_path in self.supporting_files:
-            assert supporting_file_path != new_supporting_file_path
+            if supporting_file_path == new_supporting_file_path:
+                raise Exception('Attempting to add supporting file reference with path ' + new_supporting_file_path + ' but file already exists with path ' + supporting_file_path)
         self.supporting_files.append((file_type, new_supporting_file_path))
         self.to_dict()
 
     def add_supporting_absolute_file_reference(self, file_type, absolute_path):
         for supporting_file_type,supporting_file_path in self.supporting_files:
-            assert supporting_file_path != absolute_path
+            if supporting_file_path == absolute_path:
+                raise Exception('Attempting to add supporting file reference with absolute path ' + absolute_path + ' but file already exists with path ' + supporting_file_path)
         self.supporting_files.append((file_type, absolute_path))
         self.to_dict()
 
@@ -171,7 +173,8 @@ class ScriptActionLog:
             self.default_path_header if log_header else self.base_path
         ) + relative_path
         for supporting_file_type, supporting_file_path in self.supporting_files:
-            assert supporting_file_path != new_supporting_file_path
+            if supporting_file_path == new_supporting_file_path:
+                raise Exception('Attempting to add supporting file with path ' + new_supporting_file_path + ' but file already exists with path ' + supporting_file_path)
         self.supporting_files.append((file_type, new_supporting_file_path))
         self.to_dict()
         if file_type == 'text':

@@ -14,12 +14,12 @@ import datetime
 import sys
 print(f"builtin initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
-from .custom_thread_pool import CustomThreadPool
-from .custom_process_pool import CustomProcessPool
+from ScriptEngine.custom_thread_pool import CustomThreadPool
+from ScriptEngine.custom_process_pool import CustomProcessPool
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.script_engine_utils import datetime_to_local_str, imageFileExtensions
 from ScriptEngine.common.enums import ScriptExecutionState
-from .system_script_handler import SystemScriptHandler
+from ScriptEngine.system_script_handler import SystemScriptHandler
 print(f"non builtin initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger
@@ -85,7 +85,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
           'actual script start time: ', datetime.datetime.now(), ' scheduled end time: ',
           datetime_to_local_str(timeout))
     script_logger.log('constants : ', constants)
-    from .script_loader import parse_zip
+    from ScriptEngine.script_loader import parse_zip
     script_object = parse_zip(script_name, system_script)
     device_params = {}
     if device_details is not None and device_details != '' and device_details != 'null':
@@ -115,12 +115,12 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
                     script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
     errored = False
-    from .device_controller import DeviceController
-    from .script_executor import ScriptExecutor
-    from .engine_manager import EngineManager
-    from .script_action_executor import ScriptActionExecutor
-    from .parallelized_script_executor import ParallelizedScriptExecutor
-    from .managers.device_secrets_manager import DeviceSecretsManager
+    from ScriptEngine.device_controller import DeviceController
+    from ScriptEngine.script_executor import ScriptExecutor
+    from ScriptEngine.engine_manager import EngineManager
+    from ScriptEngine.script_action_executor import ScriptActionExecutor
+    from ScriptEngine.parallelized_script_executor import ParallelizedScriptExecutor
+    from ScriptEngine.managers.device_secrets_manager import DeviceSecretsManager
     with CustomThreadPool(max_workers=50) as io_executor, CustomProcessPool(max_workers=os.cpu_count()) as process_executor:
         secrets_manager = DeviceSecretsManager()
         device_controller = DeviceController(script_object['props'], device_params, io_executor, secrets_manager)

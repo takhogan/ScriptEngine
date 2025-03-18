@@ -813,6 +813,7 @@ class ScriptExecutor:
             )
         else:
             self.context["script_counter"] += 1
+            script_logger.log('Creating action log for action', action["actionGroup"])
             script_logger.configure_action_logger(action, self.context["script_counter"], self.parent_action_log)
             _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
             # post_handle_action((self.action, self.status, self.state, self.context, self.run_queue, update_queue))
