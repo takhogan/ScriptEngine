@@ -18,17 +18,17 @@ from .device_controller import DeviceController
 from .custom_thread_pool import CustomThreadPool
 
 class ScriptActionExecutor:
-    def __init__(self, device_controller : DeviceController, io_executor : CustomThreadPool, props : Dict):
+    def __init__(self, device_controller : DeviceController, io_executor : CustomThreadPool, props : Dict, screen_plan_server_attached : bool):
         self.device_controller = device_controller
         self.io_executor = io_executor
         self.props = props
         self.system_host_controller = None
-    
+        self.screen_plan_server_attached = screen_plan_server_attached
     def execute_action(self, action, state, context, run_queue, lazy_eval=False) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
         if action["actionData"]["targetSystem"] == "none":
             if self.system_host_controller is None:
                 from .system_script_action_executor import SystemScriptActionExecutor
-                self.system_host_controller = SystemScriptActionExecutor(self.props['script_name'], self.props, self.io_executor)
+                self.system_host_controller = SystemScriptActionExecutor(self.props['script_name'], self.props, self.io_executor, self.screen_plan_server_attached)
             return self.system_host_controller.handle_action(action, state, context, run_queue)
         update_queue = []
         if action["actionName"] == "detectObject":
