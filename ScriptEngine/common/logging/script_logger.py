@@ -88,9 +88,12 @@ class ScriptLogger:
         raise TypeError(f"Instances of {self.__class__.__name__} cannot be serialized.")
 
     def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True):
+        # Format the log message
         text = str(datetime.datetime.now()) + ': ' + (
             self.log_header if log_header else ''
         ) + ' ' + sep.join(map(str, args)) + end
+
+        # Write to file with UTF-8 encoding
         if file is None:
             with open(self.log_file_path, 'a', encoding='utf-8', errors='replace') as log_file:
                 log_file.write(text)
@@ -101,7 +104,19 @@ class ScriptLogger:
             if flush:
                 file.flush()
 
-        print(text, *args, sep=sep, end=end, flush=flush)
+        # Print to console with error handling
+        try:
+            print(text, sep=sep, end=end, flush=flush)
+        except UnicodeEncodeError:
+            # If console can't handle the encoding, try to print a sanitized version
+            try:
+                # Remove or replace problematic characters
+                sanitized_text = text.encode('ascii', 'replace').decode('ascii')
+                print(sanitized_text, sep=sep, end=end, flush=flush)
+            except Exception:
+                # If all else fails, print a basic message
+                print(f"{datetime.datetime.now()}: [Output contained unprintable characters]", 
+                      flush=flush)
 
     def set_log_file_path(self, log_file_path):
         self.log_file_path = log_file_path
