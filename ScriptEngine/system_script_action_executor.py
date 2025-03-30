@@ -834,6 +834,14 @@ class SystemScriptActionExecutor:
             pre_log += 'Writing inputs to variable: ' + action["actionData"]["outputVarName"]
             script_logger.get_action_log().add_pre_file('text', 'inputs.txt', pre_log)
             script_logger.log(pre_log)
+            globals = {
+                'glob': glob,
+                'datetime': datetime,
+                'os' : os,
+                'platform' : platform,
+                'shutil' : shutil,
+                'numpy' : np
+            }
             file_path = state_eval(action["actionData"]["filePath"], globals, state)
             output_var_name = action["actionData"]["outputVarName"]
             file_properties = ''
