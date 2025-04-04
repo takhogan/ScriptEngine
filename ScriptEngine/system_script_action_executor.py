@@ -8,7 +8,13 @@ warnings.filterwarnings(
 )
 warnings.filterwarnings(
     "ignore",
-    message=r"Neither CUDA nor MPS are available.*"
+    message=r"Neither CUDA nor MPS are available.*",
+    category=UserWarning
+)
+warnings.filterwarnings(
+    "ignore",
+    message="Neither CUDA nor MPS are available - defaulting to CPU. Note: This module is much faster with a GPU.",
+    category=UserWarning
 )
 
 import numpy as np
