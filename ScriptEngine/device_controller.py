@@ -222,6 +222,7 @@ async def read_input(device_controller: DeviceController):
         if not input_line:  # EOF, if the pipe is closed
             break
         inputs = input_line.strip().split('###')
+        script_logger.log('DEVICE CONTROLLER PROCESS: split inputs ', inputs)
         inputs = inputs[0:2] + inputs[2].split(' ')
         script_logger.log('DEVICE CONTROLLER PROCESS: received inputs ', inputs)
         if len(inputs) > 2:
