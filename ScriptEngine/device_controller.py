@@ -164,6 +164,7 @@ class DeviceController:
         elif device_action == 'screen_capture':
             status = self.get_device_action(device_type, 'get_status', device_params)()
             if status == 'offline':
+                script_logger.log('DEVICE CONTROLLER: device is offline')
                 return {
 
                 }
@@ -216,16 +217,18 @@ class DeviceController:
 
 async def read_input(device_controller: DeviceController):
     script_logger.log("DEVICE CONTROLLER PROCESS: listening for input")
+    input_line = ''
     while True:
-        input_line = await asyncio.to_thread(sys.stdin.readline)
+        input_line += await asyncio.to_thread(sys.stdin.readline)
         # Process the input
         if not input_line:  # EOF, if the pipe is closed
             break
         inputs = input_line.strip().split('###')
         if len(inputs) <= 2:
-            script_logger.log('DEVICE CONTROLLER PROCESS: received inputs ', inputs)
+            script_logger.log('DEVICE CONTROLLER PROCESS: received partial inputs ', inputs)
             continue
         inputs = inputs[0:2] + inputs[2].split(' ')
+        input_line = ''
         script_logger.log('DEVICE CONTROLLER PROCESS: received inputs ', inputs)
         if len(inputs) > 2:
             try:
@@ -238,7 +241,7 @@ async def read_input(device_controller: DeviceController):
             input_response = json.dumps(output)
             script_logger.log('DEVICE CONTROLLER: Sending response for {}'.format(inputs[0]), flush=True)
             script_logger.log('<--{}-->'.format(inputs[0]) + input_response + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
-            # script_logger.log('DEVICE CONTROLLER: response', input_response, flush=True)
+            script_logger.log('DEVICE CONTROLLER: response', input_response, flush=True)
             script_logger.log('DEVICE CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
 
 async def device_controller_main(device_controller: DeviceController):
