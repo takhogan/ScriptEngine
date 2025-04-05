@@ -162,12 +162,6 @@ class DeviceController:
                 "data": status
             }
         elif device_action == 'screen_capture':
-            status = self.get_device_action(device_type, 'get_status', device_params)()
-            if status == 'offline':
-                script_logger.log('DEVICE CONTROLLER: device is offline')
-                return {
-
-                }
             screenshot = self.get_device_action(device_type, 'screenshot', device_params)()
             from cv2 import imencode
             _, buffer = imencode('.jpg', screenshot)
@@ -177,22 +171,12 @@ class DeviceController:
                 "data": base64_encoded_string
             }
         elif device_action == "click":
-            status = self.get_device_action(device_type, 'get_status', device_params)()
-            if status == 'offline':
-                return {
-
-                }
             # process_adb_host.get_screen_orientation()
             self.get_device_action(device_type, 'click', device_params)(int(float(inputs[3])), int(float(inputs[4])), 'left')
             return {
                 "data" : "success"
             }
         elif device_action == "click_and_drag":
-            status = self.get_device_action(device_type, 'get_status', device_params)()
-            if status == 'offline':
-                return {
-
-                }
             # process_adb_host.get_screen_orientation()
             self.get_device_action(device_type, 'click_and_drag', device_params)(
                 int(float(inputs[3])), int(float(inputs[4])), int(float(inputs[5])), int(float(inputs[6]))
@@ -201,11 +185,6 @@ class DeviceController:
                 "data" : "success"
             }
         elif device_action == "send_keys":
-            status = self.get_device_action(device_type, 'get_status', device_params)()
-            if status == 'offline':
-                return {
-
-                }
             DeviceActionInterpreter.parse_keyboard_action(
                 self, json.loads(inputs[3]), {}, {}
             )
@@ -241,7 +220,7 @@ async def read_input(device_controller: DeviceController):
             input_response = json.dumps(output)
             script_logger.log('DEVICE CONTROLLER: Sending response for {}'.format(inputs[0]), flush=True)
             script_logger.log('<--{}-->'.format(inputs[0]) + input_response + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
-            script_logger.log('DEVICE CONTROLLER: response', input_response, flush=True)
+            # script_logger.log('DEVICE CONTROLLER: response', input_response, flush=True)
             script_logger.log('DEVICE CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
 
 async def device_controller_main(device_controller: DeviceController):
