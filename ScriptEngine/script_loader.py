@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import glob
 import cv2
 import numpy as np
@@ -149,7 +150,7 @@ def parse_zip(script_name, system_script=False):
             use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
             if use_library_scripts:
                 script_logger.log('mode use_library_scripts not supported for zip file, extract zip file to a directory')
-                exit(1)
+                sys.exit(1)
             script_obj['props']["script_path"] = script_file_path
             script_obj['props']["script_name"] = script_name
             include_scripts = {}

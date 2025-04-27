@@ -25,6 +25,7 @@ import time
 import glob
 import datetime
 import os
+import sys
 import platform
 import shutil
 
@@ -721,7 +722,7 @@ class SystemScriptActionExecutor:
                     pre_log + '\n' + mid_log + '\n' + post_log
                 )
                 status = ScriptExecutionState.ERROR
-                exit(0)
+                sys.exit(0)
             else:
                 script_logger.log('return statement type not implemented', action["actionData"]["returnStatementType"])
                 raise Exception('return statement type not implemented')
@@ -739,7 +740,7 @@ class SystemScriptActionExecutor:
                 pass
             if action["actionData"]["exitProgram"]:
                 script_logger.log('exiting program')
-                exit(0)
+                sys.exit(0)
             status = ScriptExecutionState.FINISHED_FAILURE
             with open(script_logger.get_log_path_prefix() + '-return-failure.txt', 'w') as log_file:
                 log_file.write('returning failure state')

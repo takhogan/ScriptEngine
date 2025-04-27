@@ -23,12 +23,12 @@ class ShellScriptHelper:
         )
         script_logger.log(pre_log_2)
         if action["actionData"]["openInNewWindow"]:
-            run_command = "start cmd /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
+            run_command = f"start cmd /D {cwd} /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
 
             mid_log = 'Running command {} using os.system'.format(run_command)
             script_logger.log(mid_log)
 
-            return_code = os.system("cd {};".format(cwd) + run_command)
+            return_code = os.system(run_command)
 
             post_log = 'Command completed successfully'
             script_logger.log(post_log)
