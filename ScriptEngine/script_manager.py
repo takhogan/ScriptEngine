@@ -186,7 +186,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
             asyncio.run(close_threads_and_processes(io_executor, process_executor))
     script_logger.log('Script Manager process completed')
     if errored:
-        exit(1)
+        sys.exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())
     # update_running_scripts_file(script_name, 'pop')
 

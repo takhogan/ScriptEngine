@@ -1,6 +1,8 @@
 import datetime
 import threading
 import uuid
+import queue
+import time
 
 from ScriptEngine.common.logging.script_action_log import ScriptActionLog
 
@@ -10,6 +12,9 @@ thread_local_storage = threading.local()
 class ScriptLogger:
     _instance = None
     log_path = 'stdout.txt'
+    _write_queue = queue.Queue()
+    _writer_thread = None
+    _writer_running = False
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -21,8 +26,38 @@ class ScriptLogger:
             cls._instance.log_folder_path = None
             cls._instance.log_header = None
             cls._instance.log_level = 'info'
+            cls._instance._start_writer_thread()
 
         return cls._instance
+
+    def _start_writer_thread(self):
+        if not self._writer_thread or not self._writer_thread.is_alive():
+            self._writer_running = True
+            self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
+            self._writer_thread.start()
+
+    def _writer_loop(self):
+        while self._writer_running:
+            try:
+                # Get message from queue with a timeout to allow for clean shutdown
+                message = self._write_queue.get(timeout=1)
+                if message is None:
+                    break
+                
+                # Write to file
+                with open(self.log_file_path, 'a', encoding='utf-8', errors='replace') as log_file:
+                    log_file.write(message)
+                    log_file.flush()
+            except queue.Empty:
+                continue
+            except Exception as e:
+                print(f"Error in writer thread: {e}")
+                time.sleep(1)  # Prevent tight loop on errors
+
+    def __del__(self):
+        self._writer_running = False
+        if self._writer_thread:
+            self._writer_thread.join(timeout=1)
 
     @classmethod
     def get_instance(cls):
@@ -93,12 +128,9 @@ class ScriptLogger:
             self.log_header if log_header else ''
         ) + ' ' + sep.join(map(str, args)) + end
 
-        # Write to file with UTF-8 encoding
+        # Queue the message for non-blocking file writing
         if file is None:
-            with open(self.log_file_path, 'a', encoding='utf-8', errors='replace') as log_file:
-                log_file.write(text)
-                if flush:
-                    log_file.flush()
+            self._write_queue.put(text)
         else:
             file.write(text)
             if flush:

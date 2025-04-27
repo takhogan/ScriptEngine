@@ -401,8 +401,10 @@ class ScriptExecutor:
                         return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
                     ref_script = parse_zip(script_details[0], system_script)
                 elif script_name in self.include_scripts:
+                    script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading script from memory', script_name)
                     ref_script = self.include_scripts[script_name]
                 else:
+                    script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading script from disk', script_name, ' include_scripts: ', ','.join(list(self.include_scripts.keys())))
                     ref_script = parse_zip(script_name, False)
                     if self.context['script_memory_mode'] != 'low':
                         self.include_scripts[script_name] = ref_script
@@ -544,7 +546,7 @@ class ScriptExecutor:
         end_branch = False
         script_logger.log('-----' + self.props['script_name'] + ' CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches" + '-----')
         if datetime.datetime.now().astimezone(tz=tz.tzutc()) > self.timeout:
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script timeout - ', datetime.datetime.now())
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script has timed out - script timeout - ', datetime.datetime.now())
             self.status_detail = ScriptExecutionStatusDetail.TIMED_OUT
             return end_branch,True
 
