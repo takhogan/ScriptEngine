@@ -107,7 +107,8 @@ class ScriptExecutor:
             'success_states': None,
             'mouse_down': False,
             'run_actions_complete' : None,
-            'skip_input_parsing' : None
+            'skip_input_parsing' : None,
+            'script_memory_mode' : 'normal'
         }
         if context is not None:
             self.context.update(context)
@@ -358,6 +359,7 @@ class ScriptExecutor:
 
     def handle_script_reference(self, action, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List]:
         if action["actionName"] == 'scriptReference':
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: initializing script reference object', action['actionData']['scriptName'])
             is_new_script = "initializedScript" not in action["actionData"] or action["actionData"]["initializedScript"] is None
             
             if not is_new_script:
@@ -386,6 +388,7 @@ class ScriptExecutor:
 
             # creates script engine object
             if is_new_script:
+                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: creating new script object', action['actionData']['scriptName'])
                 script_name = action["actionData"]["scriptName"].strip()
                 if script_name[0] == '{' and script_name[-1] == '}':
                     script_name = state_eval(script_name[1:-1], {}, self.state)
@@ -401,6 +404,8 @@ class ScriptExecutor:
                     ref_script = self.include_scripts[script_name]
                 else:
                     ref_script = parse_zip(script_name, False)
+                    if self.context['script_memory_mode'] != 'low':
+                        self.include_scripts[script_name] = ref_script
                 # script_logger.log(' state (3) : ', state)
 
                 child_context["actionOrder"] = action["actionData"]["actionOrder"] if "actionOrder" in action["actionData"] else "sequential"
@@ -428,11 +433,16 @@ class ScriptExecutor:
                     screen_plan_server_attached=self.screen_plan_server_attached
                 )
             else:
+                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: rewinding existing script object', action['actionData']['scriptName'])
+
                 action["actionData"]["initializedScript"].rewind(child_state)
                 ref_script_executor = action["actionData"]["initializedScript"]
 
                 ref_script_executor.context["script_counter"] = self.context["script_counter"]
                 ref_script_executor.context["script_timer"] = self.context["script_timer"]
+            
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: configuring script action log', action['actionData']['scriptName'])
+
             self.script_action_log = script_logger.get_action_log()
             ref_script_executor.set_parent_action_log(self.script_action_log)
             child_log_folder = ref_script_executor.create_log_folders(
@@ -444,9 +454,10 @@ class ScriptExecutor:
                 self.context['skip_input_parsing'] = None
             else:
                 ref_script_executor.parse_inputs(state)
+            
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing child script', action['actionData']['scriptName'])
             ref_script_executor.set_log_paths()
 
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing child script', action['actionData']['scriptName'])
 
             if action["actionData"]["runMode"] == "run":
                 ref_script_executor.run()
