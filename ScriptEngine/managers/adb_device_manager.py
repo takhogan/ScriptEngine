@@ -517,10 +517,10 @@ class ADBDeviceManager(DeviceManager):
         return self.screen_orientation
 
     def run_kill_command(self):
-        return subprocess.run(self.adb_path + ' kill-server', cwd="/", shell=True, timeout=15)
+        return subprocess.run([self.adb_path, 'kill-server'], cwd="/", shell=False, timeout=15)
 
     def run_start_command(self):
-        return subprocess.run(self.adb_path + ' start-server', cwd="/", shell=True, timeout=15)
+        return subprocess.run([self.adb_path, 'start-server'], cwd="/", shell=False, timeout=15)
 
 
     def restart_adb(self):
@@ -561,9 +561,9 @@ class ADBDeviceManager(DeviceManager):
                     self.window_name = instance_window_name
 
                     check_for_window = lambda window_name: "HD-Player" in bytes.decode(subprocess.run(
-                        'tasklist /FI "WINDOWTITLE eq {}"'.format(window_name),
+                        ['tasklist', '/FI', f'WINDOWTITLE eq {window_name}'],
                         capture_output=True,
-                        shell=True
+                        shell=False
                     ).stdout, 'utf-8')
 
 
