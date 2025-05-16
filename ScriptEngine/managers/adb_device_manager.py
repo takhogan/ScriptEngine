@@ -358,9 +358,8 @@ class ADBDeviceManager(DeviceManager):
                 self.device_name
             )
             start_device_process = subprocess.Popen(
-                start_device_command,
+                [self.emulator_path, '--instance', self.device_name],
                 cwd="/",
-                shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
