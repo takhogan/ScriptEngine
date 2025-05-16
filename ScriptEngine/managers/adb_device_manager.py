@@ -1,5 +1,3 @@
-
-
 import threading
 import datetime
 import queue
@@ -7,9 +5,6 @@ import subprocess
 import os
 import platform
 import re
-
-
-
 
 from configobj import ConfigObj 
 from PIL import Image
@@ -430,29 +425,23 @@ class ADBDeviceManager(DeviceManager):
                     self.device_name
                 ))
                 self.window_name = instance_window_name
-                stop_device_command = 'taskkill /fi "WINDOWTITLE eq {}" /IM "HD-Player.exe" /F'.format(
-                    self.window_name
-                )
+                stop_device_command = ['taskkill', '/fi', f'WINDOWTITLE eq {self.window_name}', '/IM', 'HD-Player.exe', '/F']
                 script_logger.log('ADB CONTROLLER: stopping device', self.device_name, 'with command', stop_device_command)
 
                 stop_device_process = subprocess.run(
                     stop_device_command,
                     cwd="/",
-                    shell=True,
                     capture_output=True,
                     timeout=15
                 )
 
-                stop_device_command = 'adb -s emulator-{} emu kill'.format(
-                    self.adb_port
-                )
+                stop_device_command = [self.adb_path, '-s', f'emulator-{self.adb_port}', 'emu', 'kill']
 
                 script_logger.log('ADB CONTROLLER: stopping adb instance', self.device_name, 'with command', stop_device_command)
 
                 stop_device_process = subprocess.run(
                     stop_device_command,
                     cwd="/",
-                    shell=True,
                     capture_output=True,
                     timeout=15
                 )
@@ -480,7 +469,7 @@ class ADBDeviceManager(DeviceManager):
             'ADB CONTROLLER: stopped device',
             self.device_name,
             'with command',
-            stop_device_command,
+            ' '.join(stop_device_command),
             'with result',
             stop_device_process.returncode,
             stop_device_process
