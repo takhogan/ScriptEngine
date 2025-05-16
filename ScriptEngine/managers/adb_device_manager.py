@@ -199,7 +199,7 @@ class ADBDeviceManager(DeviceManager):
                     emulator_path = os.path.join(user_home, 'Android', 'Sdk', 'emulator', 'emulator.exe')
                 elif os_name == 'Darwin':
                     user_home = os.path.expanduser("~")
-                    emulator_path = os.path.join(user_home, 'Library/Android/sdk/emulator/emulator')
+                    emulator_path = os.path.join(user_home, 'Library/Android/sdk/emulator/')
                 elif os_name == 'Linux':
                     user_home = os.path.expanduser("~")
                     emulator_path = os.path.join(user_home, 'Android/Sdk/emulator/emulator')
@@ -380,9 +380,8 @@ class ADBDeviceManager(DeviceManager):
                 )
             elif os_name == 'Darwin' or os_name == 'Linux':
                 start_device_process = subprocess.Popen(
-                    '"{}" -avd "{}"'.format(self.emulator_path, self.device_name),
-                    cwd="/",  # You can change this to the actual working directory if needed
-                    shell=True,
+                    ['./emulator', '-avd', self.device_name],
+                    cwd=self.emulator_path,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     preexec_fn=os.setsid
@@ -435,6 +434,8 @@ class ADBDeviceManager(DeviceManager):
                 stop_device_command = 'taskkill /fi "WINDOWTITLE eq {}" /IM "HD-Player.exe" /F'.format(
                     self.window_name
                 )
+                script_logger.log('ADB CONTROLLER: stopping device', self.device_name, 'with command', stop_device_command)
+
                 stop_device_process = subprocess.run(
                     stop_device_command,
                     cwd="/",
@@ -446,6 +447,8 @@ class ADBDeviceManager(DeviceManager):
                 stop_device_command = 'adb -s emulator-{} emu kill'.format(
                     self.adb_port
                 )
+
+                script_logger.log('ADB CONTROLLER: stopping adb instance', self.device_name, 'with command', stop_device_command)
 
                 stop_device_process = subprocess.run(
                     stop_device_command,
@@ -709,8 +712,8 @@ class ADBDeviceManager(DeviceManager):
         script_logger = ScriptLogger.get_logger()
         try:
             device_list = subprocess.run(
-                self.adb_path + ' devices ',
-                cwd="/", shell=True, capture_output=True, timeout=15
+                [self.adb_path, 'devices'], 
+                cwd="/", capture_output=True, timeout=15
             )
             devices_output = bytes.decode(device_list.stdout, 'utf-8').splitlines()
         except subprocess.TimeoutExpired as t:
