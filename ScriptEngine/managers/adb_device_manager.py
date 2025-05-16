@@ -563,7 +563,6 @@ class ADBDeviceManager(DeviceManager):
                     check_for_window = lambda window_name: "HD-Player" in bytes.decode(subprocess.run(
                         ['tasklist', '/FI', f'WINDOWTITLE eq {window_name}'],
                         capture_output=True,
-                        shell=False
                     ).stdout, 'utf-8')
 
 
@@ -679,9 +678,8 @@ class ADBDeviceManager(DeviceManager):
         script_logger = ScriptLogger.get_logger()
         script_logger.log('connecting to device', self.full_ip)
         return subprocess.run(
-            self.adb_path + ' connect ' + self.full_ip, 
+            [self.adb_path, 'connect', self.full_ip], 
             cwd="/", 
-            shell=True, 
             timeout=30
         )
 
@@ -689,9 +687,8 @@ class ADBDeviceManager(DeviceManager):
         script_logger = ScriptLogger.get_logger()
         script_logger.log('disconnecting from device', self.full_ip)
         return subprocess.run(
-            self.adb_path + ' disconnect ' + self.full_ip, 
+            [self.adb_path, 'disconnect', self.full_ip], 
             cwd="/", 
-            shell=True, 
             timeout=30,
             stderr=subprocess.STDOUT
         )
@@ -795,9 +792,8 @@ class ADBDeviceManager(DeviceManager):
 
             try:
                 process = subprocess.Popen(
-                    screenshot_command,
+                    [self.adb_path, '-s', self.full_ip, 'exec-out', 'screencap', '-p'],
                     cwd="/",
-                    shell=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE
                 )
@@ -824,9 +820,8 @@ class ADBDeviceManager(DeviceManager):
             script_logger.log('ADB CONTROLLER', 'taking screenshot', 'with command', screenshot_command)
             try:
                 process = subprocess.Popen(
-                    screenshot_command,
+                    [self.adb_path, '-s', self.full_ip, 'exec-out', 'screencap'],
                     cwd="/",
-                    shell=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE
                 )
