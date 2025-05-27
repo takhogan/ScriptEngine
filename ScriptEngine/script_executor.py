@@ -914,7 +914,7 @@ class ScriptExecutor:
             self.context["action"] = action
             self.context["action_group"] = action["actionGroup"]
             child_actions = self.get_children(action)
-            interrupt_command = self.process_engine_interrupts()
+            interrupt_command = "none"#self.process_engine_interrupts()
             if interrupt_command == "return":
                 self.status = ScriptExecutionState.FINISHED
                 self.context['parent_action'] = action
