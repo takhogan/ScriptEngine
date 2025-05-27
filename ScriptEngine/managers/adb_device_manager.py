@@ -365,9 +365,8 @@ class ADBDeviceManager(DeviceManager):
             if os_name == 'Windows':
                 DETACHED_PROCESS = 0x00000008
                 start_device_process = subprocess.Popen(
-                    start_device_command,
+                    [self.emulator_path, '-avd', self.device_name],
                     cwd="/",  # You can change this to the actual working directory if needed
-                    shell=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     creationflags=DETACHED_PROCESS
@@ -451,13 +450,10 @@ class ADBDeviceManager(DeviceManager):
             devices = self.get_device_name_to_emulator_name_mapping()
             if self.device_name in devices:
                 self.full_ip = devices[self.device_name]
-                stop_device_command = 'adb -s {} emu kill'.format(
-                    self.full_ip
-                )
+                stop_device_command = [self.adb_path, '-s', self.full_ip, 'emu', 'kill']
                 stop_device_process = subprocess.run(
                     stop_device_command,
                     cwd="/",
-                    shell=True,
                     capture_output=True,
                     timeout=15
                 )
@@ -978,9 +974,7 @@ class ADBDeviceManager(DeviceManager):
                 self.commands["syn_mt_report"],
                 self.commands["action_terminate_command"]
             ]
-            # init_click_commands = [commandlet for command in init_click_commands for commandlet in command.split(' ')]
-            # script_logger.log(init_click_commands)
-            # subprocess.run(init_click_commands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            
             click_command += ['('] + init_click_commands + [') && ']
             n_events = np.random.geometric(p=0.739)
             if important:
