@@ -434,10 +434,13 @@ class ADBDeviceManager(DeviceManager):
                     timeout=15
                 )
 
+                device_list = self.get_device_list_output()
+                script_logger.log('ADB CONTROLLER: device list', device_list)
+
                 stop_device_command = [self.adb_path, '-s', f'emulator-{self.adb_port}', 'emu', 'kill']
 
                 script_logger.log('ADB CONTROLLER: stopping adb instance', self.device_name, 'with command', stop_device_command)
-
+    
                 stop_device_process = subprocess.run(
                     stop_device_command,
                     cwd="/",
