@@ -910,7 +910,7 @@ class ADBDeviceManager(DeviceManager):
             script_logger.log('key not found!', key)
             return
         keycode = KEY_TO_KEYCODE[key]
-        key_input_string = "input keyevent \"{}\"".format(keycode)
+        key_input_string = "input keyevent {}".format(keycode)
         shell_process = subprocess.Popen([
             self.adb_path,
             '-s',
@@ -918,6 +918,8 @@ class ADBDeviceManager(DeviceManager):
             'shell'
         ],
         stdin=subprocess.PIPE)
+        script_logger.log('ADB CONTROLLER: sending key event', key_input_string)
+
         shell_process.communicate(key_input_string.encode('utf-8'))
 
     def hotkey(self, keys):
