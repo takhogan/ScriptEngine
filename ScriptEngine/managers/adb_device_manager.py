@@ -89,7 +89,7 @@ KEY_TO_KEYCODE = {
     "f10": "KEYCODE_F10",
     "f11": "KEYCODE_F11",
     "f12": "KEYCODE_F12",
-    "home": "KEYCODE_MOVE_HOME",
+    "home": "KEYCODE_HOME",
     "insert": "KEYCODE_INSERT",
     "left": "KEYCODE_DPAD_LEFT",
     "menu": "KEYCODE_MENU",
