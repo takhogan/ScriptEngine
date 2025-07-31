@@ -309,12 +309,6 @@ class ImageMatcher:
                         2
                     )
         else:
-            script_logger.log('@ drawing', (matches[0]['point'][0] - source_match_point[0], matches[0]['point'][1] - source_match_point[1]),
-                (
-                    matches[0]['point'][0] + w - source_match_point[0],
-                    matches[0]['point'][1] + h - source_match_point[1],
-                ), (0, 0, int(255 * matches[0]['score'])), 2)
-
             cv2.rectangle(
                 screencap_im_bgr,
                 (matches[0]['point'][0] - source_match_point[0], matches[0]['point'][1] - source_match_point[1]),
@@ -323,7 +317,6 @@ class ImageMatcher:
                     matches[0]['point'][1] + h - source_match_point[1],
                 ), (0, 0, int(255 * matches[0]['score'])), 2
             )
-            cv2.imwrite('testimg{}'.format(random.randint(0, 1000000)) + '.png', screencap_im_bgr)
 
         result_log = 'Best valid match: {} with score {}\n'.format(
             str(best_point),
