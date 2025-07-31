@@ -27,6 +27,8 @@ class DesktopDeviceManager(DeviceManager):
         script_logger.log('Initializing Python Host')
         self.width = None
         self.height = None
+        self.click_width = None
+        self.click_height = None
         self.props = props
         self.click_path_generator = None
 
@@ -39,7 +41,12 @@ class DesktopDeviceManager(DeviceManager):
         else:
             self.dummy_mode = False
         
+        self.scale_factor = 1
+        
         self.sct = mss.mss()
+    
+    def set_scale_factor(self, scale_factor):
+        self.scale_factor = scale_factor
 
     def ensure_device_initialized(self):
         if self.width is None or self.height is None:
@@ -52,16 +59,22 @@ class DesktopDeviceManager(DeviceManager):
                 return
             script_logger.log('PythonHostController: Taking screenshot to initialize python host')
             host_dimensions = pyautogui.size()
-            self.width = host_dimensions.width
-            self.height = host_dimensions.height
+            self.click_width = host_dimensions.width
+            self.click_height = host_dimensions.height
+            
             self.xmax = self.width
             self.ymax = self.height
             height, width, _ = np.array(pyautogui.screenshot()).shape
+            self.width = width
+            self.height = height
             if (not is_null(self.props['width']) and (self.props['width'] != width)) or \
                     (not is_null(self.props['height']) and self.props['height'] != height):
                 script_logger.log('Warning: python host dims mismatch, expected : ', self.props['height'],
                                   self.props['width'],
                                   'observed :', height, width)
+            if self.width != self.click_width or self.height != self.click_height:
+                script_logger.log('Difference detected between screenshot dims and clickable dims, setting scale factor to {}'.format(self.click_width / self.width))
+                self.scale_factor =  self.click_width / self.width
             self.props['width'] = width
             self.props['height'] = height
             self.click_path_generator = ClickPathGenerator(2, 3, self.width, self.height, 45, 0.4)
@@ -111,6 +124,9 @@ class DesktopDeviceManager(DeviceManager):
         #     x = (self.width / self.props['width']) * x
         #     y = (self.height / self.props['height']) * y
         #     script_logger.log('mouse_up: adjusted coords for pyautogui', x, y, flush=True)
+        x = int(x * self.scale_factor)
+        y = int(y * self.scale_factor)
+
         current_position = pyautogui.position()
         if current_position != (x, y):
             self.smooth_move(*current_position, x, y)
@@ -126,6 +142,9 @@ class DesktopDeviceManager(DeviceManager):
         #     x = (self.width / self.props['width']) * x
         #     y = (self.height / self.props['height']) * y
         #     script_logger.log('mouse_down: adjusted coords for pyautogui', x, y, flush=True)
+        x = int(x * self.scale_factor)
+        y = int(y * self.scale_factor)
+
         current_position = pyautogui.position()
         if current_position != (x, y):
             self.smooth_move(*current_position, x, y)
@@ -141,10 +160,17 @@ class DesktopDeviceManager(DeviceManager):
         #     x = (self.width / self.props['width']) * x
         #     y = (self.height / self.props['height']) * y
         #     script_logger.log('scroll: adjusted coords for pyautogui', x, y, flush=True)
+        x = int(x * self.scale_factor)
+        y = int(y * self.scale_factor)
         pyautogui.moveTo(x, y)
         pyautogui.scroll(distance)
 
-
+    # if the dimensions of your source image are different from the dimensions of pyautogui
+    # desktop device manager will not scale to coordinates for you
+    # you need to identify what the scale factor is and do this yourself
+    # desktop device manager will not be aware of what your source image is
+    # however if the dimensions of screenshot and the dimensions of the space clickable is different
+    # desktop device manager will automatically scale
     def click(self, x, y, button):
         self.ensure_device_initialized()
         if self.dummy_mode:
@@ -154,6 +180,10 @@ class DesktopDeviceManager(DeviceManager):
         #     x = (self.width / self.props['width']) * x
         #     y = (self.height / self.props['height']) * y
         #     script_logger.log('clickAction: adjusted coords for pyautogui', x, y, flush=True)
+        
+        x = int(x * self.scale_factor)
+        y = int(y * self.scale_factor)
+        
         pyautogui.click(x=x, y=y, button=button)
 
     def smooth_move(self, source_x, source_y, target_x, target_y, drag=False, button='left'):
@@ -164,10 +194,15 @@ class DesktopDeviceManager(DeviceManager):
         #     target_x = (self.width / self.props['width']) * target_x
         #     target_y = (self.height / self.props['height']) * target_y
         #     script_logger.log('smooth_move: adjusted coords for pyautogui', source_x, source_y, target_x, target_y, flush=True)
-        frac_source_x = (source_x / self.width)
-        frac_target_x = (target_x / self.width)
-        frac_source_y = (source_y / self.height)
-        frac_target_y = (target_y / self.height)
+        source_x = int(source_x * self.scale_factor)
+        source_y = int(source_y * self.scale_factor)
+        target_x = int(target_x * self.scale_factor)
+        target_y = int(target_y * self.scale_factor)
+        
+        frac_source_x = (source_x / self.click_width)
+        frac_target_x = (target_x / self.click_width)
+        frac_source_y = (source_y / self.click_height)
+        frac_target_y = (target_y / self.click_height)
         delta_x, delta_y = self.click_path_generator.generate_click_path(
             frac_source_x, frac_source_y,
             frac_target_x, frac_target_y
