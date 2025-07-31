@@ -279,7 +279,6 @@ class ImageMatcher:
         threshold = float(detectObject['actionData']['threshold'])
 
         # draw red box around best match
-        script_logger.log('@ detectActionType', detectObject['actionData']['detectActionType'])
         if detectObject['actionData']['detectActionType'] == "floatingObject":
             if len(matches) > 0:
                 best_point = matches[0]['point']
