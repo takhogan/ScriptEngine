@@ -393,20 +393,20 @@ class DetectObjectHelper:
         if script_logger.get_log_level() == 'info':
             script_logger.log('DetectObjectHelper: starting detect object log thread')
             thread_script_logger = script_logger.copy()
-            def catch_err():
-                try:
-                    DetectObjectHelper.create_detect_action_log_images(thread_script_logger, action, log_obj)
-                except Exception as e:
-                    import traceback
-                    traceback.print_exc()
-                    script_logger.log('Error creating detect action log images', e)
-            io_executor.submit(catch_err)
-            # io_executor.submit(
-            #     DetectObjectHelper.create_detect_action_log_images,
-            #     thread_script_logger,
-            #     action,
-            #     log_obj
-            # )
+            # def catch_err():
+            #     try:
+            #         DetectObjectHelper.create_detect_action_log_images(thread_script_logger, action, log_obj)
+            #     except Exception as e:
+            #         import traceback
+            #         traceback.print_exc()
+            #         script_logger.log('Error creating detect action log images', e)
+            # io_executor.submit(catch_err)
+            io_executor.submit(
+                DetectObjectHelper.create_detect_action_log_images,
+                thread_script_logger,
+                action,
+                log_obj
+            )
 
         if len(matches) > 0:
             status = ScriptExecutionState.SUCCESS
