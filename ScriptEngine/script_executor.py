@@ -221,17 +221,12 @@ class ScriptExecutor:
                     )
                     input_log_file.write(str(type(self.state[var_name])) + ' ' + str(var_name) + ': ' + str(self.state[var_name]) + '\n')
                     continue
-                globs = {
-                    'glob' : glob,
-                    'datetime' : datetime,
-                    're' : re
-                }
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Input: ', var_name,
                                   " Default Parameter? ", default_value,
                                   " Overwriting Default? False" if default_value else "")
                 state_copy = self.state.copy()
                 state_copy.update(input_state)
-                eval_result = state_eval(input_expression, globs, state_copy)
+                eval_result = state_eval(input_expression, {}, state_copy)
                 self.state[var_name] = eval_result
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Input: ', var_name,
                                     " Value: ", eval_result)
@@ -268,16 +263,11 @@ class ScriptExecutor:
                     )
                     outputs_log_file.write(str(type(outputState[var_name])) + ' ' + str(var_name) + ': ' + str(outputState[var_name]) + '\n')
                     continue
-                globs = {
-                    'glob': glob,
-                    'datetime': datetime,
-                    're': re
-                }
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Output: ', var_name,
                                   " Default Parameter? ", default_value,
                                   " Overwriting Default? False" if default_value else "")
                 state_copy = self.state.copy()
-                eval_result = state_eval(input_expression, globs, state_copy, crashonerror=self.status !=ScriptExecutionState.FINISHED_FAILURE)
+                eval_result = state_eval(input_expression, {}, state_copy, crashonerror=self.status !=ScriptExecutionState.FINISHED_FAILURE)
                 outputState[var_name] = eval_result
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Output: ', var_name,
                                   " Value: ", eval_result)
