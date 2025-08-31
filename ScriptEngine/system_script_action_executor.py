@@ -28,6 +28,9 @@ import os
 import sys
 import platform
 import shutil
+import random
+import math
+import collections
 
 
 from .helpers.detect_object_helper import DetectObjectHelper
@@ -88,15 +91,8 @@ class SystemScriptActionExecutor:
             statement_strip = sanitize_input(condition, state)
             pre_log = 'condition: {} {}'.format(condition, statement_strip)
             script_logger.log(pre_log)
-            globals = {
-                'glob': glob,
-                'datetime': datetime,
-                'os' : os,
-                'platform' : platform,
-                'shutil' : shutil,
-                'numpy' : np
-            }
-            if state_eval('(' + condition + ')',globals, state):
+            
+            if state_eval('(' + condition + ')',{}, state):
                 post_log = 'condition successful'
                 script_logger.log(post_log)
                 status = ScriptExecutionState.SUCCESS
@@ -148,15 +144,7 @@ class SystemScriptActionExecutor:
 
                 expression = action["actionData"]["inputExpression"].replace("\n", " ")
                 if action["actionData"]["inputParser"] == 'eval':
-                    globals = {
-                        'glob': glob,
-                        'datetime': datetime,
-                        'os' : os,
-                        'platform' : platform,
-                        'shutil' : shutil,
-                        'numpy' : np
-                    }
-                    expression = state_eval(expression, globals, state)
+                    expression = state_eval(expression, {}, state)
                 elif action["actionData"]["inputParser"] == "jsonload":
                     expression = json.loads(expression)
                 late_mid_log = 'parse result: ' + str(expression)
@@ -576,7 +564,7 @@ class SystemScriptActionExecutor:
 
                 if self.easy_ocr_reader is None:
                     script_logger.log('initializing easyOCR model...')
-                    self.easy_ocr_reader = easyocr.Reader(['en'])
+                    self.easy_ocr_reader = easyocr.Reader(['en'], verbose=False)
                     script_logger.log('easyOCR model initialized')
 
                 script_logger.log('parsing text from image...')
@@ -816,8 +804,15 @@ class SystemScriptActionExecutor:
                 'glob': glob,
                 'datetime': datetime,
                 'os' : os,
+                'sys' : sys,
+                'platform' : platform,
                 'shutil' : shutil,
-                'numpy' : np
+                'numpy' : np,
+                're' : re,
+                'json' : json,
+                'random' : random,
+                'math' : math,
+                'collections' : collections
             }
 
 
@@ -841,15 +836,8 @@ class SystemScriptActionExecutor:
             pre_log += 'Writing inputs to variable: ' + action["actionData"]["outputVarName"]
             script_logger.get_action_log().add_pre_file('text', 'inputs.txt', pre_log)
             script_logger.log(pre_log)
-            globals = {
-                'glob': glob,
-                'datetime': datetime,
-                'os' : os,
-                'platform' : platform,
-                'shutil' : shutil,
-                'numpy' : np
-            }
-            file_path = state_eval(action["actionData"]["filePath"], globals, state)
+            
+            file_path = state_eval(action["actionData"]["filePath"], {}, state)
             output_var_name = action["actionData"]["outputVarName"]
             file_properties = ''
             if action["actionData"]["fileActionType"] in ["w", "wb", "a"]:
@@ -925,7 +913,7 @@ class SystemScriptActionExecutor:
                                     "value": state_eval(action["actionData"]["value"], {}, state)
                                     }
                     else:
-                        new_item = state_eval(action["actionData"]["value"], state.copy())
+                        new_item = state_eval(action["actionData"]["value"], {} state.copy())
                     result = collection.insert_one(new_item)
                 elif action["actionData"]["actionType"] == "update" or\
                         action["actionData"]["actionType"] == "upsert":

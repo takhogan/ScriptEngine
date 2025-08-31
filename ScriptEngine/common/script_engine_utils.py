@@ -1,6 +1,14 @@
 import math
 import os
 import json
+import random
+import shutil
+import sys
+import platform
+import datetime
+import numpy as np
+import glob
+import collections
 from dateutil import tz
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
@@ -200,6 +208,20 @@ def get_running_scripts():
     return running_scripts
 
 def state_eval(statement, globals, locals, crashonerror=True):
+    globals = {
+        'glob': glob,
+        'datetime': datetime,
+        'os' : os,
+        'sys' : sys,
+        'platform' : platform,
+        'shutil' : shutil,
+        'numpy' : np,
+        're' : re,
+        'json' : json,
+        'random' : random,
+        'math' : math,
+        'collections' : collections
+    }
     globals.update(locals)
     try:
         return eval(statement, globals, locals)
