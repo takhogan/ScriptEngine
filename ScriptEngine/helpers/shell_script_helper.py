@@ -1,6 +1,6 @@
 import subprocess
 import os
-
+import platform
 
 from ScriptEngine.common.script_engine_utils import apply_state_to_cmd_str
 from ScriptEngine.common.logging.script_logger import ScriptLogger
@@ -23,7 +23,12 @@ class ShellScriptHelper:
         )
         script_logger.log(pre_log_2)
         if action["actionData"]["openInNewWindow"]:
-            run_command = f"start cmd /D {cwd} /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
+            if platform.system() == 'Windows' and ':' in cwd:
+                drive, path = cwd.split(':', 1)
+                drive = drive + ':'
+                run_command = f"start cmd /K \"{drive} && cd {cwd} && " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state) + "\""
+            else:
+                run_command = f"start cmd /D {cwd} /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
 
             mid_log = 'Running command {} using os.system'.format(run_command)
             script_logger.log(mid_log)
