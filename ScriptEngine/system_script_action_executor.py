@@ -913,7 +913,7 @@ class SystemScriptActionExecutor:
                                     "value": state_eval(action["actionData"]["value"], {}, state)
                                     }
                     else:
-                        new_item = state_eval(action["actionData"]["value"], {} state.copy())
+                        new_item = state_eval(action["actionData"]["value"], {}, state.copy())
                     result = collection.insert_one(new_item)
                 elif action["actionData"]["actionType"] == "update" or\
                         action["actionData"]["actionType"] == "upsert":
