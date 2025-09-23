@@ -237,9 +237,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Support
 
-- **Documentation**: https://screenplan.io/docs
+- **Documentation**: https://screenplan.io/help
 - **Issues**: https://github.com/takhogan/ScriptEngine/issues
-- **Community**: https://screenplan.io/community
 
 ## Changelog
 
