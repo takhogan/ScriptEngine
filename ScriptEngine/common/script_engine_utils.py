@@ -9,6 +9,7 @@ import datetime
 import numpy as np
 import glob
 import collections
+from types import SimpleNamespace
 from dateutil import tz
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
@@ -207,28 +208,63 @@ def get_running_scripts():
 
     return running_scripts
 
-def state_eval(statement, globals, locals, crashonerror=True):
-    globals = {
+class StateEvaluator:
+    """Helper for evaluating state expressions with shared context."""
+
+    _base_globals = {
         'glob': glob,
         'datetime': datetime,
-        'os' : os,
-        'sys' : sys,
-        'platform' : platform,
-        'shutil' : shutil,
-        'numpy' : np,
-        're' : re,
-        'json' : json,
-        'random' : random,
-        'math' : math,
-        'collections' : collections
+        'os': os,
+        'sys': sys,
+        'platform': platform,
+        'shutil': shutil,
+        'numpy': np,
+        're': re,
+        'json': json,
+        'random': random,
+        'math': math,
+        'collections': collections,
     }
-    globals.update(locals)
-    try:
-        return eval(statement, globals, locals)
-    except KeyError as k:
-        script_logger.log(
-            'ERROR: key error while parsing eval, keys present in state: ' + ', '.join(list(globals)))
-        if not crashonerror:
-            script_logger.log('script finished with failure, ignoring key error')
-            return None
-        raise
+
+    _script_context = SimpleNamespace(
+        script_name=None,
+        script_id=None,
+        timeout=None,
+        script_start_time=None,
+        device_details=None,
+    )
+
+    @classmethod
+    def configure_script_context(cls, *, script_name=None, script_id=None, timeout=None, script_start_time=None, device_details=None):
+        """Store the current script metadata for downstream state evaluations."""
+        cls._script_context = SimpleNamespace(
+            script_name=script_name,
+            script_id=script_id,
+            timeout=timeout,
+            script_start_time=script_start_time,
+            device_details=device_details,
+        )
+
+    @classmethod
+    def eval(cls, statement, global_overrides, local_scope, crashonerror=True):
+        env_globals = cls._base_globals.copy()
+        if global_overrides:
+            env_globals.update(global_overrides)
+        if local_scope:
+            env_globals.update(local_scope)
+        env_globals.setdefault('script', cls._script_context)
+
+        try:
+            return eval(statement, env_globals, local_scope)
+        except KeyError:
+            script_logger.log(
+                'ERROR: key error while parsing eval, keys present in state: ' + ', '.join(list(env_globals))
+            )
+            if not crashonerror:
+                script_logger.log('script finished with failure, ignoring key error')
+                return None
+            raise
+
+
+def state_eval(statement, globals, locals, crashonerror=True):
+    return StateEvaluator.eval(statement, globals, locals, crashonerror=crashonerror)

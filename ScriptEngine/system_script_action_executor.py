@@ -570,6 +570,8 @@ class SystemScriptActionExecutor:
                 script_logger.log('parsing text from image...')
                 results = self.easy_ocr_reader.readtext(image_to_text_input)
 
+                # Get character whitelist from action data
+                character_white_list = str(action["actionData"]["characterWhiteList"])
 
                 outputs = [[]]
 
@@ -580,8 +582,19 @@ class SystemScriptActionExecutor:
                     script_logger.log(f"Bounding box: {bbox}")
                     script_logger.log(f"Confidence: {confidence}\n")
                     outputs[0].append(text)
+                
+                # Join all detected text first
                 outputs[0] = ' '.join(outputs[0])
-                input_results_log = 'Running easyOCR model with default params and output was ' + outputs[0]
+                
+                # Apply character whitelist filter to the final output if specified
+                if len(character_white_list) > 0:
+                    original_output = outputs[0]
+                    outputs[0] = ''.join(char for char in outputs[0] if char in character_white_list)
+                    script_logger.log(f"Applied character whitelist '{character_white_list}' to output: '{original_output}' -> '{outputs[0]}'")
+                
+                input_results_log = 'Running easyOCR model with characterWhiteList {} and output was '.format(
+                    character_white_list if len(character_white_list) > 0 else 'none'
+                ) + outputs[0]
                 inputs_log += input_results_log + '\n'
 
             else:

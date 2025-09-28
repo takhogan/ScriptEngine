@@ -21,6 +21,9 @@ import json
 import os
 import asyncio
 import base64
+import glob
+import platform
+import subprocess
 
 
 import numpy as np
@@ -59,6 +62,7 @@ class DesktopDeviceManager(DeviceManager):
             self.dummy_mode = False
         
         self.scale_factor = 1
+        self.app_mapping = self.list_applications()
         
         self.sct = mss.mss()
     
@@ -259,6 +263,132 @@ class DesktopDeviceManager(DeviceManager):
         if mouse_up:
             self.mouse_up(target_x, target_y, button='left')
         return delta_x, delta_y
+    
+    def start_application(self, application_name):
+        """
+        Start an application on the desktop.
+        On Mac: uses 'open' command
+        On Windows: uses 'start' command
+        """
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from start_application')
+            return
+        
+        import subprocess
+        import platform
+        
+        # Look up the application path from the mapping
+        if application_name not in self.app_mapping:
+            script_logger.log(f'Application "{application_name}" not found in app mapping')
+            return
+        
+        application_path = self.app_mapping[application_name]
+        
+        try:
+            if platform.system() == 'Darwin':  # macOS
+                subprocess.run(['open', application_path], check=True)
+                script_logger.log(f'Started application on Mac: {application_name} -> {application_path}')
+            elif platform.system() == 'Windows':  # Windows
+                subprocess.run(['start', '', application_path], shell=True, check=True)
+                script_logger.log(f'Started application on Windows: {application_name} -> {application_path}')
+            else:
+                script_logger.log(f'Unsupported platform for start_application: {platform.system()}')
+        except subprocess.CalledProcessError as e:
+            script_logger.log(f'Failed to start application {application_name}: {e}')
+        except Exception as e:
+            script_logger.log(f'Error starting application {application_name}: {e}')
+    
+    def stop_application(self, application_name):
+        """
+        Stop an application on the desktop.
+        On Mac: uses 'osascript' to quit applications gracefully
+        On Windows: uses 'taskkill' command
+        """
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from stop_application')
+            return
+        
+        import subprocess
+        import platform
+        
+        # Validate that the application exists in our mapping
+        if application_name not in self.app_mapping:
+            script_logger.log(f'Application "{application_name}" not found in app mapping')
+            return
+        
+        try:
+            if platform.system() == 'Darwin':  # macOS
+                # Use osascript to quit the application gracefully
+                applescript = f'tell application "{application_name}" to quit'
+                subprocess.run(['osascript', '-e', applescript], check=True)
+                script_logger.log(f'Stopped application on Mac: {application_name}')
+            elif platform.system() == 'Windows':  # Windows
+                subprocess.run(['taskkill', '/f', '/im', f'{application_name}.exe'], check=True)
+                script_logger.log(f'Stopped application on Windows: {application_name}')
+            else:
+                script_logger.log(f'Unsupported platform for stop_application: {platform.system()}')
+        except subprocess.CalledProcessError as e:
+            script_logger.log(f'Failed to stop application {application_name}: {e}')
+        except Exception as e:
+            script_logger.log(f'Error stopping application {application_name}: {e}')
+    
+    def list_applications(self):
+        """
+        List installed applications on the desktop.
+        On Mac: lists applications from ~/Applications and /Applications
+        On Windows: lists applications from Start Menu shortcuts
+        """
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from list_applications')
+            return {}
+        
+        apps = {}
+        
+        try:
+            if platform.system() == 'Darwin':  # macOS
+                # List applications from user's Applications folder
+                user_apps_path = os.path.expanduser('~/Applications')
+                if os.path.exists(user_apps_path):
+                    for app in os.listdir(user_apps_path):
+                        if app.endswith('.app'):
+                            app_name = os.path.splitext(app)[0]
+                            apps[app_name] = os.path.join(user_apps_path, app)
+                
+                # List applications from system Applications folder
+                system_apps_path = '/Applications'
+                if os.path.exists(system_apps_path):
+                    for app in os.listdir(system_apps_path):
+                        if app.endswith('.app'):
+                            app_name = os.path.splitext(app)[0]
+                            apps[app_name] = os.path.join(system_apps_path, app)
+                
+                script_logger.log(f'Found {len(apps)} applications on macOS')
+                
+            elif platform.system() == 'Windows':  # Windows
+                # Start Menu locations (system-wide + user)
+                start_menu_paths = [
+                    r"C:\ProgramData\Microsoft\Windows\Start Menu\Programs",
+                    os.path.expandvars(r"%AppData%\Microsoft\Windows\Start Menu\Programs")
+                ]
+                
+                for path in start_menu_paths:
+                    if os.path.exists(path):
+                        for lnk in glob.glob(path + r"\**\*.lnk", recursive=True):
+                            name = os.path.splitext(os.path.basename(lnk))[0]
+                            apps[name] = lnk
+                
+                script_logger.log(f'Found {len(apps)} applications on Windows')
+                
+            else:
+                script_logger.log(f'Unsupported platform for list_applications: {platform.system()}')
+                
+        except Exception as e:
+            script_logger.log(f'Error listing applications: {e}')
+        
+        return apps
     
     def start_device(self):
         return super().start_device()

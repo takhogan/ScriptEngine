@@ -52,6 +52,16 @@ class IOSDeviceManager(DeviceManager):
         dvt = DvtSecureSocketProxyService(lockdown=self.lockdown)
         screenshot_data = Screenshot(dvt)
         return screenshot_data
+    
+    def start_application(self, application_path):
+        """Start an application on iOS device - not implemented"""
+        print(f"IOSDeviceManager: start_application not implemented for iOS - {application_path}")
+        pass
+    
+    def stop_application(self, application_name):
+        """Stop an application on iOS device - not implemented"""
+        print(f"IOSDeviceManager: stop_application not implemented for iOS - {application_name}")
+        pass
 
 if __name__ == "__main__":
     with SudoClient() as sudo_client:
