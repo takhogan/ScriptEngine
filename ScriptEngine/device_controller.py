@@ -203,7 +203,7 @@ class DeviceController:
             }
         elif device_action == "send_keys":
             DeviceActionInterpreter.parse_keyboard_action(
-                self, json.loads(inputs[3]), {}, {}
+                self, json.loads(inputs[3]), {}, {}, device_params
             )
             return {
                 "data": "success"
