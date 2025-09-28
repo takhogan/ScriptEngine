@@ -304,6 +304,52 @@ class ADBDeviceManager(DeviceManager):
         )
         return ScriptExecutionState.SUCCESS, state, context
 
+    def adb_run(self, args, timeout=30, capture_output=True, cwd="/", **kwargs):
+        """
+        Helper method to run ADB commands with consistent error handling and timeout management.
+        
+        Args:
+            args: List of command arguments (will be prepended with self.adb_path and -s self.full_ip)
+            timeout: Timeout in seconds (default: 30)
+            capture_output: Whether to capture stdout/stderr (default: True)
+            cwd: Working directory (default: "/")
+            **kwargs: Additional arguments to pass to subprocess.run
+            
+        Returns:
+            subprocess.CompletedProcess object or None on error
+        """
+        script_logger = ScriptLogger.get_logger()
+        
+        # Build the full command with adb_path and device selection
+        full_args = [self.adb_path, '-s', self.full_ip] + args
+        
+        try:
+            script_logger.log(f'ADBDeviceManager: running command: {" ".join(full_args)}')
+            
+            result = subprocess.run(
+                full_args,
+                cwd=cwd,
+                capture_output=capture_output,
+                timeout=timeout,
+                **kwargs
+            )
+            
+            if result.returncode == 0:
+                script_logger.log(f'ADBDeviceManager: command succeeded')
+            else:
+                script_logger.log(f'ADBDeviceManager: command failed with return code {result.returncode}')
+                if capture_output and result.stderr:
+                    script_logger.log(f'ADBDeviceManager: stderr: {result.stderr.decode()}')
+            
+            return result
+            
+        except subprocess.TimeoutExpired as e:
+            script_logger.log(f'ADBDeviceManager: command timed out after {timeout}s: {" ".join(full_args)}')
+            return None
+        except Exception as e:
+            script_logger.log(f'ADBDeviceManager: error running command {" ".join(full_args)}: {e}')
+            return None
+
     def get_device_name_to_emulator_name_mapping(self):
         script_logger = ScriptLogger.get_logger()
         device_list = self.get_device_list_output()
@@ -314,6 +360,7 @@ class ADBDeviceManager(DeviceManager):
             if line.strip() and 'device' in line:
                 device_id = line.split('\t')[0]
                 if device_id.startswith('emulator'):
+                    # For this specific case, we need to use a different device ID
                     result = subprocess.run([self.adb_path, '-s', device_id, 'emu', 'avd', 'name'],
                                             stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE,
@@ -444,39 +491,21 @@ class ADBDeviceManager(DeviceManager):
                 stop_device_command = ['taskkill', '/fi', f'WINDOWTITLE eq {self.window_name}', '/IM', 'HD-Player.exe', '/F']
                 script_logger.log('ADB CONTROLLER: stopping device', self.device_name, 'with command', stop_device_command)
 
-                stop_device_process = subprocess.run(
-                    stop_device_command,
-                    cwd="/",
-                    capture_output=True,
-                    timeout=15
-                )
+                stop_device_process = self.adb_run(['emu', 'kill'], timeout=15)
 
                 device_list = self.get_device_list_output()
                 script_logger.log('ADB CONTROLLER: device list', device_list)
 
-                stop_device_command = [self.adb_path, '-s', f'emulator-{self.adb_port}', 'emu', 'kill']
-
-                script_logger.log('ADB CONTROLLER: stopping adb instance', self.device_name, 'with command', stop_device_command)
+                script_logger.log('ADB CONTROLLER: stopping adb instance', self.device_name)
     
-                stop_device_process = subprocess.run(
-                    stop_device_command,
-                    cwd="/",
-                    capture_output=True,
-                    timeout=15
-                )
+                stop_device_process = self.adb_run(['emu', 'kill'], timeout=15)
             else:
                 raise Exception('OS and emulator type combination not supported ' + platform.system() + '-' + self.emulator_type)
         elif self.emulator_type == 'avd':
             devices = self.get_device_name_to_emulator_name_mapping()
             if self.device_name in devices:
                 self.full_ip = devices[self.device_name]
-                stop_device_command = [self.adb_path, '-s', self.full_ip, 'emu', 'kill']
-                stop_device_process = subprocess.run(
-                    stop_device_command,
-                    cwd="/",
-                    capture_output=True,
-                    timeout=15
-                )
+                stop_device_process = self.adb_run(['emu', 'kill'], timeout=15)
             else:
                 raise Exception('unable to run command, device not active' + self.device_name)
         else:
@@ -533,10 +562,10 @@ class ADBDeviceManager(DeviceManager):
         return self.screen_orientation
 
     def run_kill_command(self):
-        return subprocess.run([self.adb_path, 'kill-server'], cwd="/", shell=False, timeout=15)
+        return self.adb_run(['kill-server'], timeout=15)
 
     def run_start_command(self):
-        return subprocess.run([self.adb_path, 'start-server'], cwd="/", shell=False, timeout=15)
+        return self.adb_run(['start-server'], timeout=15)
 
 
     def restart_adb(self):
@@ -693,32 +722,23 @@ class ADBDeviceManager(DeviceManager):
     def run_connect_command(self):
         script_logger = ScriptLogger.get_logger()
         script_logger.log('connecting to device', self.full_ip)
-        return subprocess.run(
-            [self.adb_path, 'connect', self.full_ip], 
-            cwd="/", 
-            timeout=30
-        )
+        return self.adb_run(['connect', self.full_ip], timeout=30)
 
     def run_disconnect_command(self):
         script_logger = ScriptLogger.get_logger()
         script_logger.log('disconnecting from device', self.full_ip)
-        return subprocess.run(
-            [self.adb_path, 'disconnect', self.full_ip], 
-            cwd="/", 
-            timeout=30,
-            stderr=subprocess.STDOUT
-        )
+        return self.adb_run(['disconnect', self.full_ip], timeout=30, stderr=subprocess.STDOUT)
 
     def get_device_list_output(self):
         script_logger = ScriptLogger.get_logger()
         try:
-            device_list = subprocess.run(
-                [self.adb_path, 'devices'], 
-                cwd="/", capture_output=True, timeout=15
-            )
-            devices_output = bytes.decode(device_list.stdout, 'utf-8').splitlines()
-        except subprocess.TimeoutExpired as t:
-            script_logger.log('ADB CONTROLLER: get devices timed out ', t)
+            device_list = self.adb_run(['devices'], timeout=15)
+            if device_list and device_list.returncode == 0:
+                devices_output = bytes.decode(device_list.stdout, 'utf-8').splitlines()
+            else:
+                devices_output = []
+        except Exception as e:
+            script_logger.log('ADB CONTROLLER: get devices failed ', e)
             devices_output = []
         return devices_output
 
@@ -964,7 +984,6 @@ class ADBDeviceManager(DeviceManager):
             return
         click_command = []
         if self.emulator_type == 'bluestacks':
-            #yes x and y is flipped for some reason in bluestacks
             # if self.device_profile == 'windows-bluestacks-8GB':
             #     mapped_x_val = int(((self.height - y) / self.height) * self.ymax)
             #     mapped_y_val = int((x / self.width) * self.xmax)
@@ -1220,3 +1239,92 @@ class ADBDeviceManager(DeviceManager):
         )
         self.event_counter += 1
         return delta_x, delta_y
+    
+    def start_application(self, application_path):
+        """Start an application on Android device using adb am start"""
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('ADBDeviceManager: script in dummy mode, returning from start_application')
+            return
+        
+        try:
+            # Use adb am start to launch the application
+            # application_path should be the package name (e.g., com.example.app)
+            script_logger.log(f'ADBDeviceManager: starting application {application_path}')
+            
+            result = self.adb_run(['shell', 'am', 'start', '-n', application_path], timeout=30)
+            
+            if result and result.returncode == 0:
+                script_logger.log(f'ADBDeviceManager: successfully started application {application_path}')
+            else:
+                error_msg = result.stderr.decode() if result and result.stderr else "Unknown error"
+                script_logger.log(f'ADBDeviceManager: failed to start application {application_path}, error: {error_msg}')
+                
+        except Exception as e:
+            script_logger.log(f'ADBDeviceManager: error starting application {application_path}: {e}')
+    
+    def stop_application(self, application_name):
+        """Stop an application on Android device using adb am force-stop"""
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('ADBDeviceManager: script in dummy mode, returning from stop_application')
+            return
+        
+        try:
+            # Use adb am force-stop to terminate the application
+            # application_name should be the package name (e.g., com.example.app)
+            script_logger.log(f'ADBDeviceManager: stopping application {application_name}')
+            
+            result = self.adb_run(['shell', 'am', 'force-stop', application_name], timeout=30)
+            
+            if result and result.returncode == 0:
+                script_logger.log(f'ADBDeviceManager: successfully stopped application {application_name}')
+            else:
+                error_msg = result.stderr.decode() if result and result.stderr else "Unknown error"
+                script_logger.log(f'ADBDeviceManager: failed to stop application {application_name}, error: {error_msg}')
+                
+        except Exception as e:
+            script_logger.log(f'ADBDeviceManager: error stopping application {application_name}: {e}')
+    
+    def list_applications(self, filter_system=True):
+        """List installed applications on Android device using adb shell pm list packages"""
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('ADBDeviceManager: script in dummy mode, returning from list_applications')
+            return []
+        
+        try:
+            # Use adb shell pm list packages to get installed applications
+            if filter_system:
+                # Filter out system packages to show only user-installed apps
+                args = ['shell', 'pm', 'list', 'packages', '-3']
+            else:
+                # Show all packages including system apps
+                args = ['shell', 'pm', 'list', 'packages']
+            
+            script_logger.log(f'ADBDeviceManager: listing applications (filter_system={filter_system})')
+            
+            result = self.adb_run(args, timeout=30)
+            
+            if result and result.returncode == 0:
+                # Parse the output to extract package names
+                output = result.stdout.decode('utf-8').strip()
+                packages = []
+                
+                for line in output.split('\n'):
+                    if line.startswith('package:'):
+                        # Remove 'package:' prefix to get clean package name
+                        package_name = line.replace('package:', '').strip()
+                        if package_name:
+                            packages.append(package_name)
+                
+                script_logger.log(f'ADBDeviceManager: found {len(packages)} applications')
+                return packages
+            else:
+                error_msg = result.stderr.decode() if result and result.stderr else "Unknown error"
+                script_logger.log(f'ADBDeviceManager: failed to list applications, error: {error_msg}')
+                return []
+                
+        except Exception as e:
+            script_logger.log(f'ADBDeviceManager: error listing applications: {e}')
+            return []

@@ -34,7 +34,7 @@ print(f"builtin initialization took {time.time() - start_time:.2f} seconds", flu
 from ScriptEngine.custom_thread_pool import CustomThreadPool
 from ScriptEngine.custom_process_pool import CustomProcessPool
 from ScriptEngine.common.constants.script_engine_constants import *
-from ScriptEngine.common.script_engine_utils import datetime_to_local_str, imageFileExtensions
+from ScriptEngine.common.script_engine_utils import datetime_to_local_str, imageFileExtensions, StateEvaluator
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.system_script_handler import SystemScriptHandler
 print(f"non builtin initialization took {time.time() - start_time:.2f} seconds", flush=True)
@@ -270,10 +270,20 @@ def main():
     script_logger.log('loading script {} and running with log level {}'.format(
         script_name, script_logger.get_log_level())
     )
+    script_timeout = (start_time + datetime.timedelta(minutes=30)).astimezone(tz=tz.tzutc()) if end_time is None else end_time
+
+    StateEvaluator.configure_script_context(
+        script_name=script_name,
+        script_id=str(script_id),
+        timeout=script_timeout,
+        script_start_time=start_time,
+        device_details=device_details,
+    )
+
     load_and_run(
         script_name,
         script_id,
-        timeout=(start_time + datetime.timedelta(minutes=30)).astimezone(tz=tz.tzutc()) if end_time is None else end_time,
+        timeout=script_timeout,
         start_time=start_time,
         start_time_str=start_time_str,
         constants=constants,

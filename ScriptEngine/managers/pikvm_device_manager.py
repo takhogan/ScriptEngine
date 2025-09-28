@@ -16,6 +16,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 from .device_manager import DeviceManager
+
 from pikvm_lib import PiKVM
 import cv2
 import numpy
@@ -131,4 +132,14 @@ class PiKVMDeviceManager(DeviceManager):
     
     def scroll(self, delta):
         return self.instance.send_mouse_wheel_event(delta)
+    
+    def start_application(self, application_path):
+        """Start an application on PiKVM device - not implemented"""
+        script_logger.log(f"PiKVMDeviceManager: start_application not implemented for PiKVM - {application_path}")
+        pass
+    
+    def stop_application(self, application_name):
+        """Stop an application on PiKVM device - not implemented"""
+        script_logger.log(f"PiKVMDeviceManager: stop_application not implemented for PiKVM - {application_name}")
+        pass
     
