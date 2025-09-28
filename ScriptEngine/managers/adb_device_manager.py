@@ -490,6 +490,12 @@ class ADBDeviceManager(DeviceManager):
                 self.window_name = instance_window_name
                 stop_device_command = ['taskkill', '/fi', f'WINDOWTITLE eq {self.window_name}', '/IM', 'HD-Player.exe', '/F']
                 script_logger.log('ADB CONTROLLER: stopping device', self.device_name, 'with command', stop_device_command)
+                stop_device_process = subprocess.run(
+                    stop_device_command,
+                    cwd="/",
+                    capture_output=True,
+                    timeout=15
+                )
 
                 stop_device_process = self.adb_run(['emu', 'kill'], timeout=15)
 
@@ -498,7 +504,6 @@ class ADBDeviceManager(DeviceManager):
 
                 script_logger.log('ADB CONTROLLER: stopping adb instance', self.device_name)
     
-                stop_device_process = self.adb_run(['emu', 'kill'], timeout=15)
             else:
                 raise Exception('OS and emulator type combination not supported ' + platform.system() + '-' + self.emulator_type)
         elif self.emulator_type == 'avd':
