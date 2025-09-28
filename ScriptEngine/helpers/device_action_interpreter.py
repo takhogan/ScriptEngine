@@ -17,7 +17,7 @@ class DeviceActionInterpreter:
         pass
 
     @staticmethod
-    def parse_keyboard_action(device_controller, keyboard_action, state, context):
+    def parse_keyboard_action(device_controller, keyboard_action, state, context, device_params=None):
         action_type = keyboard_action["actionData"]["keyboardActionType"]
         keyboard_expression = keyboard_action["actionData"]["keyboardExpression"]
         
@@ -33,7 +33,7 @@ class DeviceActionInterpreter:
         )
         
         target_system = keyboard_action["actionData"]["targetSystem"]
-        dummy_mode = device_controller.get_device_attribute(target_system, 'dummy_mode')
+        dummy_mode = device_controller.get_device_attribute(target_system, 'dummy_mode', device_params)
         is_secret = False
 
         if dummy_mode:
@@ -54,13 +54,13 @@ class DeviceActionInterpreter:
             
             script_logger.log(f'HotKeyKeys {hot_key_keys}')
             
-            hot_key_func = device_controller.get_device_action(target_system, 'hotkey')
+            hot_key_func = device_controller.get_device_action(target_system, 'hotkey', device_params)
             hot_key_func(*hot_key_keys)
             typed_chars_log += ' '.join(hot_key_keys)
             
         elif action_type == "keyDown":
             keys,is_secret = DeviceActionInterpreter.process_expression(keyboard_expression, state)
-            key_down_func = device_controller.get_device_action(target_system, 'key_down')
+            key_down_func = device_controller.get_device_action(target_system, 'key_down', device_params)
             
             for key in keys:
                 key_down_func(key)
@@ -68,7 +68,7 @@ class DeviceActionInterpreter:
 
         elif action_type == "keyUp":
             keys,is_secret = DeviceActionInterpreter.process_expression(keyboard_expression, state)
-            key_up_func = device_controller.get_device_action(target_system, 'key_up')
+            key_up_func = device_controller.get_device_action(target_system, 'key_up', device_params)
             
             for key in keys:
                 key_up_func(key)
@@ -76,7 +76,7 @@ class DeviceActionInterpreter:
 
         elif action_type == "keyPress":
             keys,is_secret = DeviceActionInterpreter.process_expression(keyboard_expression, state)
-            press_func = device_controller.get_device_action(target_system, 'key_press')
+            press_func = device_controller.get_device_action(target_system, 'key_press', device_params)
             for key in keys:
                 press_func(key)
                 typed_chars_log += ('* ' if is_secret else key + ' ')
