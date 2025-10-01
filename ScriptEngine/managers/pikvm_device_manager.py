@@ -115,7 +115,6 @@ class PiKVMDeviceManager(DeviceManager):
         traverse_y = source_y
         for delta_pair in zip(delta_x, delta_y):
             self.instance.send_mouse_move_event(traverse_x + delta_pair[0], traverse_y + delta_pair[1])
-            time.sleep(0.1)
             traverse_x += delta_pair[0]
             traverse_y += delta_pair[1]
         script_logger.log(f'PiKVM CONTROLLER: smooth move ${str(frac_source_x)}, ${str(frac_source_y)}, ${str(frac_target_x)}, ${str(frac_target_y)}=', )
