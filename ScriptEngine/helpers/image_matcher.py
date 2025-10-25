@@ -146,11 +146,13 @@ class ImageMatcher:
                 )
                 mid_log = ('Unresized template match failed. ' if resized_im_log == '' else '') + \
                           'Performing resized template match' +\
-                          ' on image of size {}, search image of size {} and mask of size {}'.format(
+                          ' on image of size {}, search image of size {} and mask of size {}.\n'.format(
                     str(screencap_im_bgr.shape),
                     str(screencap_search_bgr.shape),
                     str(screencap_mask_gray.shape)
                 )
+                mid_log += f'Resized image to fit original dimensions width {source_screen_width} and height {source_screen_height}'
+                script_logger.log(mid_log)
                 script_logger.get_action_log().append_supporting_file(
                     'text',
                     'detect_result.txt',
@@ -211,6 +213,9 @@ class ImageMatcher:
         dist_threshold = max(min(h, w) * 0.2, MINIMUM_MATCH_PIXEL_SPACING)
         matches = []
         match_img_index = 1
+        if thresholded_match_results is None:
+            script_logger.log('image matching failed as thresholded_match_results is None, check inputExpression of action')
+            exit(1)
         unpacked_results = list(zip(*thresholded_match_results[::-1]))
         initial_matches = len(unpacked_results)
         for pt in unpacked_results:

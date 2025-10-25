@@ -776,6 +776,7 @@ class SystemScriptActionExecutor:
                 for_variable_list
             )
             post_log = ''
+            switch_actions = []
             for_iteration = 0
             for for_variables in in_variable:
                 state_update_dict = {
@@ -802,6 +803,8 @@ class SystemScriptActionExecutor:
                 switch_action = generate_context_switch_action(action["childGroups"], None, None, {
                     "state": state_update_dict
                 })
+                switch_actions.append(switch_action)
+            for switch_action in reversed(switch_actions):
                 run_queue.append(switch_action)
             script_logger.get_action_log().add_post_file(
                 'text',
