@@ -55,7 +55,7 @@ class DeviceActionInterpreter:
             script_logger.log(f'HotKeyKeys {hot_key_keys}')
             
             hot_key_func = device_controller.get_device_action(target_system, 'hotkey', device_params)
-            hot_key_func(*hot_key_keys)
+            hot_key_func(hot_key_keys)
             typed_chars_log += ' '.join(hot_key_keys)
             
         elif action_type == "keyDown":

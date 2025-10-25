@@ -28,6 +28,81 @@ class ClickActionHelper:
         pass
 
     @staticmethod
+    def _calculate_interior_weights(point_list):
+        points_arr = np.asarray(point_list, dtype=float)
+        if points_arr.ndim != 2 or points_arr.shape[1] != 2:
+            return None
+
+        # We only work with integer coordinates inside the mask.
+        int_points = np.round(points_arr).astype(int)
+        min_x = np.min(int_points[:, 0])
+        min_y = np.min(int_points[:, 1])
+        max_x = np.max(int_points[:, 0])
+        max_y = np.max(int_points[:, 1])
+
+        # keep a 1px zero border for when the shape is a rectangle to ensure there are zeros
+        width = max_x - min_x + 3 
+        height = max_y - min_y + 3
+        if width <= 2 or height <= 2:
+            return None
+
+        # Build occupancy mask for the point cloud.
+        mask = np.zeros((height, width), dtype=np.uint8)
+        shifted_x = int_points[:, 0] - min_x + 1
+        shifted_y = int_points[:, 1] - min_y + 1
+        mask[shifted_y, shifted_x] = 255
+
+        distance_map = cv2.distanceTransform(mask, cv2.DIST_L2, 3)
+
+        # max_distance = float(distance_map.max())
+        # if max_distance > 0:
+        #     visual_map = (distance_map / max_distance * 255).astype(np.uint8)
+        # else:
+        #     visual_map = distance_map.astype(np.uint8)
+        # script_logger.log('visual_map', visual_map)
+        # random_id = str(random.random() * 1000000)
+        # cv2.imwrite(random_id + '_click_interior_weights.png', visual_map)
+        
+        # # Save the actual array data to a text file
+        # np.savetxt(random_id + '_click_interior_weights_array.txt', visual_map, fmt='%d')
+
+
+        interior_distances = distance_map[shifted_y, shifted_x]
+        thin_threshold = 1.0
+        interior_distances = np.maximum(interior_distances - thin_threshold, 0.0)
+        if not np.isfinite(interior_distances).all() or np.all(interior_distances <= 0):
+            return None
+
+        return interior_distances
+
+    @staticmethod
+    def _choose_point_from_list(point_list, prefer_interior: bool):
+        if len(point_list) == 0:
+            return (None, None), 'none'
+        if not prefer_interior or len(point_list) < 2:
+            return random.choice(point_list), 'uniform'
+
+        interior_weights = ClickActionHelper._calculate_interior_weights(point_list)
+        if interior_weights is None:
+            return random.choice(point_list), 'uniform'
+
+        interior_weights = np.asarray(interior_weights, dtype=float)
+        positive_indices = np.nonzero(interior_weights > 0)[0]
+        if positive_indices.size == 0:
+            return random.choice(point_list), 'boundary-only-fallback'
+
+        filtered_weights = interior_weights[positive_indices]
+        # Bias towards interior by squaring the distance-based weights.
+        weights = np.square(filtered_weights)
+        weight_sum = weights.sum()
+        if not np.isfinite(weight_sum) or weight_sum == 0:
+            return random.choice(point_list), 'boundary-only-fallback'
+
+        probabilities = weights / weight_sum
+        bias_index = int(np.random.choice(len(positive_indices), p=probabilities))
+        return point_list[int(positive_indices[bias_index])], 'interior-distance'
+
+    @staticmethod
     def get_remapping_function(source_screen_width, source_screen_height, screen_width, screen_height) -> Callable:
         def remapping_function(point):
             return (
@@ -72,12 +147,12 @@ class ClickActionHelper:
         return point_list, point_choice, remap_log
 
     @staticmethod
-    def get_point_choice(detectTypeData, var_name, point_list, state, screen_width, screen_height, point_index):
+    def get_point_choice(detectTypeData, var_name, point_list, state, screen_width, screen_height, point_index, prefer_interior=True):
         point_choice = (None, None)
         log_point_choice = (None, None)
         if len(point_list) > 0:
             pre_log = 'pointList in actionData, choosing point from pointlist'
-            point_choice = random.choice(point_list)
+            point_choice, selection_strategy = ClickActionHelper._choose_point_from_list(point_list, prefer_interior)
             log_point_choice = point_choice
             if detectTypeData["detectActionType"] == "fixedObject":
                 fixed_detect_obj = None
@@ -103,7 +178,7 @@ class ClickActionHelper:
                 len(str(source_screen_height)) > 0 and\
                 int(source_screen_height) > 0
             script_logger.log(pre_log)
-            point_choice_log = 'Point chosen: {}'.format(str(point_choice))
+            point_choice_log = 'Point chosen ({}): {}'.format(selection_strategy, str(point_choice))
             pre_log += '\n' + point_choice_log
             script_logger.log(point_choice_log)
             log_point_list = {
@@ -143,12 +218,22 @@ class ClickActionHelper:
                 input_expression_type = 'rectangle'
             elif input_point["input_type"] == "shape":
                 shape_ys, shape_xs = np.where(input_point["shape"] > 1)
-                point_choice_index = np.random.randint(0, shape_xs.shape[0])
-                point_choice = (
-                    input_point["point"][0] + shape_xs[point_choice_index],
-                    input_point["point"][1] + shape_ys[point_choice_index]
-                )
-                input_expression_type = 'shape'
+                relative_points = list(zip(shape_xs.tolist(), shape_ys.tolist()))
+                if len(relative_points) == 0:
+                    assert False, 'attempted to fetch point from input shape, but input shape was empty'
+                else:
+                    relative_choice, selection_strategy = ClickActionHelper._choose_point_from_list(
+                        relative_points,
+                        prefer_interior
+                    )
+                    if relative_choice == (None, None):
+                        relative_choice = random.choice(relative_points)
+                        selection_strategy = 'fallback-uniform'
+                    point_choice = (
+                        input_point["point"][0] + int(relative_choice[0]),
+                        input_point["point"][1] + int(relative_choice[1])
+                    )
+                input_expression_type = 'shape ({})'.format(selection_strategy)
             source_screen_width = input_point["original_width"]
             source_screen_height = input_point["original_height"]
             log_point_choice = point_choice
