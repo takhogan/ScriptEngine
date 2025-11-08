@@ -81,6 +81,10 @@ class DeviceManager(ABC):
         raise NotImplementedError(f"stop_device not implemented for {self.__class__.__name__}")
     
     @abstractmethod
+    def list_applications(self) -> dict[str, str]:
+        raise NotImplementedError(f"list_applications not implemented for {self.__class__.__name__}")
+    
+    @abstractmethod
     def start_application(self, application_path):
         raise NotImplementedError(f"start_application not implemented for {self.__class__.__name__}")
     

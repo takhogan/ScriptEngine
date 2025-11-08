@@ -135,6 +135,11 @@ class PiKVMDeviceManager(DeviceManager):
     def scroll(self, delta):
         return self.instance.send_mouse_wheel_event(delta)
     
+    def list_applications(self) -> dict[str, str]:
+        """List installed applications on PiKVM device - not implemented"""
+        script_logger.log(f"PiKVMDeviceManager: list_applications not implemented for PiKVM")
+        return {}
+    
     def start_application(self, application_path):
         """Start an application on PiKVM device - not implemented"""
         script_logger.log(f"PiKVMDeviceManager: start_application not implemented for PiKVM - {application_path}")
