@@ -53,6 +53,17 @@ class DetectObjectHelper:
             input_area = state_eval(var_name, {}, state)
             if len(input_area) > 0:
                 mid_log = 'input expression exists but unable to parse'
+                if not isinstance(input_area, dict) or "input_type" not in input_area:
+                    error_log = 'inputExpression {} returned unexpected value: {}'.format(
+                        var_name,
+                        repr(input_area)
+                    )
+                    script_logger.log(error_log)
+                    raise ValueError(
+                        "detectObject inputExpression '{}' must evaluate to an object containing 'input_type'".format(
+                            var_name
+                        )
+                    )
                 if input_area["input_type"] == "rectangle":
                     pass
                 elif input_area["input_type"] == "shape":
