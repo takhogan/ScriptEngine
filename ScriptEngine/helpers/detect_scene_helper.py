@@ -18,6 +18,7 @@
 import cv2
 import numpy as np
 from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_RESULT_MARKER
 
 script_logger = ScriptLogger()
 
@@ -139,5 +140,6 @@ class DetectSceneHelper:
             'original_height': sceneAction['input_obj']['original_height'],
             'original_width': sceneAction['input_obj']['original_width'],
             'score': ssim_coeff,
-            'n_matches' : 1
+            'n_matches' : 1,
+            DETECT_OBJECT_RESULT_MARKER: True
         }], ssim_coeff, screencap_masked

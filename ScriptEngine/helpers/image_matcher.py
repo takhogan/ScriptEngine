@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 import random
 from ScriptEngine.common.script_engine_utils import dist
+from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_RESULT_MARKER
 
 MINIMUM_MATCH_PIXEL_SPACING = 15
 from ScriptEngine.common.logging.script_logger import ScriptLogger
@@ -69,7 +70,8 @@ class ImageMatcher:
                 'original_height': detectObject['input_obj']['original_height'],
                 'original_width': detectObject['input_obj']['original_width'],
                 'score': score,
-                'n_matches': n_matches
+                'n_matches': n_matches,
+                DETECT_OBJECT_RESULT_MARKER: True
         } for match, score, match_area in matches], match_result
 
 
@@ -534,5 +536,4 @@ class ImageMatcher:
     #                     template_mask
     #                 )
     #                 ssim_coeff = masked_mse(screencap_masked, screencap_search_bgr, template_mask_size)
-
 
