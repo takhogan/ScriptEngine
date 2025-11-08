@@ -750,6 +750,14 @@ class SystemScriptActionExecutor:
             first_loop = True
             script_logger.log(pre_log)
             in_variable = state_eval(action["actionData"]["inVariables"], {}, state)
+            if isinstance(in_variable, dict) and in_variable.get(DETECT_OBJECT_RESULT_MARKER):
+                error_msg = (
+                    f"forLoopAction inVariables '{action['actionData']['inVariables']}' references a detectObject "
+                    "result that was produced with maxMatches = 1. Set maxMatches > 1 or wrap the result in a list "
+                    "before iterating."
+                )
+                script_logger.log(error_msg)
+                raise ValueError(error_msg)
 
             mid_log_1 = 'inVariable: {} evaluated to: {}'.format(
                 str(action["actionData"]["inVariables"]),
