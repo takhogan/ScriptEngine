@@ -188,59 +188,117 @@ class SystemScriptActionExecutor:
             counterVarName = action["actionData"]["counterVarName"].strip()
             counterThreshold = action["actionData"]["counterThreshold"].strip()
             incrementBy = action["actionData"]["incrementBy"].strip()
+            thresholdType = action["actionData"].get("thresholdType", "counter").strip()
+            
+            # Check resetCounterAfterBreached attribute (unified for both counter and timer modes)
+            resetCounterAfterBreached = action["actionData"].get("resetCounterAfterBreached", False)
+            if isinstance(resetCounterAfterBreached, str):
+                resetCounterAfterBreached = resetCounterAfterBreached.lower() == "true"
 
             threhold_stripped = sanitize_input(counterThreshold, state)
             incrementby_stripped = sanitize_input(incrementBy, state)
             pre_log = 'with counter name {}'.format(counterVarName) +\
                 'threshold params {}'.format(threhold_stripped) +\
-                'and incrementBy params {}'.format(incrementby_stripped)
+                'and incrementBy params {}'.format(incrementby_stripped) +\
+                'threshold type {}'.format(thresholdType)
             script_logger.log(pre_log)
-            if not counterVarName in state:
+
+            if thresholdType == "timer":
+                # Timer mode: check if thresholdSeconds has been breached
+                timerVarName = counterVarName + "_timer_start"
+                counterThresholdSeconds = action["actionData"].get("counterThresholdSeconds", "0").strip()
+                threshold_seconds = float(state_eval(counterThresholdSeconds, {}, state))
+
+                if timerVarName not in state:
+                    # Start the timer
+                    state[timerVarName] = time.time()
+                    initial_timer_logs = 'Starting timer for {} at {}'.format(counterVarName, state[timerVarName])
+                    script_logger.log(initial_timer_logs)
+                    pre_log += '\n' + initial_timer_logs
+
+                elapsed_time = time.time() - state[timerVarName]
+                
+                if elapsed_time < threshold_seconds:
+                    post_log = 'For timer {}'.format(counterVarName) +\
+                        'elapsed time of {:.2f}s'.format(elapsed_time) +\
+                        'was less than threshold of {:.2f}s'.format(threshold_seconds) + '.' +\
+                        'returning failure'
+                    script_logger.log(post_log)
+                    status = ScriptExecutionState.FAILURE
+                    post_post_log = 'elapsed time is {:.2f}s'.format(elapsed_time)
+                else:
+                    post_log = 'For timer {}'.format(counterVarName) + \
+                               'elapsed time of {:.2f}s'.format(elapsed_time) + \
+                               'was greater than or equal to threshold of {:.2f}s'.format(threshold_seconds) + '.' + \
+                               'returning success.'
+                    script_logger.log(
+                        'timer elapsed time of', elapsed_time, 'was greater than or equal to threshold of', threshold_seconds, '.',
+                        'returning success'
+                    )
+                    post_post_log = ''
+                    status = ScriptExecutionState.SUCCESS
+                    
+                    # Reset timer if resetCounterAfterBreached is True
+                    if resetCounterAfterBreached:
+                        del state[timerVarName]
+                        reset_log = 'Timer {} reset after threshold breached'.format(counterVarName)
+                        script_logger.log(reset_log)
+                        post_post_log = reset_log
+            else:
                 initialValue = '0'
                 if "initialValue" in action["actionData"]:
                     initialValue = action["actionData"]["initialValue"].strip()
-                initial_value_stripped = sanitize_input(initialValue, state)
-
-                initial_value_logs = 'Setting initial value with initialValue params {}'.format(initial_value_stripped)
-                script_logger.log(initial_value_logs)
                 initial_value = state_eval(initialValue, {}, state)
-                state[counterVarName] = initial_value
+                
+                if not counterVarName in state:
+                    initial_value_stripped = sanitize_input(initialValue, state)
 
-                initial_value_post_logs = 'Evaluated initial value to {}'.format(initial_value)
-                script_logger.log(initial_value_post_logs)
-                pre_log += '\n' + initial_value_logs + '\n' + initial_value_post_logs
+                    initial_value_logs = 'Setting initial value with initialValue params {}'.format(initial_value_stripped)
+                    script_logger.log(initial_value_logs)
+                    state[counterVarName] = initial_value
 
-            counter_value = state_eval(counterVarName, {}, state)
-            threshold_value = state_eval(counterThreshold, {}, state)
-            if counter_value < threshold_value:
-                incrementby_value = state_eval(incrementBy, {}, state)
-                post_log = 'For counter {}'.format(counterVarName) +\
-                    'counter value of {}'.format(counter_value) +\
-                    'was less than threshold of {}'.format(threshold_value) + '.'+\
-                    'incrementing by {}'.format(incrementby_value) +\
-                    'and returning failure'
-                script_logger.log(
-                    post_log
-                )
-                new_counter_value = counter_value + incrementby_value
-                state[counterVarName] = new_counter_value
-                status = ScriptExecutionState.FAILURE
-                post_post_log = 'new counter value is {}'.format(new_counter_value)
-                script_logger.log(
-                    post_post_log
-                )
-            else:
-                post_log = 'For counter {}'.format(counterVarName) + \
-                           'counter value of {}'.format(counter_value) + \
-                           'was greater than threshold of {}'.format(threshold_value) + '.' + \
-                           'returning success.'
-                script_logger.log(
-                    'counter value of', counter_value, 'was greater than threshold of', threshold_value, '.',
-                    'returning success'
-                )
-                post_post_log = ''
+                    initial_value_post_logs = 'Evaluated initial value to {}'.format(initial_value)
+                    script_logger.log(initial_value_post_logs)
+                    pre_log += '\n' + initial_value_logs + '\n' + initial_value_post_logs
 
-                status = ScriptExecutionState.SUCCESS
+                counter_value = state_eval(counterVarName, {}, state)
+                threshold_value = state_eval(counterThreshold, {}, state)
+                if counter_value < threshold_value:
+                    incrementby_value = state_eval(incrementBy, {}, state)
+                    post_log = 'For counter {}'.format(counterVarName) +\
+                        'counter value of {}'.format(counter_value) +\
+                        'was less than threshold of {}'.format(threshold_value) + '.'+\
+                        'incrementing by {}'.format(incrementby_value) +\
+                        'and returning failure'
+                    script_logger.log(
+                        post_log
+                    )
+                    new_counter_value = counter_value + incrementby_value
+                    state[counterVarName] = new_counter_value
+                    status = ScriptExecutionState.FAILURE
+                    post_post_log = 'new counter value is {}'.format(new_counter_value)
+                    script_logger.log(
+                        post_post_log
+                    )
+                else:
+                    post_log = 'For counter {}'.format(counterVarName) + \
+                               'counter value of {}'.format(counter_value) + \
+                               'was greater than threshold of {}'.format(threshold_value) + '.' + \
+                               'returning success.'
+                    script_logger.log(
+                        'counter value of', counter_value, 'was greater than threshold of', threshold_value, '.',
+                        'returning success'
+                    )
+                    post_post_log = ''
+
+                    status = ScriptExecutionState.SUCCESS
+                    
+                    # Reset counter if resetCounterAfterBreached is True
+                    if resetCounterAfterBreached:
+                        del state[counterVarName]
+                        reset_log = 'Counter {} reset after threshold breached'.format(counterVarName)
+                        script_logger.log(reset_log)
+                        post_post_log = reset_log
             script_logger.get_action_log().add_post_file(
                 'text',
                 'counterVarName-log.txt',

@@ -103,34 +103,11 @@ class DeviceController:
     
     def get_device_action(self, device_type, action_type, device_params=None):
         device = self.initialize_device(device_type, device_params)
-        if action_type == 'screenshot':
-            return device.screenshot
-        elif action_type == 'key_down':
-            return device.key_down
-        elif action_type == 'key_up':
-            return device.key_up
-        elif action_type == 'key_press':
-            return device.key_press
-        elif action_type == 'hotkey':
-            return device.hotkey
-        elif action_type == 'mouse_down':
-            return device.mouse_down
-        elif action_type == 'mouse_up':
-            return device.mouse_up
-        elif action_type == 'mouse_move':
-            return device.smooth_move
-        elif action_type == 'click':
-            return device.click
-        elif action_type == 'click_and_drag':
-            return device.click_and_drag
-        elif action_type == 'scroll':
-            return device.scroll
-        elif action_type == 'start_device':
-            return device.start_device
-        elif action_type == 'stop_device':
-            return device.stop_device
-        elif action_type == 'get_status':
-            return device.get_status
+        action_method_map = {
+            'mouse_move': 'smooth_move'
+        }
+        method_name = action_method_map.get(action_type, action_type)
+        return getattr(device, method_name)
     
     def ensure_device_initialized(self, device_type, device_params=None):
         device = self.initialize_device(device_type, device_params)
@@ -208,6 +185,21 @@ class DeviceController:
             return {
                 "data": "success"
             }
+        elif device_action == "list_applications":
+            applications = self.get_device_action(device_type, 'list_applications', device_params)()
+            return {
+                "data": applications
+            }
+        elif device_action == "start_application":
+            self.get_device_action(device_type, 'start_application', device_params)(inputs[3])
+            return {
+                "data": "success"
+            }
+        elif device_action == "stop_application":
+            self.get_device_action(device_type, 'stop_application', device_params)(inputs[3])
+            return {
+                "data": "success"
+            }
 
 
 
@@ -230,7 +222,7 @@ async def read_input(device_controller: DeviceController):
             try:
                 output = device_controller.parse_inputs(inputs)
             except Exception as e:
-                script_logger.log('DEVICE CONTROLLER: error in parse_inputs', e)
+                script_logger.log('DEVICE CONTROLLER: error in parse_inputs', inputs, e)
                 output = {
                     "data" : "device controller error"
                 }

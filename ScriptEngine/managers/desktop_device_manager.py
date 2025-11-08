@@ -334,7 +334,7 @@ class DesktopDeviceManager(DeviceManager):
         except Exception as e:
             script_logger.log(f'Error stopping application {application_name}: {e}')
     
-    def list_applications(self):
+    def list_applications(self) -> dict[str, str]:
         """
         List installed applications on the desktop.
         On Mac: lists applications from ~/Applications and /Applications

@@ -1291,12 +1291,47 @@ class ADBDeviceManager(DeviceManager):
         except Exception as e:
             script_logger.log(f'ADBDeviceManager: error stopping application {application_name}: {e}')
     
-    def list_applications(self, filter_system=True):
+    def _get_application_label(self, package_name: str) -> str:
+        """Get the user-friendly application label for a package name using adb shell dumpsys package"""
+        try:
+            result = self.adb_run(['shell', 'dumpsys', 'package', package_name], timeout=10)
+            if result and result.returncode == 0:
+                output = result.stdout.decode('utf-8', errors='ignore')
+                # Look for applicationLabel in the output
+                # The label can appear in different formats in dumpsys output:
+                # - applicationLabel='App Name'
+                # - applicationLabel="App Name"
+                # - applicationLabel=App Name
+                # - applicationLabelRes=12345 (resource ID, less common)
+                for line in output.split('\n'):
+                    line = line.strip()
+                    if 'applicationLabel' in line and '=' in line:
+                        # Extract the label value
+                        # Handle quoted formats: applicationLabel='App Name' or applicationLabel="App Name"
+                        match = re.search(r"applicationLabel(?:Res)?=(?:'|\")([^'\"]+)(?:'|\")", line)
+                        if match:
+                            label = match.group(1).strip()
+                            if label:
+                                return label
+                        # Try unquoted format: applicationLabel=App Name
+                        # Match everything after = until end of line or next space/colon
+                        match = re.search(r"applicationLabel(?:Res)?=([^\s:]+)", line)
+                        if match:
+                            label = match.group(1).strip()
+                            if label and not label.isdigit():  # Skip resource IDs
+                                return label
+        except Exception as e:
+            script_logger.log(f'ADBDeviceManager: error getting label for {package_name}: {e}')
+        
+        # Fallback to package name if label cannot be retrieved
+        return package_name
+    
+    def list_applications(self, filter_system=True) -> dict[str, str]:
         """List installed applications on Android device using adb shell pm list packages"""
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('ADBDeviceManager: script in dummy mode, returning from list_applications')
-            return []
+            return {}
         
         try:
             # Use adb shell pm list packages to get installed applications
@@ -1324,12 +1359,19 @@ class ADBDeviceManager(DeviceManager):
                             packages.append(package_name)
                 
                 script_logger.log(f'ADBDeviceManager: found {len(packages)} applications')
-                return packages
+                
+                # Get application labels for each package
+                applications = {}
+                for package_name in packages:
+                    app_label = self._get_application_label(package_name)
+                    applications[package_name] = app_label
+                
+                return applications
             else:
                 error_msg = result.stderr.decode() if result and result.stderr else "Unknown error"
                 script_logger.log(f'ADBDeviceManager: failed to list applications, error: {error_msg}')
-                return []
+                return {}
                 
         except Exception as e:
             script_logger.log(f'ADBDeviceManager: error listing applications: {e}')
-            return []
+            return {}

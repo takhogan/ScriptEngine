@@ -53,6 +53,11 @@ class IOSDeviceManager(DeviceManager):
         screenshot_data = Screenshot(dvt)
         return screenshot_data
     
+    def list_applications(self) -> dict[str, str]:
+        """List installed applications on iOS device - not implemented"""
+        print(f"IOSDeviceManager: list_applications not implemented for iOS")
+        return {}
+    
     def start_application(self, application_path):
         """Start an application on iOS device - not implemented"""
         print(f"IOSDeviceManager: start_application not implemented for iOS - {application_path}")

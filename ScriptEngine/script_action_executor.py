@@ -305,6 +305,53 @@ class ScriptActionExecutor:
                 time_val = datetime.datetime.utcnow()
             state[action["actionData"]["outputVarName"]] = time_val
             status = ScriptExecutionState.SUCCESS
+        elif action["actionName"] == "interactApplicationAction":
+            actionType = action["actionData"]["actionType"].strip()
+            applicationName = action["actionData"]["applicationName"].strip()
+            actionPayload = action["actionData"].get("actionPayload", "").strip()
+            targetSystem = action["actionData"]["targetSystem"]
+
+            pre_log = 'InteractApplicationAction: actionType={}, applicationName={}, actionPayload={}, targetSystem={}'.format(
+                actionType, applicationName, actionPayload, targetSystem
+            )
+            script_logger.log(pre_log)
+
+            try:
+                if actionType == "start":
+                    # Call start_application with applicationName and actionPayload
+                    # For Android, combine as package/activity format if actionPayload is provided
+                    start_app_func = self.device_controller.get_device_action(targetSystem, 'start_application')
+                    if actionPayload:
+                        # Combine applicationName and actionPayload for the application path (package/activity)
+                        application_path = applicationName + "/" + actionPayload
+                    else:
+                        application_path = applicationName
+                    start_app_func(application_path)
+                    post_log = 'Successfully started application: {}'.format(application_path)
+                    script_logger.log(post_log)
+                    status = ScriptExecutionState.SUCCESS
+                elif actionType == "stop":
+                    # Call stop_application with applicationName (actionPayload not used for stop)
+                    stop_app_func = self.device_controller.get_device_action(targetSystem, 'stop_application')
+                    stop_app_func(applicationName)
+                    post_log = 'Successfully stopped application: {}'.format(applicationName)
+                    script_logger.log(post_log)
+                    status = ScriptExecutionState.SUCCESS
+                else:
+                    exception_text = 'Unsupported actionType: {}'.format(actionType)
+                    script_logger.log(exception_text)
+                    raise Exception(exception_text)
+            except Exception as e:
+                error_log = 'Error in interactApplicationAction: {}'.format(str(e))
+                script_logger.log(error_log)
+                status = ScriptExecutionState.FAILURE
+                post_log = error_log
+
+            script_logger.get_action_log().add_post_file(
+                'text',
+                'interactApplicationAction-log.txt',
+                pre_log + '\n' + post_log
+            )
         # TODO: to be reintroduced in another form
         # elif action["actionName"] == "searchPatternStartAction":
             # context = self.search_pattern_helper.generate_pattern(action, context, log_folder, self.props['dir_path'])
