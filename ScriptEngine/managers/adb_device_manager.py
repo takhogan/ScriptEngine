@@ -540,8 +540,10 @@ class ADBDeviceManager(DeviceManager):
             self.full_ip in devices_output_line and 'offline' not in devices_output_line
         ) for devices_output_line in devices_output)
         if emulator_active:
+            script_logger.log('ADB CONTROLLER: emulator is online')
             return 'online'
         else:
+            script_logger.log('ADB CONTROLLER: emulator is offline')
             return 'offline'
 
     def get_screen_orientation(self):
@@ -732,7 +734,7 @@ class ADBDeviceManager(DeviceManager):
     def run_disconnect_command(self):
         script_logger = ScriptLogger.get_logger()
         script_logger.log('disconnecting from device', self.full_ip)
-        return self.adb_run(['disconnect', self.full_ip], timeout=30, stderr=subprocess.STDOUT)
+        return self.adb_run(['disconnect', self.full_ip], timeout=30, capture_output=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     def get_device_list_output(self):
         script_logger = ScriptLogger.get_logger()
@@ -1328,7 +1330,6 @@ class ADBDeviceManager(DeviceManager):
     
     def list_applications(self, filter_system=True) -> dict[str, str]:
         """List installed applications on Android device using adb shell pm list packages"""
-        self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('ADBDeviceManager: script in dummy mode, returning from list_applications')
             return {}
