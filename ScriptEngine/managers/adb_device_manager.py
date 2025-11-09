@@ -1255,11 +1255,16 @@ class ADBDeviceManager(DeviceManager):
             return
         
         try:
-            # Use adb am start to launch the application
-            # application_path should be the package name (e.g., com.example.app)
             script_logger.log(f'ADBDeviceManager: starting application {application_path}')
             
-            result = self.adb_run(['shell', 'am', 'start', '-n', application_path], timeout=30)
+            # Check if application_path contains '/' (package/activity format)
+            if '/' in application_path:
+                # Use adb am start with component name (package/activity format)
+                result = self.adb_run(['shell', 'am', 'start', '-n', application_path], timeout=30)
+            else:
+                # Only package name provided - use monkey command to launch the app
+                # This works without needing to know the activity name
+                result = self.adb_run(['shell', 'monkey', '-p', application_path, '-c', 'android.intent.category.LAUNCHER', '1'], timeout=30)
             
             if result and result.returncode == 0:
                 script_logger.log(f'ADBDeviceManager: successfully started application {application_path}')
@@ -1278,17 +1283,19 @@ class ADBDeviceManager(DeviceManager):
             return
         
         try:
-            # Use adb am force-stop to terminate the application
-            # application_name should be the package name (e.g., com.example.app)
-            script_logger.log(f'ADBDeviceManager: stopping application {application_name}')
+            # Extract package name if application_name contains '/' (package/activity format)
+            # am force-stop only needs the package name
+            package_name = application_name.split('/')[0] if '/' in application_name else application_name
             
-            result = self.adb_run(['shell', 'am', 'force-stop', application_name], timeout=30)
+            script_logger.log(f'ADBDeviceManager: stopping application {package_name}')
+            
+            result = self.adb_run(['shell', 'am', 'force-stop', package_name], timeout=30)
             
             if result and result.returncode == 0:
-                script_logger.log(f'ADBDeviceManager: successfully stopped application {application_name}')
+                script_logger.log(f'ADBDeviceManager: successfully stopped application {package_name}')
             else:
                 error_msg = result.stderr.decode() if result and result.stderr else "Unknown error"
-                script_logger.log(f'ADBDeviceManager: failed to stop application {application_name}, error: {error_msg}')
+                script_logger.log(f'ADBDeviceManager: failed to stop application {package_name}, error: {error_msg}')
                 
         except Exception as e:
             script_logger.log(f'ADBDeviceManager: error stopping application {application_name}: {e}')
