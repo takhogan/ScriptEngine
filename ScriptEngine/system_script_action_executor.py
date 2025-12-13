@@ -55,9 +55,12 @@ class SystemScriptActionExecutor:
             self.messaging_helper = MessagingHelper()
             from .helpers.user_secrets_helper import UserSecretsHelper
             self.user_secrets_helper = UserSecretsHelper()
+            from .helpers.calendar_action_helper import CalendarActionHelper
+            self.calendar_action_helper = CalendarActionHelper()
 
         else:
             self.messaging_helper = None
+            self.calendar_action_helper = None
         self.easy_ocr_reader = None
     
     def handle_action(self, action, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
@@ -1042,6 +1045,12 @@ class SystemScriptActionExecutor:
                 status = ScriptExecutionState.FAILURE
             else:
                 status, state = self.user_secrets_helper.handle_action(action, state)
+        elif action["actionName"] == "calendarAction":
+            if not self.screen_plan_server_attached:
+                script_logger.log('unable to perform calendar action, screen plan server not active')
+                status = ScriptExecutionState.FAILURE
+            else:
+                status, state = self.calendar_action_helper.handle_action(action, state)
 
 
         return action, status, state, context, run_queue, []
