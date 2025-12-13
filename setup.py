@@ -14,6 +14,7 @@ setup(
         'scikit-image>=0.22.0',
         'scipy>=1.11.4',
         'cx_Freeze>=6.15.12',
+        'tzlocal>=5.0',
         # Add other dependencies from setup/venv_requirements.txt
     ],
     entry_points={

@@ -46,6 +46,7 @@ threadpoolctl
 tifffile
 typing_extensions
 tzdata
+tzlocal
 urllib3
 watchdog
 Werkzeug
