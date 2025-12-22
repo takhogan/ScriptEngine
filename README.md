@@ -138,10 +138,11 @@ scripts/
 {
   "actionName": "clickAction",
   "actionData": {
-    "targetSystem": "desktop",
-    "clickType": "leftClick",
-    "x": 100,
-    "y": 200
+    "targetSystem": "python",
+    "inputExpression": "detectObject_0_output",
+    "pointList": [],
+    "clickCount": 1,
+    "mouseButton": "left"
   }
 }
 ```
@@ -151,10 +152,20 @@ scripts/
 {
   "actionName": "detectObject",
   "actionData": {
-    "targetSystem": "desktop",
-    "detectActionType": "detectAndClick",
-    "positiveExamples": ["button.png"],
-    "negativeExamples": ["not_button.png"]
+    "targetSystem": "adb",
+    "detectActionType": "floatingObject",
+    "matchMode": "bestMatch",
+    "threshold": "0.3",
+    "inputExpression": "",
+    "outputVarName": "detectObject_0_output",
+    "positiveExamples": [
+      {
+        "detectType": "floatingObject",
+        "img": "actions/0-row/0-detectObject/assets/positiveExamples/0-img.png",
+        "mask": "actions/0-row/0-detectObject/assets/positiveExamples/0-mask.png"
+      }
+    ],
+    "negativeExamples": []
   }
 }
 ```
@@ -164,25 +175,13 @@ scripts/
 {
   "actionName": "keyboardAction",
   "actionData": {
-    "targetSystem": "desktop",
+    "targetSystem": "python",
     "keyboardActionType": "keyPress",
     "keyboardExpression": "Hello World"
   }
 }
 ```
 
-#### Android Device Control
-```json
-{
-  "actionName": "adbAction",
-  "actionData": {
-    "targetSystem": "android",
-    "adbActionType": "tap",
-    "x": 500,
-    "y": 1000
-  }
-}
-```
 ## Development
 
 ### Building from Source
