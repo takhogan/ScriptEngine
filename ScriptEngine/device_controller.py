@@ -38,6 +38,13 @@ from ScriptEngine.helpers.device_action_interpreter import DeviceActionInterpret
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
+# Global lock for response writing to prevent interleaving
+response_lock = asyncio.Lock()
+
+# Per-device locks to ensure only one thread per device at a time
+device_locks: Dict[str, asyncio.Lock] = {}
+device_locks_lock = asyncio.Lock()  # Lock for accessing device_locks dict
+
 
 class DeviceController:
     def __init__(self, default_props, default_device_params, io_executor : CustomThreadPool, secrets_manager: DeviceSecretsManager):
@@ -203,6 +210,40 @@ class DeviceController:
 
 
 
+async def get_device_lock(device_key: str) -> asyncio.Lock:
+    """Get or create a lock for a specific device."""
+    async with device_locks_lock:
+        if device_key not in device_locks:
+            device_locks[device_key] = asyncio.Lock()
+        return device_locks[device_key]
+
+async def process_input(device_controller: DeviceController, inputs: list):
+    """Process a single input with per-device locking and global response locking."""
+    device_key = inputs[1]
+    request_id = inputs[0]
+    
+    # Get the lock for this specific device
+    device_lock = await get_device_lock(device_key)
+    
+    # Wait for this device to be available (only one thread per device)
+    async with device_lock:
+        try:
+            # Process the input in a thread pool (non-blocking for event loop)
+            output = await asyncio.to_thread(device_controller.parse_inputs, inputs)
+        except Exception as e:
+            script_logger.log('DEVICE CONTROLLER: error in parse_inputs', inputs, e)
+            output = {
+                "data" : "device controller error"
+            }
+        
+        # Write response with global lock to prevent interleaving
+        async with response_lock:
+            input_response = json.dumps(output)
+            script_logger.log('DEVICE CONTROLLER: Sending response for {}'.format(request_id), flush=True)
+            script_logger.log('<--{}-->'.format(request_id) + input_response + '<--{}-->'.format(request_id), file=DummyFile(), flush=True)
+            # script_logger.log('DEVICE CONTROLLER: response', input_response, flush=True)
+            script_logger.log('DEVICE CONTROLLER: Response sent for {}'.format(request_id), flush=True)
+
 async def read_input(device_controller: DeviceController):
     script_logger.log("DEVICE CONTROLLER PROCESS: listening for input")
     input_line = ''
@@ -219,18 +260,8 @@ async def read_input(device_controller: DeviceController):
         input_line = ''
         script_logger.log('DEVICE CONTROLLER PROCESS: received inputs ', inputs)
         if len(inputs) > 2:
-            try:
-                output = device_controller.parse_inputs(inputs)
-            except Exception as e:
-                script_logger.log('DEVICE CONTROLLER: error in parse_inputs', inputs, e)
-                output = {
-                    "data" : "device controller error"
-                }
-            input_response = json.dumps(output)
-            script_logger.log('DEVICE CONTROLLER: Sending response for {}'.format(inputs[0]), flush=True)
-            script_logger.log('<--{}-->'.format(inputs[0]) + input_response + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
-            # script_logger.log('DEVICE CONTROLLER: response', input_response, flush=True)
-            script_logger.log('DEVICE CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
+            # Process input asynchronously (will queue per device automatically)
+            asyncio.create_task(process_input(device_controller, inputs))
 
 async def device_controller_main(device_controller: DeviceController):
     await asyncio.gather(read_input(device_controller))
