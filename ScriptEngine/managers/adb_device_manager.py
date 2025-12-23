@@ -304,7 +304,7 @@ class ADBDeviceManager(DeviceManager):
         )
         return ScriptExecutionState.SUCCESS, state, context
 
-    def adb_run(self, args, timeout=30, capture_output=True, cwd="/", **kwargs):
+    def adb_run(self, args, timeout=30, capture_output=True, cwd="/", retry_on_timeout=True, **kwargs):
         """
         Helper method to run ADB commands with consistent error handling and timeout management.
         
@@ -345,10 +345,70 @@ class ADBDeviceManager(DeviceManager):
             
         except subprocess.TimeoutExpired as e:
             script_logger.log(f'ADBDeviceManager: command timed out after {timeout}s: {" ".join(full_args)}')
-            return None
+            if retry_on_timeout:
+                self.adb_run(args, timeout=timeout, capture_output=capture_output, cwd=cwd, retry_on_timeout=False, **kwargs)
+            raise UnidentifiedImageError()
         except Exception as e:
             script_logger.log(f'ADBDeviceManager: error running command {" ".join(full_args)}: {e}')
             return None
+
+    def adb_popen(self, args, timeout=15, cwd="/", retry_on_timeout=True, **kwargs):
+        """
+        Helper method to run ADB commands with subprocess.Popen and handle communication.
+        Similar to adb_run but uses Popen for cases where you need more control over the process.
+        
+        Args:
+            args: List of command arguments (will be prepended with self.adb_path and -s self.full_ip)
+            timeout: Timeout in seconds for communicate() (default: 15)
+            cwd: Working directory (default: "/")
+            **kwargs: Additional arguments to pass to subprocess.Popen
+            
+        Returns:
+            tuple: (stdout, stderr, returncode) on success
+            Raises: UnidentifiedImageError on failure or timeout
+        """
+        script_logger = ScriptLogger.get_logger()
+        
+        # Build the full command with adb_path and device selection
+        full_args = [self.adb_path, '-s', self.full_ip] + args
+        
+        # Set default Popen arguments if not provided
+        popen_kwargs = {
+            'cwd': cwd,
+            'stdout': subprocess.PIPE,
+            'stderr': subprocess.PIPE,
+            **kwargs
+        }
+        
+        try:
+            script_logger.log(f'ADBDeviceManager: running popen command: {" ".join(full_args)}')
+            
+            process = subprocess.Popen(full_args, **popen_kwargs)
+            stdout, stderr = process.communicate(timeout=timeout)
+            
+            if process.returncode != 0:
+                script_logger.log(f"Command failed with return code {process.returncode}")
+                script_logger.log(f"Error output: {stderr.decode('utf-8')}")
+                raise UnidentifiedImageError()
+            else:
+                script_logger.log("Command executed successfully.")
+            
+            return stdout, stderr, process.returncode
+            
+        except subprocess.TimeoutExpired:
+            script_logger.log(f'ADBDeviceManager: command timed out after {timeout}s: {" ".join(full_args)}')
+            try:
+                stdout, stderr = process.communicate(timeout=10)
+                process.kill()
+                script_logger.log(stdout.decode('utf-8', errors='ignore'))
+            except:
+                pass
+            if retry_on_timeout:
+                self.adb_popen(args, timeout=timeout, cwd=cwd, retry_on_timeout=False, **kwargs)
+            raise UnidentifiedImageError()
+        except Exception as e:
+            script_logger.log(f'ADBDeviceManager: error running popen command {" ".join(full_args)}: {e}')
+            raise UnidentifiedImageError()
 
     def get_device_name_to_emulator_name_mapping(self):
         script_logger = ScriptLogger.get_logger()
@@ -833,56 +893,14 @@ class ADBDeviceManager(DeviceManager):
             screenshot_command = self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip)
             script_logger.log('ADB CONTROLLER', 'taking screenshot', 'with command', screenshot_command)
 
-            try:
-                process = subprocess.Popen(
-                    [self.adb_path, '-s', self.full_ip, 'exec-out', 'screencap', '-p'],
-                    cwd="/",
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
-                stdout, stderr = process.communicate(timeout=15)
-
-                if process.returncode != 0:
-                    script_logger.log(f"Command failed with return code {process.returncode}")
-                    script_logger.log(f"Error output: {stderr.decode('utf-8')}")
-                    raise UnidentifiedImageError()
-                else:
-                    script_logger.log("Command executed successfully.")
-
-            except subprocess.TimeoutExpired:
-                script_logger.log('screencap command timed out')
-                stdout, stderr = process.communicate(timeout=10)
-                process.kill()
-                script_logger.log(stdout.decode('utf-8', errors='ignore'))
-                raise UnidentifiedImageError()
+            stdout, stderr, returncode = self.adb_popen(['exec-out', 'screencap', '-p'], timeout=15)
             bytes_im = BytesIO(stdout)
             source_im = Image.open(bytes_im)
             img = cv2.cvtColor(np.array(source_im), cv2.COLOR_RGB2BGR)
         else:
             screenshot_command = self.adb_path + ' -s {} exec-out screencap'.format(self.full_ip)
             script_logger.log('ADB CONTROLLER', 'taking screenshot', 'with command', screenshot_command)
-            try:
-                process = subprocess.Popen(
-                    [self.adb_path, '-s', self.full_ip, 'exec-out', 'screencap'],
-                    cwd="/",
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
-                stdout, stderr = process.communicate(timeout=15)
-
-                if process.returncode != 0:
-                    script_logger.log(f"Command failed with return code {process.returncode}")
-                    script_logger.log(f"Error output: {stderr.decode('utf-8')}")
-                    raise UnidentifiedImageError()
-                else:
-                    script_logger.log("Command executed successfully.")
-
-            except subprocess.TimeoutExpired:
-                script_logger.log('screencap command timed out')
-                stdout, stderr = process.communicate(timeout=10)
-                process.kill()
-                script_logger.log(stdout.decode('utf-8', errors='ignore'))
-                raise UnidentifiedImageError()
+            stdout, stderr, returncode = self.adb_popen(['exec-out', 'screencap'], timeout=15)
             raw_data = stdout
             header_size = 16
             header_format = '<4I'  # Little-endian, 4 unsigned integers
