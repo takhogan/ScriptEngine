@@ -34,7 +34,7 @@ class DetectObjectHelper:
         pass
 
     @staticmethod
-    def get_detect_area(action, state, output_type='matched_area'):
+    def get_detect_area(action, state):
         screencap_im_bgr = None
         original_image = None
         match_point = (0, 0)
@@ -67,33 +67,20 @@ class DetectObjectHelper:
                 if input_area["input_type"] == "rectangle":
                     pass
                 elif input_area["input_type"] == "shape":
-                    if output_type == 'matched_area':
-                        screencap_im_bgr = input_area["matched_area"]
-                        match_point = (
-                            input_area["point"][0],
-                            input_area["point"][1]
-                        )
-                        original_height = input_area["original_height"]
-                        original_width = input_area["original_width"]
-                        original_image = input_area["original_image"]
-                        fixed_scale = True
+                    screencap_im_bgr = input_area["matched_area"]
+                    screencap_mask = input_area["shape"]
+                    match_point = (
+                        input_area["point"][0],
+                        input_area["point"][1]
+                    )
+                    original_height = input_area["original_height"]
+                    original_width = input_area["original_width"]
+                    original_image = input_area["original_image"]
+                    fixed_scale = True
 
-                        mid_log = 'parsed inputExpression, found matched area and match point {}'.format(
-                            str(match_point)
-                        )
-                    elif output_type == 'matched_pixels':
-                        screencap_im_bgr = input_area["matched_area"][np.where(input_area['shape'] > 1)]
-                        match_point = (
-                            input_area["point"][0],
-                            input_area["point"][1]
-                        )
-                        original_height = input_area["original_height"]
-                        original_width = input_area["original_width"]
-                        original_image = input_area["original_image"]
-                        fixed_scale = True
-                        mid_log = 'parsed inputExpression, found matched pixels and match point {}'.format(
-                            str(match_point)
-                        )
+                    mid_log = 'parsed inputExpression, found matched area and match point {}'.format(
+                        str(match_point)
+                    )
                     script_logger.log(mid_log)
 
             else:
@@ -111,6 +98,7 @@ class DetectObjectHelper:
         )
         return {
             "screencap_im_bgr" : screencap_im_bgr,
+            "sceencap_mask" : screencap_mask,
             "match_point" : match_point,
             "original_height" : original_height,
             "original_width" : original_width,

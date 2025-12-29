@@ -16,6 +16,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 from abc import ABC, abstractmethod
+from typing import List
 
 
 class DeviceManager(ABC):
@@ -85,9 +86,9 @@ class DeviceManager(ABC):
         raise NotImplementedError(f"list_applications not implemented for {self.__class__.__name__}")
     
     @abstractmethod
-    def start_application(self, application_path):
+    def start_application(self, application_path : str, args : List[str] | None):
         raise NotImplementedError(f"start_application not implemented for {self.__class__.__name__}")
     
     @abstractmethod
-    def stop_application(self, application_name):
+    def stop_application(self, application_name : str):
         raise NotImplementedError(f"stop_application not implemented for {self.__class__.__name__}")

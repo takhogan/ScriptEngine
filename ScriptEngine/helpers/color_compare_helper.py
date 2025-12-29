@@ -31,16 +31,18 @@ class ColorCompareHelper:
         )
         script_logger.log(pre_log_2)
 
+        masked_screencap_im_bgr_pixels = screencap_im_bgr[np.where(action['input_obj']['screencap_mask'] > 1)]
+
         pre_log_3 = ''
         if action["actionData"]["compareMode"] == 'mean':
-            img_colors = np.mean(screencap_im_bgr, axis=0)
+            img_colors = np.mean(masked_screencap_im_bgr_pixels, axis=0)
             img_colors = [img_colors[2], img_colors[1], img_colors[0]]
             pre_log_3 = 'Mean Color: {}'.format(img_colors)
         elif action["actionData"]["compareMode"] == 'mode':
             color_counts = {}
             # Iterate over each pixel
-            for pixel_index in range(0, screencap_im_bgr.shape[0]):
-                pixel = screencap_im_bgr[pixel_index]
+            for pixel_index in range(0, masked_screencap_im_bgr_pixels.shape[0]):
+                pixel = masked_screencap_im_bgr_pixels[pixel_index]
                 # Quantize the color values
                 r, g, b = pixel // 4
                 color_key = f"{b},{g},{r}"

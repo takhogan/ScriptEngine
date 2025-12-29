@@ -22,6 +22,7 @@ import subprocess
 import os
 import platform
 import re
+from typing import List
 
 from configobj import ConfigObj 
 from PIL import Image
@@ -1265,7 +1266,7 @@ class ADBDeviceManager(DeviceManager):
         self.event_counter += 1
         return delta_x, delta_y
     
-    def start_application(self, application_path):
+    def start_application(self, application_path : str, args : List[str] | None):
         """Start an application on Android device using adb am start"""
         self.ensure_device_initialized()
         if self.dummy_mode:
@@ -1276,9 +1277,10 @@ class ADBDeviceManager(DeviceManager):
             script_logger.log(f'ADBDeviceManager: starting application {application_path}')
             
             # Check if application_path contains '/' (package/activity format)
-            if '/' in application_path:
+            # For ADB, args is expected to be a list, but we use the first element as the activity name
+            if args is not None and len(args) > 0:
                 # Use adb am start with component name (package/activity format)
-                result = self.adb_run(['shell', 'am', 'start', '-n', application_path], timeout=30)
+                result = self.adb_run(['shell', 'am', 'start', '-n', application_path + "/" + args[0]], timeout=30)
             else:
                 # Only package name provided - use monkey command to launch the app
                 # This works without needing to know the activity name
