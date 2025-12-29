@@ -36,6 +36,7 @@ class DetectObjectHelper:
     @staticmethod
     def get_detect_area(action, state):
         screencap_im_bgr = None
+        screencap_mask = None
         original_image = None
         match_point = (0, 0)
         original_width = 0
