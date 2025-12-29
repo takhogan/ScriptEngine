@@ -16,6 +16,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 from .device_manager import DeviceManager
+from typing import List
 
 from pikvm_lib import PiKVM
 import cv2
@@ -140,7 +141,7 @@ class PiKVMDeviceManager(DeviceManager):
         script_logger.log(f"PiKVMDeviceManager: list_applications not implemented for PiKVM")
         return {}
     
-    def start_application(self, application_path):
+    def start_application(self, application_path : str, args : List[str] | None):
         """Start an application on PiKVM device - not implemented"""
         script_logger.log(f"PiKVMDeviceManager: start_application not implemented for PiKVM - {application_path}")
         pass

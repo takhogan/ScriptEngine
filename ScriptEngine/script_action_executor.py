@@ -18,6 +18,7 @@
 import cv2
 import time
 import datetime
+import shlex
 
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_storage
@@ -251,7 +252,7 @@ class ScriptActionExecutor:
             )
         elif action["actionName"] == "colorCompareAction":
             input_obj = DetectObjectHelper.get_detect_area(
-                action, state, output_type='matched_pixels'
+                action, state
             )
             if input_obj['screencap_im_bgr'] is None:
                 script_logger.log('No cached screenshot or input expression, taking screenshot')
@@ -321,13 +322,9 @@ class ScriptActionExecutor:
                     # Call start_application with applicationName and actionPayload
                     # For Android, combine as package/activity format if actionPayload is provided
                     start_app_func = self.device_controller.get_device_action(targetSystem, 'start_application')
-                    if actionPayload:
-                        # Combine applicationName and actionPayload for the application path (package/activity)
-                        application_path = applicationName + "/" + actionPayload
-                    else:
-                        application_path = applicationName
-                    start_app_func(application_path)
-                    post_log = 'Successfully started application: {}'.format(application_path)
+                    args_list = shlex.split(actionPayload) if actionPayload else None
+                    start_app_func(applicationName, args_list)
+                    post_log = 'Successfully started application: {}'.format(applicationName)
                     script_logger.log(post_log)
                     status = ScriptExecutionState.SUCCESS
                 elif actionType == "stop":

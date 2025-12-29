@@ -24,6 +24,7 @@ import base64
 import glob
 import platform
 import subprocess
+from typing import List
 
 
 import numpy as np
@@ -264,7 +265,7 @@ class DesktopDeviceManager(DeviceManager):
             self.mouse_up(target_x, target_y, button='left')
         return delta_x, delta_y
     
-    def start_application(self, application_name):
+    def start_application(self, application_name : str, args : List[str] | None):
         """
         Start an application on the desktop.
         On Mac: uses 'open' command
@@ -287,11 +288,19 @@ class DesktopDeviceManager(DeviceManager):
         
         try:
             if platform.system() == 'Darwin':  # macOS
-                subprocess.run(['open', application_path], check=True)
-                script_logger.log(f'Started application on Mac: {application_name} -> {application_path}')
+                cmd = ['open', application_path]
+                if args:
+                    cmd.extend(args)
+                cmd_str = ' '.join(cmd)
+                subprocess.run(cmd, check=True)
+                script_logger.log(f'Started application on Mac: {application_name} -> Command: {cmd_str}')
             elif platform.system() == 'Windows':  # Windows
-                subprocess.run(['start', '', application_path], shell=True, check=True)
-                script_logger.log(f'Started application on Windows: {application_name} -> {application_path}')
+                cmd = ['start', '', f'"{application_path}"']
+                if args:
+                    cmd.extend(args)
+                cmd_str = ' '.join(cmd)
+                subprocess.run(['start', '', application_path] + (args if args else []), shell=True, check=True)
+                script_logger.log(f'Started application on Windows: {application_name} -> Command: {cmd_str}')
             else:
                 script_logger.log(f'Unsupported platform for start_application: {platform.system()}')
         except subprocess.CalledProcessError as e:

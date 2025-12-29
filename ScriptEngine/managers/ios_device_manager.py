@@ -16,6 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+from typing import List
 from pymobiledevice3.tunneld.api import async_get_tunneld_devices
 from pymobiledevice3.services.dvt.instruments.screenshot import Screenshot
 
@@ -58,7 +59,7 @@ class IOSDeviceManager(DeviceManager):
         print(f"IOSDeviceManager: list_applications not implemented for iOS")
         return {}
     
-    def start_application(self, application_path):
+    def start_application(self, application_path : str, args : List[str] | None):
         """Start an application on iOS device - not implemented"""
         print(f"IOSDeviceManager: start_application not implemented for iOS - {application_path}")
         pass

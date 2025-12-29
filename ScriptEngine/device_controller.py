@@ -198,7 +198,7 @@ class DeviceController:
                 "data": applications
             }
         elif device_action == "start_application":
-            self.get_device_action(device_type, 'start_application', device_params)(inputs[3])
+            self.get_device_action(device_type, 'start_application', device_params)(inputs[3], [])
             return {
                 "data": "success"
             }
