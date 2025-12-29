@@ -31,7 +31,13 @@ class ColorCompareHelper:
         )
         script_logger.log(pre_log_2)
 
-        masked_screencap_im_bgr_pixels = screencap_im_bgr[np.where(action['input_obj']['screencap_mask'] > 1)]
+        # Get the mask if available, otherwise use the entire image
+        screencap_mask = action['input_obj'].get('screencap_mask')
+        if screencap_mask is not None:
+            masked_screencap_im_bgr_pixels = screencap_im_bgr[np.where(screencap_mask > 1)]
+        else:
+            # If no mask is provided, use all pixels from the image
+            masked_screencap_im_bgr_pixels = screencap_im_bgr.reshape(-1, 3)
 
         pre_log_3 = ''
         if action["actionData"]["compareMode"] == 'mean':

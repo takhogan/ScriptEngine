@@ -99,7 +99,7 @@ class DetectObjectHelper:
         )
         return {
             "screencap_im_bgr" : screencap_im_bgr,
-            "sceencap_mask" : screencap_mask,
+            "screencap_mask" : screencap_mask,
             "match_point" : match_point,
             "original_height" : original_height,
             "original_width" : original_width,
