@@ -3,6 +3,7 @@ import os
 import json
 import random
 import shutil
+import subprocess
 import sys
 import platform
 import datetime
@@ -207,6 +208,52 @@ def get_running_scripts():
             running_scripts = json.load(running_scripts_file)
 
     return running_scripts
+
+def safe_subprocess_run(args, timeout=5, capture_output=True, cwd="/", retry_on_timeout=True, **kwargs):
+        """
+        Helper method to run commands with consistent error handling and timeout management.
+        
+        Args:
+            args: List of command arguments
+            timeout: Timeout in seconds (default: 5)
+            capture_output: Whether to capture stdout/stderr (default: True)
+            cwd: Working directory (default: "/")
+            **kwargs: Additional arguments to pass to subprocess.run
+            
+        Returns:
+            subprocess.CompletedProcess object or None on error
+        """        
+        
+        try:
+            script_logger.log(f'safe_subprocess_run: running command: {" ".join(args)}')
+            
+            result = subprocess.run(
+                args,
+                cwd=cwd,
+                capture_output=capture_output,
+                timeout=timeout,
+                **kwargs
+            )
+            
+            if result.returncode == 0:
+                script_logger.log(f'safe_subprocess_run: command succeeded')
+            else:
+                script_logger.log(f'safe_subprocess_run: command failed with return code {result.returncode}')
+                if capture_output and result.stderr:
+                    script_logger.log(f'safe_subprocess_run: stderr: {result.stderr.decode()}')
+            
+            return result
+            
+        except subprocess.TimeoutExpired as e:
+            script_logger.log(f'safe_subprocess_run: command timed out after {timeout}s: {" ".join(args)}')
+            if retry_on_timeout:
+                safe_subprocess_run(args, timeout=timeout, capture_output=capture_output, cwd=cwd, retry_on_timeout=False, **kwargs)
+            else:
+                raise e
+        except Exception as e:
+            script_logger.log(f'safe_subprocess_run: error running command {" ".join(args)}: {e}')
+            raise e
+
 
 class StateEvaluator:
     """Helper for evaluating state expressions with shared context."""

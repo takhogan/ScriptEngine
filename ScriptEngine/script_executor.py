@@ -202,7 +202,7 @@ class ScriptExecutor:
     def set_parent_action_log(self, script_action_log : ScriptActionLog):
         self.parent_action_log = script_action_log
 
-    def rewind(self, input_vars):
+    def rewind(self, input_vars=None):
         # script_logger.log('rewind context : ', self.context["action_attempts"])
         # script_logger.log('input_vars : ', input_vars)
         # script_logger.log('state (1.5) ', self.state)
@@ -213,6 +213,11 @@ class ScriptExecutor:
         self.context["success_states"] = None
         self.context["run_queue"] = None
         self.run_queue = []
+        # Reset state to fresh state, preserving only SCRIPT_CONTEXT
+        script_context = self.state.get('SCRIPT_CONTEXT', {})
+        self.state = {
+            'SCRIPT_CONTEXT': script_context
+        }
         if input_vars is not None:
             self.state.update(input_vars)
         # script_logger.log('state (2) : ', self.state)
@@ -391,8 +396,6 @@ class ScriptExecutor:
                 child_context = action["actionData"]["initializedScript"].context
             # script_logger.log("child_context: ", child_context, "self context: ", context)
 
-            child_state = {}
-
             # creates script engine object
             if is_new_script:
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: creating new script object', action['actionData']['scriptName'])
@@ -437,14 +440,15 @@ class ScriptExecutor:
                     call_stack=self.call_stack + ['[{}-scriptReference-{}]'.format(self.context["script_counter"], action["actionGroup"])],
                     parent_folder=self.log_folder,
                     context=child_context,
-                    state=child_state,
+                    state={},
                     create_log_folders=False,
                     screen_plan_server_attached=self.screen_plan_server_attached
                 )
             else:
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: rewinding existing script object', action['actionData']['scriptName'])
 
-                action["actionData"]["initializedScript"].rewind(child_state)
+                # Pass None to rewind since inputs will be set via parse_inputs() below
+                action["actionData"]["initializedScript"].rewind()
                 ref_script_executor = action["actionData"]["initializedScript"]
 
                 ref_script_executor.context["script_counter"] = self.context["script_counter"]
