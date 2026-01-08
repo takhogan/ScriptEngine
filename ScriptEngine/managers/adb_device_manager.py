@@ -32,9 +32,8 @@ import cv2
 import numpy as np
 import random
 import time
-import sys
 import struct
-from ScriptEngine.common.script_engine_utils import is_null, state_eval, DummyFile
+from ScriptEngine.common.script_engine_utils import is_null, safe_subprocess_run, state_eval, DummyFile
 import pyautogui 
 from .device_manager import DeviceManager
 from ..helpers.device_action_interpreter import DeviceActionInterpreter
@@ -233,9 +232,9 @@ class ADBDeviceManager(DeviceManager):
             os_name = platform.system()
             try:
                 if os_name == "Windows":
-                    result = subprocess.run(["where", "adb"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    result = safe_subprocess_run(["where", "adb"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 else:
-                    result = subprocess.run(["which", "adb"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    result = safe_subprocess_run(["which", "adb"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
                 if result.returncode == 0:
                     adb_path = result.stdout.decode().strip()
@@ -252,6 +251,10 @@ class ADBDeviceManager(DeviceManager):
                     # On Windows, use the AppData path for Android SDK
                     user_home = os.path.expandvars(r'%LOCALAPPDATA%')
                     adb_path = os.path.join(user_home, 'Android', 'Sdk', 'platform-tools', 'adb.exe')
+                    if not os.path.exists(adb_path):
+                        adb_path = os.path.join(user_home, 'AppData', 'Local', 'Android', 'Sdk', 'platform-tools', 'adb.exe')
+                    if not os.path.exists(adb_path):
+                        adb_path = os.path.join(user_home, 'platform-tools', 'adb.exe')
                 elif os_name == 'Darwin':
                     # macOS
                     user_home = os.path.expanduser("~")
@@ -422,7 +425,7 @@ class ADBDeviceManager(DeviceManager):
                 device_id = line.split('\t')[0]
                 if device_id.startswith('emulator'):
                     # For this specific case, we need to use a different device ID
-                    result = subprocess.run([self.adb_path, '-s', device_id, 'emu', 'avd', 'name'],
+                    result = safe_subprocess_run([self.adb_path, '-s', device_id, 'emu', 'avd', 'name'],
                                             stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE,
                                             text=True)
@@ -551,14 +554,36 @@ class ADBDeviceManager(DeviceManager):
                 self.window_name = instance_window_name
                 stop_device_command = ['taskkill', '/fi', f'WINDOWTITLE eq {self.window_name}', '/IM', 'HD-Player.exe', '/F']
                 script_logger.log('ADB CONTROLLER: stopping device', self.device_name, 'with command', stop_device_command)
-                stop_device_process = subprocess.run(
+                stop_device_process = safe_subprocess_run(
                     stop_device_command,
                     cwd="/",
                     capture_output=True,
                     timeout=15
                 )
+                script_logger.log(
+                    'ADB CONTROLLER: stopped device (taskkill)',
+                    self.device_name,
+                    'with command',
+                    ' '.join(stop_device_command),
+                    'with result',
+                    stop_device_process.returncode,
+                    'stderr:',
+                    stop_device_process.stderr.decode() if stop_device_process.stderr else None,
+                    stop_device_process
+                )
 
-                stop_device_process = self.adb_run(['emu', 'kill'], timeout=15)
+                stop_device_process = safe_subprocess_run(['emu', 'kill'], timeout=15)
+                script_logger.log(
+                    'ADB CONTROLLER: stopped device (emu kill)',
+                    self.device_name,
+                    'with command',
+                    'emu kill',
+                    'with result',
+                    stop_device_process.returncode if stop_device_process else None,
+                    'stderr:',
+                    stop_device_process.stderr.decode() if stop_device_process and stop_device_process.stderr else None,
+                    stop_device_process
+                )
 
                 device_list = self.get_device_list_output()
                 script_logger.log('ADB CONTROLLER: device list', device_list)
@@ -572,19 +597,21 @@ class ADBDeviceManager(DeviceManager):
             if self.device_name in devices:
                 self.full_ip = devices[self.device_name]
                 stop_device_process = self.adb_run(['emu', 'kill'], timeout=15)
+                script_logger.log(
+                    'ADB CONTROLLER: stopped device (emu kill)',
+                    self.device_name,
+                    'with command',
+                    'emu kill',
+                    'with result',
+                    stop_device_process.returncode if stop_device_process else None,
+                    'stderr:',
+                    stop_device_process.stderr.decode() if stop_device_process and stop_device_process.stderr else None,
+                    stop_device_process
+                )
             else:
-                raise Exception('unable to run command, device not active' + self.device_name)
+                script_logger.log('ADB CONTROLLER: unable to run command emu kill, device not active' + self.device_name)
         else:
             raise Exception('ADB CONTROLLER: emulator type ' + self.emulator_type + ' not supported')
-        script_logger.log(
-            'ADB CONTROLLER: stopped device',
-            self.device_name,
-            'with command',
-            ' '.join(stop_device_command),
-            'with result',
-            stop_device_process.returncode,
-            stop_device_process
-        )
 
     def get_status(self):
         if self.adb_port == 'auto':
@@ -673,7 +700,7 @@ class ADBDeviceManager(DeviceManager):
                     ))
                     self.window_name = instance_window_name
 
-                    check_for_window = lambda window_name: "HD-Player" in bytes.decode(subprocess.run(
+                    check_for_window = lambda window_name: "HD-Player" in bytes.decode(safe_subprocess_run(
                         ['tasklist', '/FI', f'WINDOWTITLE eq {window_name}'],
                         capture_output=True,
                     ).stdout, 'utf-8')
@@ -973,17 +1000,8 @@ class ADBDeviceManager(DeviceManager):
             script_logger.log('key not found!', key)
             return
         keycode = KEY_TO_KEYCODE[key]
-        key_input_string = "input keyevent {}".format(keycode)
-        shell_process = subprocess.Popen([
-            self.adb_path,
-            '-s',
-            self.full_ip,
-            'shell'
-        ],
-        stdin=subprocess.PIPE)
-        script_logger.log('ADB CONTROLLER: sending key event', key_input_string)
-
-        shell_process.communicate(key_input_string.encode('utf-8'))
+        script_logger.log('ADB CONTROLLER: sending key event', keycode.encode('utf-8'))
+        self.adb_popen(['shell', 'input', 'keyevent', keycode.encode('utf-8')])
 
     def hotkey(self, keys):
         script_logger.log('adb hotkey unimplemented! defaulting to pyautogui')

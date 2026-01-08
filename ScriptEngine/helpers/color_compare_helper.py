@@ -15,7 +15,7 @@ class ColorCompareHelper:
         screencap_im_bgr = action['input_obj']['screencap_im_bgr'].copy()
         if script_logger.get_log_level() == 'info':
             input_image_relative_path = script_logger.get_log_header() + '-colorCompareAction-inputImage.png'
-            cv2.imwrite(script_logger.get_log_folder() + input_image_relative_path, screencap_im_bgr)
+            cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
             script_logger.get_action_log().set_pre_file(
                 'image',
                 input_image_relative_path
