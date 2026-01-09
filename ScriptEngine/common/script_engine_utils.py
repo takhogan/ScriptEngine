@@ -1,17 +1,3 @@
-import math
-import os
-import json
-import random
-import shutil
-import subprocess
-import sys
-import platform
-import datetime
-import numpy as np
-import glob
-import collections
-from types import SimpleNamespace
-from dateutil import tz
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
@@ -71,6 +57,7 @@ def is_null(item):
 
 
 def dist(x1, y1, x2, y2):
+    import math
     return math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2)
 
 
@@ -90,6 +77,7 @@ import re
 
 
 def datetime_to_local_str(datetime, delim=':'):
+    from dateutil import tz
     return datetime.astimezone(tz.tzlocal()).strftime('%Y-%m-%d %H{}%M{}%S'.format(delim, delim))
 
 # Mapping dictionary with key-value pairs
@@ -99,7 +87,7 @@ variable_mapping = {
 }
 
 def apply_state_to_cmd_str(cmd_str, state):
-
+    import re
     # Custom string formatter that replaces %KEY% placeholders with dictionary values
     class CustomFormatter:
         def __init__(self, mapping):
@@ -202,6 +190,8 @@ def get_glob_digit_regex_string(start_index, stop_index, pad_zeros=False):
 
 
 def get_running_scripts():
+    import os
+    import json
     running_scripts = []
     if os.path.exists(RUNNING_SCRIPTS_PATH):
         with open(RUNNING_SCRIPTS_PATH, 'r') as running_scripts_file:
@@ -223,7 +213,7 @@ def safe_subprocess_run(args, timeout=5, capture_output=True, cwd="/", retry_on_
         Returns:
             subprocess.CompletedProcess object or None on error
         """        
-        
+        import subprocess
         try:
             script_logger.log(f'safe_subprocess_run: running command: {" ".join(args)}')
             
@@ -257,6 +247,18 @@ def safe_subprocess_run(args, timeout=5, capture_output=True, cwd="/", retry_on_
 
 class StateEvaluator:
     """Helper for evaluating state expressions with shared context."""
+    import glob
+    import datetime
+    import os
+    import sys
+    import platform
+    import shutil
+    import numpy as np
+    import re
+    import json
+    import random
+    import math
+    import collections
 
     _base_globals = {
         'glob': glob,
@@ -273,17 +275,12 @@ class StateEvaluator:
         'collections': collections,
     }
 
-    _script_context = SimpleNamespace(
-        script_name=None,
-        script_id=None,
-        timeout=None,
-        script_start_time=None,
-        device_details=None,
-    )
+    _script_context = None
 
     @classmethod
     def configure_script_context(cls, *, script_name=None, script_id=None, timeout=None, script_start_time=None, device_details=None):
         """Store the current script metadata for downstream state evaluations."""
+        from types import SimpleNamespace
         cls._script_context = SimpleNamespace(
             script_name=script_name,
             script_id=script_id,

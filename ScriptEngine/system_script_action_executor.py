@@ -64,6 +64,9 @@ class SystemScriptActionExecutor:
         self.easy_ocr_reader = None
     
     def handle_action(self, action, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
+        # Initialize status to FAILURE as default (will be overridden by action handlers)
+        status = ScriptExecutionState.ERROR
+        
         def sanitize_input(statement_input, state):
             statement_input = statement_input.strip()
             statement_input = statement_input.replace('\n', ' ')
@@ -367,7 +370,7 @@ class SystemScriptActionExecutor:
                 status = ScriptExecutionState.SUCCESS
             else:
                 script_logger.log('invalid mode: ', action)
-                status = ScriptExecutionState.ERROR
+                raise Exception('invalid mode: ' + action)
         elif action["actionName"] == "imageTransformationAction":
             # transformationType : 'blur' | 'binarize' | 'antialias' | 'resize' | 'erode' | 'dilate'
             if len(action['actionData']['inputExpression']) == 0:
@@ -722,21 +725,21 @@ class SystemScriptActionExecutor:
                 script_logger.log('unable to send message, screen plan server not active')
                 status = ScriptExecutionState.FAILURE
             else:
-                message = state_eval(action["actionData"]["inputExpression"], {}, state)
+                message_data = state_eval(action["actionData"]["inputExpression"], {}, state)
                 pre_log = 'Sending message through ' + str(action["actionData"]["messagingProvider"]) +\
                         ' of type ' + str(action["actionData"]["messageType"])
                 script_logger.log(pre_log)
 
-                mid_log = 'Message Contents: ' + str(message)
-                script_logger.log(mid_log)
+                # mid_log = 'Message Contents: ' + str(type(message_data)
+                # script_logger.log(mid_log)
 
+                
                 messaging_successful = self.messaging_helper.send_message({
                     "action" : "sendMessage",
                     "messagingChannelName" : action["actionData"]["messagingChannelName"],
                     "messagingProvider" : action["actionData"]["messagingProvider"],
-                    "messageType" : action["actionData"]["messageType"],
-                    "message" : message
-                })
+                    "messageType" : action["actionData"]["messageType"]
+                }, message_data)
 
                 if messaging_successful:
                     status = ScriptExecutionState.SUCCESS
@@ -783,7 +786,6 @@ class SystemScriptActionExecutor:
                     'returnStatement-{}.txt'.format('exit-0'),
                     pre_log + '\n' + mid_log + '\n' + post_log
                 )
-                status = ScriptExecutionState.ERROR
                 sys.exit(0)
             else:
                 script_logger.log('return statement type not implemented', action["actionData"]["returnStatementType"])
@@ -1051,7 +1053,11 @@ class SystemScriptActionExecutor:
                 status = ScriptExecutionState.FAILURE
             else:
                 status, state = self.calendar_action_helper.handle_action(action, state)
-
+        else:
+            # If action name doesn't match any handler, log error and set status to FAILURE
+            script_logger.log('ERROR: Unknown action name "{}" for action group {}'.format(action["actionName"], action.get("actionGroup", "unknown")))
+            raise Exception('unknown action name: ' + action["actionName"])
+        assert status != ScriptExecutionState.ERROR, 'action returned error status'
 
         return action, status, state, context, run_queue, []
 

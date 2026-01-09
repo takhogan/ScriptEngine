@@ -1,15 +1,11 @@
-import datetime
-import threading
-import uuid
-import queue
-import time
-
 from ScriptEngine.common.logging.script_action_log import ScriptActionLog
 
+import threading
 thread_local_storage = threading.local()
 
 
 class ScriptLogger:
+    import queue
     _instance = None
     log_path = 'stdout.txt'
     _write_queue = queue.Queue()
@@ -17,6 +13,7 @@ class ScriptLogger:
     _writer_running = False
 
     def __new__(cls, *args, **kwargs):
+        import uuid
         if not cls._instance:
             cls._instance = super(ScriptLogger, cls).__new__(cls, *args, **kwargs)
             cls._instance.id = uuid.uuid4()
@@ -37,6 +34,7 @@ class ScriptLogger:
             self._writer_thread.start()
 
     def _writer_loop(self):
+        import queue
         while self._writer_running:
             try:
                 # Get message from queue with a timeout to allow for clean shutdown
@@ -51,6 +49,7 @@ class ScriptLogger:
             except queue.Empty:
                 continue
             except Exception as e:
+                import time
                 print(f"Error in writer thread: {e}")
                 time.sleep(1)  # Prevent tight loop on errors
 
@@ -106,6 +105,7 @@ class ScriptLogger:
         return self.__copy__()
 
     def __copy__(self):
+        import uuid
         cls = self.__class__
         new_instance = object.__new__(cls)
         new_instance.id = uuid.uuid4()
@@ -123,6 +123,7 @@ class ScriptLogger:
         raise TypeError(f"Instances of {self.__class__.__name__} cannot be serialized.")
 
     def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True):
+        import datetime
         # Format the log message
         text = str(datetime.datetime.now()) + ': ' + (
             self.log_header if log_header else ''
