@@ -1000,8 +1000,8 @@ class ADBDeviceManager(DeviceManager):
             script_logger.log('key not found!', key)
             return
         keycode = KEY_TO_KEYCODE[key]
-        script_logger.log('ADB CONTROLLER: sending key event', keycode.encode('utf-8'))
-        self.adb_popen(['shell', 'input', 'keyevent', keycode.encode('utf-8')])
+        script_logger.log('ADB CONTROLLER: sending key event', keycode)
+        self.adb_popen(['shell', 'input', 'keyevent', keycode])
 
     def hotkey(self, keys):
         script_logger.log('adb hotkey unimplemented! defaulting to pyautogui')
