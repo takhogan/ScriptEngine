@@ -572,7 +572,7 @@ class ADBDeviceManager(DeviceManager):
                     stop_device_process
                 )
 
-                stop_device_process = safe_subprocess_run(['emu', 'kill'], timeout=15)
+                stop_device_process = self.adb_run(['emu', 'kill'], timeout=15)
                 script_logger.log(
                     'ADB CONTROLLER: stopped device (emu kill)',
                     self.device_name,
