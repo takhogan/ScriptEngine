@@ -18,32 +18,27 @@
 import time
 
 start_time = time.time()
-import os
-import asyncio
-
 
 from dateutil import tz
-import json
-import traceback
-import multiprocessing
-import uuid
-import datetime
-import sys
-print(f"builtin initialization took {time.time() - start_time:.2f} seconds", flush=True)
+print(f"builtin initialization completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 from ScriptEngine.custom_thread_pool import CustomThreadPool
 from ScriptEngine.custom_process_pool import CustomProcessPool
+print(f"non builtin initialization 1 completed at {time.time() - start_time:.2f} seconds", flush=True)
+
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.script_engine_utils import datetime_to_local_str, imageFileExtensions, StateEvaluator
+print(f"non builtin initialization 2 completed at {time.time() - start_time:.2f} seconds", flush=True)
+
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.system_script_handler import SystemScriptHandler
-print(f"non builtin initialization took {time.time() - start_time:.2f} seconds", flush=True)
+print(f"non builtin initialization 3 completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
-print(f"script logger initialization took {time.time() - start_time:.2f} seconds", flush=True)
+print(f"script logger initialization completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 
 def hot_swap(current_action_group, current_script, include_scripts, recovery_script=None):
@@ -52,6 +47,7 @@ def hot_swap(current_action_group, current_script, include_scripts, recovery_scr
     pass
 
 def str_timeout_to_datetime_timeout(timeout, src=None):
+    import datetime
     if not isinstance(timeout, str):
         return timeout
     if src == 'deployment_server':
@@ -67,6 +63,8 @@ def str_timeout_to_datetime_timeout(timeout, src=None):
 
 
 def update_running_scripts_file(scriptname, action):
+    import os
+    import json
     if action == 'push':
         running_scripts = []
         if not os.path.exists(RUNNING_SCRIPTS_PATH):
@@ -94,9 +92,16 @@ def update_running_scripts_file(scriptname, action):
                     json.dump(running_scripts, running_script_file)
 
 async def close_threads_and_processes(io_executor, process_executor, timeout=30):
+    import asyncio
     await asyncio.gather(io_executor.soft_shutdown(script_logger, timeout), process_executor.soft_shutdown(script_logger, timeout))
 
-def load_and_run(script_name, script_id, timeout, constants=None, start_time : datetime.datetime=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False):
+def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False):
+    import os
+    import json
+    import datetime
+    import traceback
+    import sys
+    import asyncio
     script_logger.log('SCRIPT_MANAGER: ', ' script trigger time: ',
           datetime_to_local_str(str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')),
           'actual script start time: ', datetime.datetime.now(), ' scheduled end time: ',
@@ -211,6 +216,10 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time : d
 print(f"Final Method initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
 def main():
+    import multiprocessing
+    import os
+    import sys
+    import datetime
     multiprocessing.freeze_support()
     multiprocessing.set_start_method('spawn')
     print(f'SCRIPT MANAGER: Process ID: {os.getpid()}')
@@ -244,6 +253,7 @@ def main():
     
     end_time = str_timeout_to_datetime_timeout(args.end_time, src='deployment_server') if args.end_time else None
     log_level = args.log_level
+    import uuid
     script_id = args.script_id if args.script_id else uuid.uuid4()
     device_details = None if (not args.device or args.device == '' or args.device == 'null') else args.device
     system_script = args.system_script

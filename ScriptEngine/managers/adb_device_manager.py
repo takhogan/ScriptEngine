@@ -232,9 +232,9 @@ class ADBDeviceManager(DeviceManager):
             os_name = platform.system()
             try:
                 if os_name == "Windows":
-                    result = safe_subprocess_run(["where", "adb"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    result = safe_subprocess_run(["where", "adb"])
                 else:
-                    result = safe_subprocess_run(["which", "adb"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    result = safe_subprocess_run(["which", "adb"])
 
                 if result.returncode == 0:
                     adb_path = result.stdout.decode().strip()
