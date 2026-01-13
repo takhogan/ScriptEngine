@@ -18,6 +18,7 @@
 import random
 import numpy as np
 import math
+import warnings
 # import matplotlib.pyplot as plt
 from ScriptEngine.common.script_engine_utils import dist
 from ScriptEngine.common.logging.script_logger import ScriptLogger
@@ -141,7 +142,10 @@ class ClickPathGenerator:
         delta_avg = sum(delta_path) / len(delta_path)
         refit_path = list(map(lambda delta: (delta * increment / max_val), refit_path))
         refit_avg = sum(refit_path) / len(refit_path)
-        refit_path = list(map(lambda delta : delta / refit_avg * delta_avg, refit_path))
+        # Suppress division by zero warning
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            refit_path = list(map(lambda delta : delta / refit_avg * delta_avg, refit_path))
         if merge:
             return ClickPathGenerator.merge_refit_delta_path(delta_path, refit_path)
         else:

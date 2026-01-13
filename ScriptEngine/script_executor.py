@@ -832,9 +832,14 @@ class ScriptExecutor:
         parallel_process = self.parallelized_executor.get_process(action["actionGroup"])
         if parallel_process is not None:
             handle_action_result = parallel_process.result()
-            _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_handle_action_result(
+            action, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_handle_action_result(
                 handle_action_result, self.status, self.state, self.context, self.run_queue
             )
+            # script_logger.log('CONTROL FLOW: ', 
+            # self.props['script_name'], 
+            # 'completed handling for action',
+            # action['actionName'],
+            # action['actionGroup'])
         else:
             self.context["script_counter"] += 1
             script_logger.log('Creating action log for action', action["actionGroup"])
@@ -976,6 +981,7 @@ class ScriptExecutor:
                 self.context['child_actions'] = None
                 self.status = ScriptExecutionState.ERROR
                 break
+        self.parallelized_executor.clear_processes()
         
         if "run_actions" in self.engine_manager.interrupt_actions:
             run_actions = self.engine_manager.interrupt_actions["run_actions"]

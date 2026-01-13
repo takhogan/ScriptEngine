@@ -181,9 +181,10 @@ class ADBDeviceManager(DeviceManager):
                     'adbPath' : adb_args['adbPath'] if 'adbPath' in adb_args else None,
                     'emulatorType' : '"' + adb_args['type'] + '"',
                     'emulatorPath' : adb_args['emulatorPath'] if 'emulatorPath' in adb_args else None,
-                    'deviceName' : '"' + adb_args['deviceName'] + '"',
+                    'deviceName' : ('"' + adb_args['deviceName'] + '"') if "deviceName" in adb_args else None,
                     'windowName' : '"' + adb_args['name'] + '"',
-                    'adbPort' : '"' + adb_args['port'] + '"'
+                    'adbPort' : '"' + adb_args['port'] + '"',
+                    'adbIp' : adb_args['ip'] if 'ip' in adb_args else None
                 }
             }, {}, {})
         except Exception as e:
@@ -198,6 +199,11 @@ class ADBDeviceManager(DeviceManager):
         self.emulator_type = emulator_type
         state['EMULATOR_TYPE'] = emulator_type
         script_logger.log('configuring emulator of type', self.emulator_type)
+
+        # Extract IP from actionData if type is adb
+        if self.emulator_type == 'adb' and configurationAction['actionData'].get('adbIp') is not None:
+            self.adb_ip = configurationAction['actionData']['adbIp']
+            script_logger.log('ADB CONTROLLER: using IP from adb_args:', self.adb_ip)
 
         if configurationAction['actionData']["emulatorPath"] is not None:
             emulator_path = state_eval(configurationAction['actionData']["emulatorPath"], {}, state)
@@ -217,6 +223,9 @@ class ADBDeviceManager(DeviceManager):
                     emulator_path = os.path.join(user_home, 'Android/Sdk/emulator/emulator')
                 else:
                     raise Exception(f"Unsupported OS: {os_name}")
+            elif self.emulator_type == 'adb':
+                emulator_path = None
+                script_logger.log('ADB CONTROLLER: emulator path not possible for adb type')
             else:
                 raise Exception(f"Unsupported emulator type: {self.emulator_type}")
         self.emulator_path = emulator_path
@@ -273,7 +282,7 @@ class ADBDeviceManager(DeviceManager):
 
         state['ADB_PATH'] = self.adb_path
 
-        device_name = state_eval(configurationAction['actionData']["deviceName"], {}, state)
+        device_name = state_eval(configurationAction['actionData']["deviceName"], {}, state) if configurationAction['actionData']["deviceName"] is not None else None
         self.device_name = device_name
         state['DEVICE_NAME'] = device_name
 
@@ -291,7 +300,11 @@ class ADBDeviceManager(DeviceManager):
         else:
             self.window_name = state_eval(configurationAction['actionData']["windowName"], {}, state)
         self.adb_port = str(state_eval(configurationAction['actionData']['adbPort'], {}, state))
-        self.auto_detect_adb_port = (self.adb_port == 'auto')
+        # Default auto_detect_adb_port to True for adb type
+        if self.emulator_type == 'adb':
+            self.auto_detect_adb_port = True
+        else:
+            self.auto_detect_adb_port = (self.adb_port == 'auto')
         self.detect_adb_port()
         state['ADB_PORT'] = self.adb_port
         state['AUTO_DETECT_ADB_PORT'] = self.auto_detect_adb_port
@@ -437,6 +450,41 @@ class ADBDeviceManager(DeviceManager):
                         script_logger.log('device name fetch failed: ', result)
         return devices
 
+    def _test_adb_port(self, device_ip, port):
+        """Helper method to test if a specific ADB port is active.
+        
+        Args:
+            device_ip: The IP address of the device
+            port: The port number to test (as string or int)
+            
+        Returns:
+            str: The port as string if connection successful, None otherwise
+        """
+        script_logger = ScriptLogger.get_logger()
+        port_str = str(port)
+        test_ip = f'{device_ip}:{port_str}'
+        try:
+            connect_result = safe_subprocess_run(
+                [self.adb_path, 'connect', test_ip],
+                timeout=5,
+                capture_output=True
+            )
+            time.sleep(1)
+            devices_output = self.get_device_list_output()
+            for device_line in devices_output:
+                if test_ip in device_line and 'device' in device_line and 'offline' not in device_line:
+                    script_logger.log(f'ADB CONTROLLER: found active device on port {port_str}')
+                    return port_str
+            # Disconnect if connection was made but device is not active
+            safe_subprocess_run(
+                [self.adb_path, 'disconnect', test_ip],
+                timeout=5,
+                capture_output=True
+            )
+        except Exception as e:
+            script_logger.log(f'ADB CONTROLLER: error testing port {port_str}: {e}')
+        return None
+
     def detect_adb_port(self):
         script_logger = ScriptLogger.get_logger()
         og_port = self.adb_port
@@ -458,6 +506,126 @@ class ADBDeviceManager(DeviceManager):
                 self.adb_port = self.full_ip.split('-')[1]
             else:
                 self.full_ip = self.adb_ip + ':' + self.adb_port
+        elif self.emulator_type == 'adb':
+            # Use adb_ip which should be set from adb_args if type is adb
+            device_ip = self.adb_ip
+            script_logger.log('ADB CONTROLLER: scanning ports on device IP:', device_ip)
+            
+            # For real Android devices:
+            # - Android 10 and earlier: typically use port 5555
+            # - Android 11+ (Wireless Debugging): ports are dynamically assigned and can vary widely
+            #   (commonly 37000-44000, but can range from ~30000-45000, with observed ports as low as 32789)
+            
+            found_port = None
+            
+            # First, try the specified port if it's not "auto"
+            if og_port and og_port != 'auto':
+                script_logger.log(f'ADB CONTROLLER: checking specified port {og_port} first')
+                found_port = self._test_adb_port(device_ip, og_port)
+            
+            # If specified port didn't work, try port 5555 for older Android devices (quick check)
+            if not found_port:
+                script_logger.log('ADB CONTROLLER: checking port 5555 for older Android devices')
+                found_port = self._test_adb_port(device_ip, '5555')
+            
+            # If port 5555 didn't work, use nmap to scan for open ports in Wireless Debugging range
+            if not found_port:
+                script_logger.log('ADB CONTROLLER: port 5555 not found, scanning Wireless Debugging range (30000-45000) with nmap')
+                
+                # Check if nmap is available
+                nmap_available = False
+                try:
+                    nmap_check = safe_subprocess_run(['nmap', '--version'], timeout=5, capture_output=True)
+                    if nmap_check.returncode == 0:
+                        nmap_available = True
+                        script_logger.log('ADB CONTROLLER: nmap is available')
+                    else:
+                        script_logger.log('ADB CONTROLLER: nmap check failed')
+                except Exception as e:
+                    script_logger.log(f'ADB CONTROLLER: nmap not found: {e}')
+                
+                if nmap_available:
+                    # Use nmap to scan for open ports in the Wireless Debugging range
+                    try:
+                        script_logger.log(f'ADB CONTROLLER: running nmap scan on {device_ip} ports 30000-45000')
+                        nmap_result = safe_subprocess_run(
+                            ['nmap', '-p', '30000-45000', '--open', device_ip],
+                            timeout=60,  # nmap scan can take a while
+                            capture_output=True
+                        )
+                        
+                        if nmap_result.returncode == 0:
+                            # Parse nmap output to find open ports
+                            output = nmap_result.stdout.decode('utf-8', errors='ignore')
+                            open_ports = []
+                            
+                            # Look for port lines in nmap output (format: "PORT      STATE SERVICE")
+                            # or "34000/tcp open  unknown"
+                            for line in output.split('\n'):
+                                line = line.strip()
+                                # Match lines like "34000/tcp open" or "34000/tcp   open"
+                                match = re.search(r'(\d+)/tcp\s+open', line)
+                                if match:
+                                    port = int(match.group(1))
+                                    if 30000 <= port <= 45000:
+                                        open_ports.append(port)
+                            
+                            script_logger.log(f'ADB CONTROLLER: nmap found {len(open_ports)} open ports: {open_ports}')
+                            
+                            # Try adb connect on each open port found by nmap
+                            for port in open_ports:
+                                test_ip = f'{device_ip}:{port}'
+                                script_logger.log(f'ADB CONTROLLER: trying adb connect on port {port}')
+                                try:
+                                    connect_result = safe_subprocess_run(
+                                        [self.adb_path, 'connect', test_ip],
+                                        timeout=5,
+                                        capture_output=True
+                                    )
+                                    time.sleep(1)
+                                    
+                                    devices_output = self.get_device_list_output()
+                                    for device_line in devices_output:
+                                        if test_ip in device_line and 'device' in device_line and 'offline' not in device_line:
+                                            found_port = str(port)
+                                            # Update port and full_ip immediately when found
+                                            self.adb_port = found_port
+                                            self.full_ip = f'{device_ip}:{found_port}'
+                                            script_logger.log(f'ADB CONTROLLER: found active ADB device on port {port}, updated adb_port to {found_port} and full_ip to {self.full_ip}')
+                                            break
+                                    
+                                    if found_port:
+                                        break
+                                    else:
+                                        # Disconnect if connection was made but device is not active
+                                        safe_subprocess_run(
+                                            [self.adb_path, 'disconnect', test_ip],
+                                            timeout=5,
+                                            capture_output=True
+                                        )
+                                except Exception as e:
+                                    script_logger.log(f'ADB CONTROLLER: error testing port {port}: {e}')
+                                    continue
+                        else:
+                            script_logger.log(f'ADB CONTROLLER: nmap scan failed with return code {nmap_result.returncode}')
+                    except Exception as e:
+                        script_logger.log(f'ADB CONTROLLER: error running nmap scan: {e}')
+                else:
+                    script_logger.log('ADB CONTROLLER: nmap not available, cannot scan Wireless Debugging port range')
+                    script_logger.log('ADB CONTROLLER: please install nmap or manually specify the ADB port')
+                    raise Exception('ADB CONTROLLER: nmap not available and adb port unavailable, please install nmap or manually specify the ADB port')
+            
+            if found_port:
+                self.adb_port = found_port
+                self.full_ip = f'{device_ip}:{found_port}'
+                script_logger.log(f'ADB CONTROLLER: successfully detected ADB port {found_port} on {device_ip}')
+            else:
+                ports_tried = []
+                if og_port and og_port != 'auto':
+                    ports_tried.append(f'specified port {og_port}')
+                ports_tried.append('port 5555')
+                ports_tried.append('Wireless Debugging range (30000-49999)')
+                script_logger.log(f'ADB CONTROLLER: unable to find ADB port on {device_ip} after trying {", ".join(ports_tried)}')
         else:
             raise Exception('Unsupported emulator type: ' + self.emulator_type)
         if self.adb_port != 'auto':
@@ -528,6 +696,8 @@ class ADBDeviceManager(DeviceManager):
                 if start_device_process.poll() is not None:
                     script_logger.log("Emulator process exited prematurely.")
                     break
+        elif self.emulator_type == 'adb':
+            script_logger.log('ADB CONTROLLER: start device for adb emulator type not supported, please manually start the device')
         else:
             script_logger.log('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
             return
@@ -610,6 +780,8 @@ class ADBDeviceManager(DeviceManager):
                 )
             else:
                 script_logger.log('ADB CONTROLLER: unable to run command emu kill, device not active' + self.device_name)
+        elif self.emulator_type == 'adb':
+            script_logger.log('ADB CONTROLLER: stop device for adb emulator type not supported, please manually stop the device')
         else:
             raise Exception('ADB CONTROLLER: emulator type ' + self.emulator_type + ' not supported')
 
@@ -750,11 +922,12 @@ class ADBDeviceManager(DeviceManager):
                     adb_attempts += 1
                 script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 15 seconds')
                 self.restart_adb()
+                time.sleep(5)
                 devices_output = self.get_device_list_output()
                 emulator_active = any((
                     self.full_ip in devices_output_line and 'offline' not in devices_output_line
                 ) for devices_output_line in devices_output)
-                time.sleep(15)
+                time.sleep(5)
 
             screencap_succesful = False
             try:
@@ -827,7 +1000,13 @@ class ADBDeviceManager(DeviceManager):
     def get_device_list_output(self):
         script_logger = ScriptLogger.get_logger()
         try:
-            device_list = self.adb_run(['devices'], timeout=15)
+            # Use adb devices directly without -s flag to list all devices
+            # This works even when self.full_ip is None or invalid
+            device_list = safe_subprocess_run(
+                [self.adb_path, 'devices'],
+                timeout=15,
+                capture_output=True
+            )
             if device_list and device_list.returncode == 0:
                 devices_output = bytes.decode(device_list.stdout, 'utf-8').splitlines()
             else:
@@ -1090,7 +1269,7 @@ class ADBDeviceManager(DeviceManager):
                                self.commands["action_terminate_command"],
                                ')'] if mouse_up else []
             click_command += footer_commands
-        elif self.emulator_type == 'avd':
+        elif self.emulator_type == 'avd' or self.emulator_type == 'adb':
             click_command.append('input tap {} {};'.format(
                 x, y
             ))
@@ -1240,7 +1419,7 @@ class ADBDeviceManager(DeviceManager):
                 self.commands["action_terminate_command"]
             ] if mouse_up else []
             command_strings += footer_commands
-        elif self.emulator_type == 'avd':
+        elif self.emulator_type == 'avd' or self.emulator_type == 'adb':
             # frac_source_x = (source_x / self.width)
             # frac_target_x = (target_x / self.width)
             # frac_source_y = (source_y / self.height)
