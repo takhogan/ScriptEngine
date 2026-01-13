@@ -130,7 +130,7 @@ class DeviceController:
             device_type = 'python'
         else:
             device_subtype = device_id.split(':')[0]
-            if device_subtype == 'avd' or device_subtype == 'bluestacks':
+            if device_subtype == 'avd' or device_subtype == 'bluestacks' or device_subtype == 'adb':
                 device_type = 'adb'
             elif device_subtype == 'pikvm':
                 device_type = 'kvm'

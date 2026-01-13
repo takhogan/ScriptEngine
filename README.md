@@ -212,6 +212,7 @@ ScriptEngine/
 ### Core Classes
 
 - **`ScriptExecutor`**: Main script execution engine
+  
 - **`DeviceController`**: Device abstraction layer
 - **`ScriptActionExecutor`**: Action execution handler
 - **`ParallelizedScriptExecutor`**: Parallel execution manager
