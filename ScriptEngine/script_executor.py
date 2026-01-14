@@ -78,7 +78,7 @@ class ScriptExecutor:
                  engine_manager : EngineManager,
                  io_executor : CustomThreadPool,
                  script_action_executor : ScriptActionExecutor,
-                 parallelized_executor : ParallelizedScriptExecutor,
+                 process_executor : CustomProcessPool,
                  call_stack=None,
                  parent_folder='',
                  script_start_time : datetime.datetime=None,
@@ -93,9 +93,10 @@ class ScriptExecutor:
         self.device_controller = device_controller
         self.engine_manager = engine_manager
         self.io_executor = io_executor
+        self.process_executor = process_executor
         self.screen_plan_server_attached = screen_plan_server_attached
         self.script_action_executor = script_action_executor
-        self.parallelized_executor = parallelized_executor
+        self.parallelized_executor = ParallelizedScriptExecutor(device_controller, process_executor)
         self.state = {
             'SCRIPT_CONTEXT': {
                 'script_id': script_id,
@@ -201,26 +202,6 @@ class ScriptExecutor:
 
     def set_parent_action_log(self, script_action_log : ScriptActionLog):
         self.parent_action_log = script_action_log
-
-    def rewind(self, input_vars=None):
-        # script_logger.log('rewind context : ', self.context["action_attempts"])
-        # script_logger.log('input_vars : ', input_vars)
-        # script_logger.log('state (1.5) ', self.state)
-        self.actions = self.action_rows[0]["actions"]
-        self.status = ScriptExecutionState.FINISHED
-        self.status_detail = None
-        self.context["action_attempts"] = [0] * len(self.actions)
-        self.context["success_states"] = None
-        self.context["run_queue"] = None
-        self.run_queue = []
-        # Reset state to fresh state, preserving only SCRIPT_CONTEXT
-        script_context = self.state.get('SCRIPT_CONTEXT', {})
-        self.state = {
-            'SCRIPT_CONTEXT': script_context
-        }
-        if input_vars is not None:
-            self.state.update(input_vars)
-        # script_logger.log('state (2) : ', self.state)
 
     def parse_inputs(self, input_state):
         with open(self.log_folder + 'inputs.txt', 'w') as input_log_file:
@@ -372,87 +353,63 @@ class ScriptExecutor:
     def handle_script_reference(self, action, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List]:
         if action["actionName"] == 'scriptReference':
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: initializing script reference object', action['actionData']['scriptName'])
-            is_new_script = "initializedScript" not in action["actionData"] or action["actionData"]["initializedScript"] is None
-            
-            if not is_new_script:
-                # Check if initialized script needs hot swapping
-                initialized_script = action["actionData"]["initializedScript"]
-                current_version = self.engine_manager.get_script_version(initialized_script.props['script_name'])
-                if initialized_script.hot_swap_version != current_version:
-                    # Force reinitialization if versions don't match
-                    is_new_script = True
-                    
-            if is_new_script:
-                # script_logger.log('context: ', context)
-                child_context = {
-                    "script_attributes": context["script_attributes"].copy(),
-                    "run_type": action["actionData"]["runMode"],
-                    "branching_behavior": action["actionData"]["branchingBehavior"]
-                }
-                # script_logger.log("source: ", action["actionData"]["scriptAttributes"], " target: ", child_context["script_attributes"])
-                child_context["script_attributes"].update(action["actionData"]["scriptAttributes"])
-                # script_logger.log("child_context: ", child_context, "self context: ", context, " actionData: ", action["actionData"]["scriptAttributes"])
-            else:
-                child_context = action["actionData"]["initializedScript"].context
-            # script_logger.log("child_context: ", child_context, "self context: ", context)
-
+             
+            # script_logger.log('context: ', context)
+            child_context = {
+                "script_attributes": context["script_attributes"].copy(),
+                "run_type": action["actionData"]["runMode"],
+                "branching_behavior": action["actionData"]["branchingBehavior"]
+            }
+            # script_logger.log("source: ", action["actionData"]["scriptAttributes"], " target: ", child_context["script_attributes"])
+            child_context["script_attributes"].update(action["actionData"]["scriptAttributes"])
+            # script_logger.log("child_context: ", child_context, "self context: ", context, " actionData: ", action["actionData"]["scriptAttributes"])
             # creates script engine object
-            if is_new_script:
-                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: creating new script object', action['actionData']['scriptName'])
-                script_name = action["actionData"]["scriptName"].strip()
-                if script_name[0] == '{' and script_name[-1] == '}':
-                    script_name = state_eval(script_name[1:-1], {}, self.state)
-                if script_name[0] == '[' and script_name[-1] == ']':
-                    script_name = script_name[1:-1]
-                    system_script = True
-                    script_details = script_name.split(':')
-                    handle_status = SystemScriptHandler.handle_system_script(self.device_controller, script_details[0], script_details[1])
-                    if handle_status == 'return':
-                        return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
-                    ref_script = parse_zip(script_details[0], system_script)
-                elif script_name in self.include_scripts:
-                    script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading script from memory', script_name)
-                    ref_script = self.include_scripts[script_name]
-                else:
-                    script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading script from disk', script_name, ' include_scripts: ', ','.join(list(self.include_scripts.keys())))
-                    ref_script = parse_zip(script_name, False)
-                    if self.context['script_memory_mode'] != 'low':
-                        self.include_scripts[script_name] = ref_script
-                # script_logger.log(' state (3) : ', state)
-
-                child_context["actionOrder"] = action["actionData"]["actionOrder"] if "actionOrder" in action["actionData"] else "sequential"
-                child_context["scriptMaxActionAttempts"] = action["actionData"]["scriptMaxActionAttempts"] if "scriptMaxActionAttempts" in action["actionData"] else ""
-                child_context["onOutOfActionAttempts"] = action["actionData"]["onOutOfActionAttempts"] if "onOutOfActionAttempts" in action["actionData"] else "returnFailure"
-                child_context["script_counter"] = self.context["script_counter"]
-                child_context["script_timer"] = self.context["script_timer"]
-                ref_script_executor = ScriptExecutor(
-                    ref_script,
-                    self.include_scripts,
-                    self.props["timeout"],
-                    self.base_script_name,
-                    self.base_start_time_str,
-                    self.script_id,
-                    self.device_controller,
-                    self.engine_manager,
-                    self.io_executor,
-                    self.script_action_executor,
-                    self.parallelized_executor,
-                    call_stack=self.call_stack + ['[{}-scriptReference-{}]'.format(self.context["script_counter"], action["actionGroup"])],
-                    parent_folder=self.log_folder,
-                    context=child_context,
-                    state={},
-                    create_log_folders=False,
-                    screen_plan_server_attached=self.screen_plan_server_attached
-                )
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: creating new script object', action['actionData']['scriptName'])
+            script_name = action["actionData"]["scriptName"].strip()
+            if script_name[0] == '{' and script_name[-1] == '}':
+                script_name = state_eval(script_name[1:-1], {}, self.state)
+            if script_name[0] == '[' and script_name[-1] == ']':
+                script_name = script_name[1:-1]
+                system_script = True
+                script_details = script_name.split(':')
+                handle_status = SystemScriptHandler.handle_system_script(self.device_controller, script_details[0], script_details[1])
+                if handle_status == 'return':
+                    return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
+                ref_script = parse_zip(script_details[0], system_script)
+            elif script_name in self.include_scripts:
+                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading script from memory', script_name)
+                ref_script = self.include_scripts[script_name]
             else:
-                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: rewinding existing script object', action['actionData']['scriptName'])
+                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading script from disk', script_name, ' include_scripts: ', ','.join(list(self.include_scripts.keys())))
+                ref_script = parse_zip(script_name, False)
+                if self.context['script_memory_mode'] != 'low':
+                    self.include_scripts[script_name] = ref_script
+            # script_logger.log(' state (3) : ', state)
 
-                # Pass None to rewind since inputs will be set via parse_inputs() below
-                action["actionData"]["initializedScript"].rewind()
-                ref_script_executor = action["actionData"]["initializedScript"]
-
-                ref_script_executor.context["script_counter"] = self.context["script_counter"]
-                ref_script_executor.context["script_timer"] = self.context["script_timer"]
+            child_context["actionOrder"] = action["actionData"]["actionOrder"] if "actionOrder" in action["actionData"] else "sequential"
+            child_context["scriptMaxActionAttempts"] = action["actionData"]["scriptMaxActionAttempts"] if "scriptMaxActionAttempts" in action["actionData"] else ""
+            child_context["onOutOfActionAttempts"] = action["actionData"]["onOutOfActionAttempts"] if "onOutOfActionAttempts" in action["actionData"] else "returnFailure"
+            child_context["script_counter"] = self.context["script_counter"]
+            child_context["script_timer"] = self.context["script_timer"]
+            ref_script_executor = ScriptExecutor(
+                ref_script,
+                self.include_scripts,
+                self.props["timeout"],
+                self.base_script_name,
+                self.base_start_time_str,
+                self.script_id,
+                self.device_controller,
+                self.engine_manager,
+                self.io_executor,
+                self.script_action_executor,
+                self.process_executor,
+                call_stack=self.call_stack + ['[{}-scriptReference-{}]'.format(self.context["script_counter"], action["actionGroup"])],
+                parent_folder=self.log_folder,
+                context=child_context,
+                state={},
+                create_log_folders=False,
+                screen_plan_server_attached=self.screen_plan_server_attached
+            )
             
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: configuring script action log', action['actionData']['scriptName'])
 
@@ -504,7 +461,6 @@ class ScriptExecutor:
                 status = ScriptExecutionState.FAILURE
             else:
                 status = ScriptExecutionState.ERROR
-            action["actionData"]["initializedScript"] = ref_script_executor
             context["status_detail"] = self.status_detail
             script_logger.log(action["actionData"][
                       "scriptName"] + " returning with status " + ref_script_executor.status.name + "/" + status.name)

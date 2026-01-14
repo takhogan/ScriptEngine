@@ -148,7 +148,6 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         device_controller = DeviceController(script_object['props'], device_params, io_executor, secrets_manager)
         engine_manager = EngineManager(script_id, script_logger.get_log_folder())
         script_action_executor = ScriptActionExecutor(device_controller, io_executor, script_object['props'], screen_plan_server_attached)
-        parallelized_executor = ParallelizedScriptExecutor(device_controller, process_executor)
         # TODO: might need fixing
         # logger = multiprocessing.log_to_stderr()
         # logger.setLevel(multiprocessing.SUBDEBUG)
@@ -170,7 +169,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
             engine_manager,
             io_executor,
             script_action_executor,
-            parallelized_executor,
+            process_executor,
             script_start_time=start_time,
             screen_plan_server_attached=screen_plan_server_attached
         )
