@@ -25,6 +25,26 @@ script_logger = ScriptLogger()
 def masked_mse(target_im, compare_im, mask_size):
     return 1 - np.sum(np.square(np.subtract(target_im, compare_im))) / mask_size
 
+def apply_output_mask(screencap_im_bgr, location_val, output_mask_bgr, output_cropping=None):
+    object_h, object_w = output_mask_bgr.shape[0], output_mask_bgr.shape[1]
+    match_img_bgr = screencap_im_bgr[location_val[1]:location_val[1] + object_h, 
+                                      location_val[0]:location_val[0] + object_w].copy()
+    
+    mid_log = 'Applying mask to output. Output has size of {}. Output mask has size of {}'.format(
+        str(match_img_bgr.shape), str(output_mask_bgr.shape)
+    )
+    script_logger.log(mid_log)
+    
+    match_img_bgr = cv2.bitwise_and(match_img_bgr, output_mask_bgr)
+    
+    if output_cropping is not None:
+        match_img_bgr = match_img_bgr[output_cropping[0][1]:output_cropping[1][1],
+                                      output_cropping[0][0]:output_cropping[1][0]]
+        crop_log = 'Cropping masked output'
+        script_logger.log(crop_log)
+    
+    return match_img_bgr
+
 class DetectSceneHelper:
     def __init__(self):
         pass
@@ -76,19 +96,17 @@ class DetectSceneHelper:
 
         object_h,object_w = object_mask_single_channel.shape
         location_val = sceneAction["actionData"]["sceneLocation"][0]
-        match_img_bgr = screencap_im_bgr[location_val[1]:location_val[1] + object_h, location_val[0]:location_val[0] + object_w].copy()
-
-        mid_log_4 = 'Applying mask to output. Output has size of {}. Output mask has size of {}'.format(str(match_img_bgr.shape), str(screencap_outputmask_bgr.shape))
-        script_logger.log(mid_log_4)
-
-        match_img_bgr = cv2.bitwise_and(match_img_bgr, screencap_outputmask_bgr)
-
+        
+        mid_log_4 = 'Applying output mask'
         mid_log_5 = ''
+        match_img_bgr = apply_output_mask(
+            screencap_im_bgr, 
+            location_val, 
+            screencap_outputmask_bgr,
+            output_cropping
+        )
         if output_cropping is not None:
-            match_img_bgr = match_img_bgr[output_cropping[0][1]:output_cropping[1][1],
-            output_cropping[0][0]:output_cropping[1][0]]
             mid_log_5 = 'Cropping masked output'
-            script_logger.log(mid_log_5)
 
         post_log = 'Final output image size is {}'.format(str(match_img_bgr.shape))
         script_logger.log(post_log)

@@ -75,12 +75,23 @@ def parse_script_file(
         inputs_file_obj,
         outputs_file_obj,
         dir_path,
-        script_zip=None):
+        script_zip=None,
+        script_path_in_zip=None):
     script_logger.log('SCRIPT LOAD: loading script ', script_name)
     def read_and_set_image(example, action, img_type):
         if img_type in example and not example[img_type] is None:
             script_logger.log(dir_path, example[img_type])
             example[img_type] = cv2.imread(dir_path + '/' + example[img_type])
+    def read_json_file(file_path):
+        """Read JSON file from either zip or filesystem"""
+        if script_zip is not None:
+            # Read from zip file
+            with script_zip.open(file_path, 'r') as f:
+                return json.load(f)
+        else:
+            # Read from filesystem
+            with open(file_path, 'r') as f:
+                return json.load(f)
     with action_rows_file_obj as action_rows_file:
         action_rows = json.load(action_rows_file)
     script_logger.log(script_to_string(script_name, action_rows))
@@ -104,6 +115,45 @@ def parse_script_file(
                     read_and_set_image(positive_example, action, "containedAreaMask")
                     read_and_set_image(positive_example, action, "img")
                     set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)
+            
+            # Handle mouseInteractionAction and mouseMoveAction point lists
+            if action["actionName"] in {"mouseInteractionAction", "mouseMoveAction"}:
+                if "actionData" in action and "sourcePointList" in action["actionData"]:
+                    source_point_list = action["actionData"]["sourcePointList"]
+                    if isinstance(source_point_list, str):
+                        # It's a file path, read the JSON file
+                        if script_zip is not None and script_path_in_zip is not None:
+                            # For zip files, construct the path within the zip
+                            # script_path_in_zip is the base path within the zip (e.g., "scriptname" or "scriptname/include/includename")
+                            # Normalize the path by removing leading slashes from source_point_list
+                            normalized_path = source_point_list.lstrip('/')
+                            zip_path = (script_path_in_zip + '/' + normalized_path).replace('\\', '/')
+                            if zip_path in script_zip.namelist():
+                                action["actionData"]["sourcePointList"] = read_json_file(zip_path)
+                        elif script_zip is None:
+                            # For regular files
+                            file_path = dir_path + '/' + source_point_list
+                            if os.path.exists(file_path):
+                                action["actionData"]["sourcePointList"] = read_json_file(file_path)
+                
+                # For mouseMoveAction, also handle targetPointList
+                if action["actionName"] == "mouseMoveAction":
+                    if "actionData" in action and "targetPointList" in action["actionData"]:
+                        target_point_list = action["actionData"]["targetPointList"]
+                        if isinstance(target_point_list, str):
+                            # It's a file path, read the JSON file
+                            if script_zip is not None and script_path_in_zip is not None:
+                                # For zip files, construct the path within the zip
+                                # Normalize the path by removing leading slashes from target_point_list
+                                normalized_path = target_point_list.lstrip('/')
+                                zip_path = (script_path_in_zip + '/' + normalized_path).replace('\\', '/')
+                                if zip_path in script_zip.namelist():
+                                    action["actionData"]["targetPointList"] = read_json_file(zip_path)
+                            elif script_zip is None:
+                                # For regular files
+                                file_path = dir_path + '/' + target_point_list
+                                if os.path.exists(file_path):
+                                    action["actionData"]["targetPointList"] = read_json_file(file_path)
 
     with props_file_obj as props_file:
         props = json.load(props_file)
@@ -133,7 +183,11 @@ def parse_zip(script_name, system_script=False):
         script_path = os.path.splitext(os.path.basename(script_file_path))[0]
         # TODO this method is referencing files outside of the zip, will not work if uncompressed file is not there
         with ZipFile(script_file_path) as script_zip:
-            action_rows_file_obj = script_zip.open(script_path + '/actions/actionRows.json', 'r')
+            # Try /actionRows.json first, then /actions/actionRows.json
+            action_rows_path = script_path + '/actionRows.json'
+            if action_rows_path not in script_zip.namelist():
+                action_rows_path = script_path + '/actions/actionRows.json'
+            action_rows_file_obj = script_zip.open(action_rows_path, 'r')
             props_file_obj = script_zip.open(script_path + '/props.json', 'r')
             inputs_file_obj = script_zip.open(script_path + '/inputs.json', 'r')
             outputs_file_obj = script_zip.open(script_path + '/outputs.json', 'r')
@@ -145,7 +199,8 @@ def parse_zip(script_name, system_script=False):
                 inputs_file_obj,
                 outputs_file_obj,
                 dir_path,
-                script_zip
+                script_zip,
+                script_path
             )
             use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
             if use_library_scripts:
@@ -162,7 +217,11 @@ def parse_zip(script_name, system_script=False):
                 file_path_split = file_path_split[:-1]
                 include_script_name = file_path_split[-1]
                 include_file_path = '/'.join(file_path_split)
-                action_rows_file_obj = script_zip.open(include_file_path + '/actions/actionRows.json', 'r')
+                # Try /actionRows.json first, then /actions/actionRows.json
+                action_rows_path = include_file_path + '/actionRows.json'
+                if action_rows_path not in script_zip.namelist():
+                    action_rows_path = include_file_path + '/actions/actionRows.json'
+                action_rows_file_obj = script_zip.open(action_rows_path, 'r')
                 props_file_obj = script_zip.open(include_file_path + '/props.json', 'r')
                 inputs_file_obj = script_zip.open(include_file_path + '/inputs.json', 'r')
                 outputs_file_obj = script_zip.open(include_file_path + '/outputs.json', 'r')
@@ -173,14 +232,20 @@ def parse_zip(script_name, system_script=False):
                     props_file_obj,
                     inputs_file_obj,
                     outputs_file_obj,
-                    include_dir_path
+                    include_dir_path,
+                    script_zip,
+                    include_file_path
                 )
                 include_script_obj['props']['script_name'] = include_script_name
                 include_script_obj['props']["dir_path"] = include_dir_path
                 include_scripts[include_script_name] = include_script_obj
     else:
         script_path = script_file_path
-        action_rows_file_obj = open(script_path + '/actions/actionRows.json', 'r')
+        # Try /actionRows.json first, then /actions/actionRows.json
+        action_rows_path = script_path + '/actionRows.json'
+        if not os.path.exists(action_rows_path):
+            action_rows_path = script_path + '/actions/actionRows.json'
+        action_rows_file_obj = open(action_rows_path, 'r')
         props_file_obj = open(script_path + '/props.json', 'r')
         inputs_file_obj = open(script_path + '/inputs.json', 'r')
         outputs_file_obj = open(script_path + '/outputs.json', 'r')
@@ -191,7 +256,9 @@ def parse_zip(script_name, system_script=False):
             props_file_obj,
             inputs_file_obj,
             outputs_file_obj,
-            dir_path
+            dir_path,
+            None,
+            None
         )
         use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
         action_rows_file_obj.close()
@@ -206,7 +273,11 @@ def parse_zip(script_name, system_script=False):
             include_script_name = include_file_path.split('/')[-1]
             include_parse_file_path = './scripts/scriptLibrary/' + os.path.basename(include_file_path) \
                 if use_library_scripts else include_file_path
-            action_rows_file_obj = open(include_parse_file_path + '/actions/actionRows.json', 'r')
+            # Try /actionRows.json first, then /actions/actionRows.json
+            action_rows_path = include_parse_file_path + '/actionRows.json'
+            if not os.path.exists(action_rows_path):
+                action_rows_path = include_parse_file_path + '/actions/actionRows.json'
+            action_rows_file_obj = open(action_rows_path, 'r')
             props_file_obj = open(include_parse_file_path + '/props.json', 'r')
             inputs_file_obj = open(include_parse_file_path + '/inputs.json', 'r')
             outputs_file_obj = open(include_parse_file_path + '/outputs.json', 'r')
@@ -217,7 +288,9 @@ def parse_zip(script_name, system_script=False):
                 props_file_obj,
                 inputs_file_obj,
                 outputs_file_obj,
-                include_parse_file_path
+                include_parse_file_path,
+                None,
+                None
             )
             action_rows_file_obj.close()
             props_file_obj.close()

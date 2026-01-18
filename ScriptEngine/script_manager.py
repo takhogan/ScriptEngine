@@ -41,6 +41,7 @@ DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
 print(f"script logger initialization completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 
+
 def hot_swap(current_action_group, current_script, include_scripts, recovery_script=None):
     if recovery_script is not None:
         pass
@@ -106,6 +107,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
           datetime_to_local_str(str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')),
           'actual script start time: ', datetime.datetime.now(), ' scheduled end time: ',
           datetime_to_local_str(timeout))
+    import numpy as np
+    np.set_printoptions(threshold=3, edgeitems=0, linewidth=80, precision=2, suppress=True)
     script_logger.log('constants : ', constants)
     from ScriptEngine.script_loader import parse_zip
     script_object = parse_zip(script_name, system_script)
