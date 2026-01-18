@@ -24,8 +24,9 @@ import numpy as np
 from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_storage
 from ScriptEngine.common.script_engine_utils import state_eval
 from ScriptEngine.common.enums import ScriptExecutionState
+from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_RESULT_MARKER
 from .image_matcher import ImageMatcher
-from .detect_scene_helper import DetectSceneHelper
+from .detect_scene_helper import DetectSceneHelper, apply_output_mask
 script_logger = ScriptLogger()
 print(f"detect object imports took {time.time() - start_time:.2f} seconds", flush=True)
 
@@ -109,8 +110,6 @@ class DetectObjectHelper:
 
     @staticmethod
     def update_update_queue(action, state, context, matches, update_queue):
-        state_copy = state.copy()
-        context_copy = context.copy()
         script_logger.log('updating update queue')
         if len(matches) > 0:
             update_update_queue_log = ''
@@ -195,6 +194,8 @@ class DetectObjectHelper:
             'detect_result.txt',
             ''
         )
+        
+        # Get floating_detect_obj and fixed_detect_obj
         fixed_detect_obj = None
         for positive_example in action["actionData"]["positiveExamples"]:
             if positive_example["detectType"] == "fixedObject":
@@ -205,6 +206,71 @@ class DetectObjectHelper:
             if positive_example["detectType"] == "floatingObject":
                 floating_detect_obj = positive_example
                 break
+        
+        # Check if skipDetection is enabled
+        skip_detection = action.get('actionData', {}).get('skipDetection')
+        if skip_detection == True or skip_detection == "true":
+            script_logger.log('skipDetection is true, skipping detection methods and returning default match')
+            
+            # Create proper match structure emulating regular match
+            output_mask_bgr = floating_detect_obj["outputMask"]
+            output_mask_single_channel = floating_detect_obj["outputMask_single_channel"]
+            location_val = (0, 0)
+            
+            # Check for output cropping
+            output_cropping = action["actionData"].get("maskLocation") if (
+                action["actionData"].get("maskLocation") != 'null' and
+                action['actionData'].get("excludeMatchedAreaFromOutput", False)
+            ) else None
+            
+            # Apply output mask to input at point (0, 0) using helper function
+            match_img_bgr = apply_output_mask(
+                screencap_im_bgr,
+                location_val,
+                output_mask_bgr,
+                output_cropping
+            )
+            
+            # Create match structure emulating regular match
+            matches = [{
+                'input_type': 'shape',
+                'point': location_val,
+                'shape': output_mask_single_channel.copy(),
+                'matched_area': match_img_bgr,
+                'height': output_mask_single_channel.shape[0],
+                'width': output_mask_single_channel.shape[1],
+                'original_image': action['input_obj'].get('original_image'),
+                'original_height': action['input_obj'].get('original_height', 0),
+                'original_width': action['input_obj'].get('original_width', 0),
+                'score': 1.0,
+                'n_matches': 1,
+                DETECT_OBJECT_RESULT_MARKER: True
+            }]
+            
+            # Set log_objs based on detectActionType
+            log_objs = {
+                'base': (screencap_im_bgr.copy() if screencap_im_bgr is not None else None, floating_detect_obj, match_point),
+                'fixedObject': None,
+                'floatingObject': None
+            }
+            
+            detect_action_type = action['actionData']['detectActionType']
+            if detect_action_type == 'fixedObject':
+                needs_rescale = screencap_im_bgr.shape != fixed_detect_obj["mask"].shape
+                screencap_masked = cv2.bitwise_and(screencap_im_bgr, fixed_detect_obj["mask"])
+                log_objs['fixedObject'] = (
+                    matches, screencap_masked, fixed_detect_obj, needs_rescale
+                )
+            elif detect_action_type == 'floatingObject':
+                H, W = screencap_im_bgr.shape[0], screencap_im_bgr.shape[1]
+                h, w = floating_detect_obj["img"].shape[0], floating_detect_obj["img"].shape[1]
+                match_result = np.ones((H - h + 1, W - w + 1), dtype=np.float32)
+                log_objs['floatingObject'] = (
+                    matches, match_result
+                )
+            script_logger.log('Completed handle detect object (skipDetection)')
+            return action, matches, log_objs
+        
         is_detect_object_first_match = (
                 action['actionData']['detectActionType'] == 'floatingObject' and action['actionData'][
             'matchMode'] == 'firstMatch'

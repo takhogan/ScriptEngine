@@ -726,33 +726,41 @@ class SystemScriptActionExecutor:
                 status = ScriptExecutionState.FAILURE
             else:
                 message_data = state_eval(action["actionData"]["inputExpression"], {}, state)
-                pre_log = 'Sending message through ' + str(action["actionData"]["messagingProvider"]) +\
-                        ' of type ' + str(action["actionData"]["messageType"])
+                subject = state_eval(action["actionData"]["subject"], {}, state)
+                pre_log = 'Sending message to ' + str(action["actionData"]["messagingChannelName"]) + ' with subject ' + str(subject)
                 script_logger.log(pre_log)
 
-                # mid_log = 'Message Contents: ' + str(type(message_data)
-                # script_logger.log(mid_log)
+                mid_log = 'Message Contents: ' + str(message_data)
+                script_logger.log(mid_log)
 
                 
                 messaging_successful = self.messaging_helper.send_message({
                     "action" : "sendMessage",
-                    "messagingChannelName" : action["actionData"]["messagingChannelName"],
-                    "messagingProvider" : action["actionData"]["messagingProvider"],
-                    "messageType" : action["actionData"]["messageType"]
+                    "subject" : subject,
+                    "messagingChannelName" : action["actionData"]["messagingChannelName"]
                 }, message_data)
 
                 if messaging_successful:
                     status = ScriptExecutionState.SUCCESS
                     post_log = 'Message Send Successful'
                 else:
-                    status = ScriptExecutionState.FAILURE
+                    status = ScriptExecutionState.ERROR
                     post_log = 'Message Send Failed'
                 script_logger.log(post_log)
-                script_logger.get_action_log().add_post_file(
+                script_logger.get_action_log().add_pre_file(
                     'text',
                     'sendMessage-log.txt',
                     pre_log + '\n' + mid_log + '\n' + post_log
                 )
+                
+                thread_script_logger = script_logger.copy()
+                self.io_executor.submit(
+                    self.messaging_helper.create_and_save_log_image,
+                    message_data,
+                    thread_script_logger,
+                    subject
+                )
+                
         elif action["actionName"] == "returnStatement":
             pre_log = 'Return Statement Type: {}'.format(action["actionData"]["returnStatementType"])
             script_logger.log(pre_log)

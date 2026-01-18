@@ -1,5 +1,5 @@
-from typing import Dict, Optional, Literal
-from dataclasses import dataclass
+from typing import Dict, Optional, Literal, List, Tuple
+from dataclasses import dataclass, field
 import requests
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 import json
@@ -18,6 +18,7 @@ class ScreenPlanAPIRequest:
     request_type: str
     path: str
     payload: Dict
+    files: Optional[List[Tuple[str, Tuple[str, bytes, str]]]] = field(default=None)
 
 class ScreenPlanAPI:
     def __init__(self):
@@ -74,7 +75,7 @@ class ScreenPlanAPI:
             script_logger.log(e)
             return False
 
-    def send_request(self, request: ScreenPlanAPIRequest) -> Optional[Dict]:
+    def send_request(self, request: ScreenPlanAPIRequest, retry: bool = True) -> Optional[Dict]:
         url = f"{self.base_url}/{request.path.lstrip('/')}"
         script_logger.log(f'sending {request.method} request to {url}')
         
@@ -82,12 +83,27 @@ class ScreenPlanAPI:
         
         try:
             if request.method == 'POST':
-                response = requests.post(
-                    url,
-                    json=request.payload,
-                    headers=headers,
-                    verify=VERIFY_PATH
-                )
+                if request.files:
+                    # Use multipart/form-data when files are present
+                    # Send JSON payload as a form field
+                    script_logger.log(f'sending files:', len(request.files), request.payload)
+                    
+                    form_data = {'payload': json.dumps(request.payload)}
+                    response = requests.post(
+                        url,
+                        data=form_data,
+                        files=request.files,
+                        headers=headers,
+                        verify=VERIFY_PATH
+                    )
+                else:
+                    # Use JSON when no files
+                    response = requests.post(
+                        url,
+                        json=request.payload,
+                        headers=headers,
+                        verify=VERIFY_PATH
+                    )
             else:  # GET
                 response = requests.get(
                     url,
@@ -95,9 +111,9 @@ class ScreenPlanAPI:
                     verify=VERIFY_PATH
                 )
 
-            if response.status_code == 403:
+            if response.status_code == 403 and retry:
                 self.get_server_token()
-                return self.send_request(request)  # Retry once with new token
+                return self.send_request(request, retry=False)  # Retry once with new token
             
             if response.status_code in (200, 201):
                 try:
