@@ -1,7 +1,6 @@
 from ScriptEngine.common.logging.script_action_log import ScriptActionLog
 import sys
 import threading
-import traceback
 thread_local_storage = threading.local()
 
 
@@ -24,7 +23,7 @@ class ScriptLogger:
             cls._instance.log_folder_path = None
             cls._instance.log_header = None
             cls._instance.log_level = 'info'
-            cls._instance.log_to_stdout = False 
+            cls._instance.log_to_stdout = True 
             cls._instance._start_writer_thread()
 
         return cls._instance
@@ -44,8 +43,6 @@ class ScriptLogger:
                 if message is None:
                     break
                 
-                # Write to file
-                assert self.log_file_path is not None, "log_file_path is not set"
                 with open(self.log_file_path, 'a', encoding='utf-8', errors='replace') as log_file:
                     log_file.write(message)
                     log_file.flush()
@@ -53,10 +50,8 @@ class ScriptLogger:
                 continue
             except Exception as e:
                 import time
-                print(message, file=sys.stderr)
-                print(f"Error in writer thread: {e}", file=sys.stderr)
+                print(f"Error in writer thread: {e}. Message: {message}", file=sys.stderr)
                 time.sleep(1)  # Prevent tight loop on errors
-                traceback.print_exc()
                 raise e
 
     def __del__(self):

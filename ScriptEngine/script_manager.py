@@ -289,7 +289,7 @@ def main():
         parser.add_argument('--constants', '-c', nargs='*', help='Constants in format key:value')
         parser.add_argument('--read-env', action='store_true', help='Read environment variables and pass them to parse_inputs')
         # parser.add_argument('--write-env', action='store_true', help='Output script outputs as environment variable exports (cross-platform)')
-        parser.add_argument('--log-stdout', action='store_true', default=False, help='Enable logging to stdout (default: False)')
+        parser.add_argument('--log-stdout', action='store_true', default=True, help='Enable logging to stdout (default: False)')
         
         args = parser.parse_args()
         
