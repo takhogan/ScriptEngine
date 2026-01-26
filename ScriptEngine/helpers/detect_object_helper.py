@@ -517,4 +517,4 @@ class DetectObjectHelper:
             script_logger.get_action_log().set_summary('detection failed')
         return action, status, state, context, run_queue
 
-script_logger.log(f"detect object module initialization took {time.time() - start_time:.2f} seconds")
+# print(f"detect object module initialization took {time.time() - start_time:.2f} seconds")
