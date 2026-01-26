@@ -116,6 +116,7 @@ class ScriptLogger:
         new_instance.log_folder_path = self.log_folder_path
         new_instance.log_header = self.log_header
         new_instance.log_level = self.log_level
+        new_instance.log_to_stdout = self.log_to_stdout
 
         return new_instance
 
