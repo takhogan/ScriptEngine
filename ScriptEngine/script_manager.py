@@ -320,7 +320,7 @@ def main():
                     script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/'
         os.makedirs(log_folder, exist_ok=True)
     except Exception as e:
-        script_logger.log(f"Error in initial setup: {e}", file=sys.stderr)
+        print(f"Error in initial setup: {e}", file=sys.stderr)
         traceback.print_exc()
 
     script_logger.set_log_file_path(log_folder + 'global-stdout.txt')
