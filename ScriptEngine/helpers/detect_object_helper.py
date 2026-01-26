@@ -28,7 +28,7 @@ from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_
 from .image_matcher import ImageMatcher
 from .detect_scene_helper import DetectSceneHelper, apply_output_mask
 script_logger = ScriptLogger()
-script_logger.log(f"detect object imports took {time.time() - start_time:.2f} seconds")
+# print(f"detect object imports took {time.time() - start_time:.2f} seconds")
 
 class DetectObjectHelper:
     def __init__(self):
