@@ -125,10 +125,8 @@ class ScriptLogger:
 
     def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True):
         import datetime
-        # Format the log message
-        text = str(datetime.datetime.now()) + ': ' + (
-            self.log_header if log_header else ''
-        ) + ' ' + sep.join(map(str, args)) + end
+        header_str = str(self.log_header) if (log_header and self.log_header is not None) else ''
+        text = f"{datetime.datetime.now()}: {header_str} {sep.join(map(str, args))}{end}"
 
         # Queue the message for non-blocking file writing
         if file is None:
