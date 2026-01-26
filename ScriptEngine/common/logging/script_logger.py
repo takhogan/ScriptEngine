@@ -53,6 +53,7 @@ class ScriptLogger:
                 continue
             except Exception as e:
                 import time
+                print(message, file=sys.stderr)
                 print(f"Error in writer thread: {e}", file=sys.stderr)
                 time.sleep(1)  # Prevent tight loop on errors
                 traceback.print_exc()
