@@ -28,7 +28,7 @@ from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_
 from .image_matcher import ImageMatcher
 from .detect_scene_helper import DetectSceneHelper, apply_output_mask
 script_logger = ScriptLogger()
-print(f"detect object imports took {time.time() - start_time:.2f} seconds", flush=True)
+script_logger.log(f"detect object imports took {time.time() - start_time:.2f} seconds")
 
 class DetectObjectHelper:
     def __init__(self):
@@ -503,13 +503,18 @@ class DetectObjectHelper:
                 truncate_log = 'Truncated {} excess matches'.format(excess_matches)
                 update_update_queue_log += truncate_log + '\n'
                 script_logger.log(truncate_log)
+            # Get score for summary before modifying matches
+            best_score = matches[0]['score']
             if max_matches > 1:
                 matches = matches[:max_matches]
             else:
                 matches = matches[0]
             state[action['actionData']['outputVarName']] = matches
+            # Set summary with score
+            script_logger.get_action_log().set_summary('detection succeeded with score {:.3f}'.format(best_score))
         else:
             status = ScriptExecutionState.FAILURE
+            script_logger.get_action_log().set_summary('detection failed')
         return action, status, state, context, run_queue
 
-print(f"detect object module initialization took {time.time() - start_time:.2f} seconds", flush=True)
+script_logger.log(f"detect object module initialization took {time.time() - start_time:.2f} seconds")

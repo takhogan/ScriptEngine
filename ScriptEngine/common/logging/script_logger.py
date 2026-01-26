@@ -1,5 +1,5 @@
 from ScriptEngine.common.logging.script_action_log import ScriptActionLog
-
+import sys
 import threading
 thread_local_storage = threading.local()
 
@@ -23,6 +23,7 @@ class ScriptLogger:
             cls._instance.log_folder_path = None
             cls._instance.log_header = None
             cls._instance.log_level = 'info'
+            cls._instance.log_to_stdout = False 
             cls._instance._start_writer_thread()
 
         return cls._instance
@@ -50,7 +51,7 @@ class ScriptLogger:
                 continue
             except Exception as e:
                 import time
-                print(f"Error in writer thread: {e}")
+                print(f"Error in writer thread: {e}", file=sys.stderr)
                 time.sleep(1)  # Prevent tight loop on errors
 
     def __del__(self):
@@ -137,19 +138,20 @@ class ScriptLogger:
             if flush:
                 file.flush()
 
-        # Print to console with error handling
-        try:
-            print(text, sep=sep, end=end, flush=flush)
-        except UnicodeEncodeError:
-            # If console can't handle the encoding, try to print a sanitized version
+        # Print to console with error handling (only if log_to_stdout is enabled)
+        if self.log_to_stdout:
             try:
-                # Remove or replace problematic characters
-                sanitized_text = text.encode('ascii', 'replace').decode('ascii')
-                print(sanitized_text, sep=sep, end=end, flush=flush)
-            except Exception:
-                # If all else fails, print a basic message
-                print(f"{datetime.datetime.now()}: [Output contained unprintable characters]", 
-                      flush=flush)
+                print(text, sep=sep, end=end, flush=flush)
+            except UnicodeEncodeError:
+                # If console can't handle the encoding, try to print a sanitized version
+                try:
+                    # Remove or replace problematic characters
+                    sanitized_text = text.encode('ascii', 'replace').decode('ascii')
+                    print(sanitized_text, sep=sep, end=end, flush=flush)
+                except Exception:
+                    # If all else fails, print a basic message
+                    print(f"{datetime.datetime.now()}: [Output contained unprintable characters]", 
+                          flush=flush)
 
     def set_log_file_path(self, log_file_path):
         self.log_file_path = log_file_path
@@ -183,3 +185,9 @@ class ScriptLogger:
 
     def get_log_level(self) -> str:
         return self.log_level
+
+    def set_log_to_stdout(self, log_to_stdout : bool):
+        self.log_to_stdout = log_to_stdout
+
+    def get_log_to_stdout(self) -> bool:
+        return self.log_to_stdout

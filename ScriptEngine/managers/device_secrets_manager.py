@@ -19,6 +19,7 @@ import json
 import keyring
 import sys
 from typing import Dict, Any, Optional
+import traceback
 
 class DeviceSecretsManager:
     """
@@ -47,6 +48,7 @@ class DeviceSecretsManager:
             keyring.set_password(self.SERVICE_NAME, key, value)
             return True
         except Exception as e:
+            traceback.print_exc()
             return False
     
     def get_secret(self, key: str) -> Optional[str]:
@@ -62,6 +64,7 @@ class DeviceSecretsManager:
         try:
             return keyring.get_password(self.SERVICE_NAME, key)
         except Exception as e:
+            traceback.print_exc()
             return None
     
     def delete_secret(self, key: str) -> bool:
@@ -78,7 +81,7 @@ class DeviceSecretsManager:
             keyring.delete_password(self.SERVICE_NAME, key)
             return True
         except Exception as e:
-            print(e)
+            traceback.print_exc()
             return False
     
     def parse_command(self, command: str, *args) -> Dict[str, Any]:

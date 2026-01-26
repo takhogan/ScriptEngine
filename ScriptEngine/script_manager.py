@@ -20,25 +20,25 @@ import time
 start_time = time.time()
 
 from dateutil import tz
-print(f"builtin initialization completed at {time.time() - start_time:.2f} seconds", flush=True)
+# print(f"builtin initialization completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 from ScriptEngine.custom_thread_pool import CustomThreadPool
 from ScriptEngine.custom_process_pool import CustomProcessPool
-print(f"non builtin initialization 1 completed at {time.time() - start_time:.2f} seconds", flush=True)
+# print(f"non builtin initialization 1 completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.script_engine_utils import datetime_to_local_str, imageFileExtensions, StateEvaluator
-print(f"non builtin initialization 2 completed at {time.time() - start_time:.2f} seconds", flush=True)
+# print(f"non builtin initialization 2 completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.system_script_handler import SystemScriptHandler
-print(f"non builtin initialization 3 completed at {time.time() - start_time:.2f} seconds", flush=True)
+# print(f"non builtin initialization 3 completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
-print(f"script logger initialization completed at {time.time() - start_time:.2f} seconds", flush=True)
+# print(f"script logger initialization completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 
 
@@ -62,6 +62,37 @@ def str_timeout_to_datetime_timeout(timeout, src=None):
 
     return timeout
 
+
+def format_env_outputs(env_dict):
+    """
+    Format environment variables in a cross-platform manner.
+    Returns a string that can be used with:
+    - Mac/Linux: source <(python3 script.py --write-env)
+    - Windows: python script.py --write-env | Invoke-Expression
+    """
+    import os
+    import platform
+    import shlex
+    
+    lines = []
+    system = platform.system().lower()
+    
+    for key, value in env_dict.items():
+        # Convert value to string and escape special characters
+        value_str = str(value)
+        
+        if system == 'windows':
+            # PowerShell format: Set-Item -Path Env:VAR -Value "value"
+            # Escape quotes and backticks for PowerShell
+            escaped_value = value_str.replace('"', '`"').replace('$', '`$').replace('`', '``')
+            lines.append(f'Set-Item -Path Env:{key} -Value "{escaped_value}"')
+        else:
+            # Unix/Mac format: export VAR="value"
+            # Use shlex.quote for proper shell escaping
+            escaped_value = shlex.quote(value_str)
+            lines.append(f'export {key}={escaped_value}')
+    
+    return '\n'.join(lines)
 
 def update_running_scripts_file(scriptname, action):
     import os
@@ -96,7 +127,7 @@ async def close_threads_and_processes(io_executor, process_executor, timeout=30)
     import asyncio
     await asyncio.gather(io_executor.soft_shutdown(script_logger, timeout), process_executor.soft_shutdown(script_logger, timeout))
 
-def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False):
+def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False, read_env=False, write_env=False):
     import os
     import json
     import datetime
@@ -178,7 +209,13 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         )
 
         try:
-            main_script.parse_inputs({})
+            # Prepare input state - include environment variables if read-env is enabled
+            input_state = {}
+            if read_env:
+                import os
+                input_state.update(os.environ)
+            
+            main_script.parse_inputs(input_state)
             # action logger for the scriptReference
             main_script.context["script_counter"] += 1
             script_logger.configure_action_logger(
@@ -208,6 +245,15 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         else:
             script_logger.log('Script Execution completed')
             asyncio.run(close_threads_and_processes(io_executor, process_executor))
+            
+            if write_env:
+                output_state = {}
+                outputs_log_file_path = script_logger.get_log_folder() + 'outputs.txt'
+                main_script.parse_outputs(output_state, outputs_log_file_path)
+                env_output = format_env_outputs(output_state)
+                print(env_output, flush=True)
+                sys.exit(0)
+    
     script_logger.log('Script Manager process completed')
     if errored:
         sys.exit(1)
@@ -215,62 +261,67 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
     # update_running_scripts_file(script_name, 'pop')
 
 
-print(f"Final Method initialization took {time.time() - start_time:.2f} seconds", flush=True)
+# print(f"Final Method initialization took {time.time() - start_time:.2f} seconds", flush=True)
 
 def main():
     import multiprocessing
     import os
     import sys
     import datetime
+    import traceback
     multiprocessing.freeze_support()
     multiprocessing.set_start_method('spawn')
-    print(f'SCRIPT MANAGER: Process ID: {os.getpid()}')
-    print('SCRIPT MANAGER: parsing args ', sys.argv)
-    import argparse
-    parser = argparse.ArgumentParser(description='Script Manager CLI')
-    
-    # Required arguments
-    parser.add_argument('--script-name', '-s', required=True, help='Name of the script to run')
-    
-    # Optional arguments
-    parser.add_argument('--start-time', '-st', help='Script start time (format: YYYY-MM-DD HH:MM:SS)')
-    parser.add_argument('--end-time', '-et', help='Script end time (format: YYYY-MM-DD HH:MM:SS)')
-    parser.add_argument('--log-level', '-l', default='info', help='Logging level')
-    parser.add_argument('--script-id', '-id', help='Script ID (UUID)')
-    parser.add_argument('--device', '-d', help='Device details')
-    parser.add_argument('--system-script', '-sys', action='store_true', help='Whether this is a system script')
-    parser.add_argument('--screen-plan-server-attached', '-spsa', action='store_true', help='Whether a screenplan client server is attached')
-    parser.add_argument('--constants', '-c', nargs='*', help='Constants in format key:value')
-    
-    args = parser.parse_args()
-    
-    script_name = args.script_name
-    
-    if args.start_time:
-        start_time_str = args.start_time
-        start_time = str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')
-    else:
-        start_time = datetime.datetime.now(datetime.timezone.utc)
-        start_time_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
-    
-    end_time = str_timeout_to_datetime_timeout(args.end_time, src='deployment_server') if args.end_time else None
-    log_level = args.log_level
-    import uuid
-    script_id = args.script_id if args.script_id else uuid.uuid4()
-    device_details = None if (not args.device or args.device == '' or args.device == 'null') else args.device
-    system_script = args.system_script
-    
-    constants = []
-    if args.constants:
-        for const in args.constants:
-            key_value = const.strip().split(':')
-            if len(key_value) == 2:
-                constants.append([key_value[0], key_value[1], False])
-    
-    log_folder = './logs/' + str(0).zfill(5) + '-' +\
-                 script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/'
-    print('log_folder', log_folder, start_time)
-    os.makedirs(log_folder, exist_ok=True)
+    try:
+        import argparse
+        parser = argparse.ArgumentParser(description='Script Manager CLI')
+        
+        # Required arguments
+        parser.add_argument('--script-name', '-s', required=True, help='Name of the script to run')
+        
+        # Optional arguments
+        parser.add_argument('--start-time', '-st', help='Script start time (format: YYYY-MM-DD HH:MM:SS)')
+        parser.add_argument('--end-time', '-et', help='Script end time (format: YYYY-MM-DD HH:MM:SS)')
+        parser.add_argument('--log-level', '-l', default='info', help='Logging level')
+        parser.add_argument('--script-id', '-id', help='Script ID (UUID)')
+        parser.add_argument('--device', '-d', help='Device details')
+        parser.add_argument('--system-script', '-sys', action='store_true', help='Whether this is a system script')
+        parser.add_argument('--screen-plan-server-attached', '-spsa', action='store_true', help='Whether a screenplan client server is attached')
+        parser.add_argument('--constants', '-c', nargs='*', help='Constants in format key:value')
+        parser.add_argument('--read-env', action='store_true', help='Read environment variables and pass them to parse_inputs')
+        # parser.add_argument('--write-env', action='store_true', help='Output script outputs as environment variable exports (cross-platform)')
+        parser.add_argument('--log-stdout', action='store_true', default=False, help='Enable logging to stdout (default: False)')
+        
+        args = parser.parse_args()
+        
+        script_name = args.script_name
+        
+        if args.start_time:
+            start_time_str = args.start_time
+            start_time = str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')
+        else:
+            start_time = datetime.datetime.now(datetime.timezone.utc)
+            start_time_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
+        
+        end_time = str_timeout_to_datetime_timeout(args.end_time, src='deployment_server') if args.end_time else None
+        log_level = args.log_level
+        import uuid
+        script_id = args.script_id if args.script_id else uuid.uuid4()
+        device_details = None if (not args.device or args.device == '' or args.device == 'null') else args.device
+        system_script = args.system_script
+        
+        constants = []
+        if args.constants:
+            for const in args.constants:
+                key_value = const.strip().split(':')
+                if len(key_value) == 2:
+                    constants.append([key_value[0], key_value[1], False])
+        
+        log_folder = './logs/' + str(0).zfill(5) + '-' +\
+                    script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/'
+        os.makedirs(log_folder, exist_ok=True)
+    except Exception as e:
+        script_logger.log(f"Error in initial setup: {e}", file=sys.stderr)
+        traceback.print_exc()
 
     script_logger.set_log_file_path(log_folder + 'global-stdout.txt')
     script_logger.set_log_folder(log_folder)
@@ -278,8 +329,12 @@ def main():
     script_logger.set_log_path_prefix(script_logger.get_log_folder() + script_logger.get_log_header() + '-')
 
     script_logger.set_log_level(log_level)
-    script_logger.log('completed parsing args ', sys.argv)
-    script_logger.log('loading script {} and running with log level {}'.format(
+    script_logger.set_log_to_stdout(args.log_stdout)
+    script_logger.log(f'SCRIPT MANAGER: Process ID: {os.getpid()}')
+    script_logger.log('SCRIPT MANAGER: parsed args ', sys.argv)
+    script_logger.log('SCRIPT MANAGER: log_folder', log_folder, start_time)
+
+    script_logger.log('SCRIPT MANAGER: loading script {} and running with log level {}'.format(
         script_name, script_logger.get_log_level())
     )
     script_timeout = (start_time + datetime.timedelta(minutes=30)).astimezone(tz=tz.tzutc()) if end_time is None else end_time
@@ -301,7 +356,9 @@ def main():
         constants=constants,
         device_details=device_details,
         system_script=system_script,
-        screen_plan_server_attached=args.screen_plan_server_attached
+        screen_plan_server_attached=args.screen_plan_server_attached,
+        read_env=args.read_env
+        # write_env=args.write_env
     )
 
 if __name__ == '__main__':

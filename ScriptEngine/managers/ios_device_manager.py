@@ -28,6 +28,9 @@ from pymobiledevice3.tunneld.api import async_get_tunneld_devices
 from pymobiledevice3.services.dvt.dvt_secure_socket_proxy import DvtSecureSocketProxyService
 from .device_manager import DeviceManager
 
+from ScriptEngine.common.logging.script_logger import ScriptLogger
+script_logger = ScriptLogger()
+
 class IOSDeviceManager(DeviceManager):
     def __init__(self, sudo_client: SudoClient):
         """Initialize connection to iOS device through tunnel"""
@@ -37,16 +40,16 @@ class IOSDeviceManager(DeviceManager):
         # Use asyncio.run() to handle the await
         rsds = asyncio.run(async_get_tunneld_devices())
         
-        print("Connected devices:", rsds)
+        script_logger.log("Connected devices:", rsds)
         if not rsds:
             raise RuntimeError("No iOS devices found")
             
         device = rsds[0]
-        print("Device info:", device.product_version, type(device))
+        script_logger.log("Device info:", device.product_version, type(device))
         self.lockdown = device
         # self.connection = device.start_lockdown_developer_service('com.apple.mobile.screenshotr')
         # for entry in OsTraceService(device).syslog():
-        #     print(entry)
+        #     script_logger.log(entry)
 
     def take_screenshot(self):
         """Takes a screenshot of the iOS device and returns the PNG data"""
@@ -56,17 +59,17 @@ class IOSDeviceManager(DeviceManager):
     
     def list_applications(self) -> dict[str, str]:
         """List installed applications on iOS device - not implemented"""
-        print(f"IOSDeviceManager: list_applications not implemented for iOS")
+        script_logger.log(f"IOSDeviceManager: list_applications not implemented for iOS")
         return {}
     
     def start_application(self, application_path : str, args : List[str] | None):
         """Start an application on iOS device - not implemented"""
-        print(f"IOSDeviceManager: start_application not implemented for iOS - {application_path}")
+        script_logger.log(f"IOSDeviceManager: start_application not implemented for iOS - {application_path}")
         pass
     
     def stop_application(self, application_name):
         """Stop an application on iOS device - not implemented"""
-        print(f"IOSDeviceManager: stop_application not implemented for iOS - {application_name}")
+        script_logger.log(f"IOSDeviceManager: stop_application not implemented for iOS - {application_name}")
         pass
 
 if __name__ == "__main__":

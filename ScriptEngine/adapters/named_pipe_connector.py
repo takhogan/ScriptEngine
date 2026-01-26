@@ -4,11 +4,13 @@ import json
 import threading
 from typing import Callable, Optional, Union, TextIO
 import queue
+import traceback
 
+from ScriptEngine.common.logging.script_logger import ScriptLogger
+script_logger = ScriptLogger()
 if sys.platform == "win32":
-    import win32pipe
-    import win32file
-    import win32api
+    import win32pipe  # pyright: ignore[reportMissingModuleSource]
+    import win32file  # pyright: ignore[reportMissingModuleSource]
 else:
     import fcntl
     import stat
@@ -54,7 +56,7 @@ class NamedPipeAdapter:
             else:
                 return pipe_handle.readline().strip()
         except Exception as e:
-            print(f"Error reading from pipe: {e}")
+            traceback.print_exc()
             return None
 
     def _write_to_pipe(self, pipe_handle, message: str) -> None:
@@ -67,7 +69,7 @@ class NamedPipeAdapter:
                 pipe_handle.write(message + '\n')
                 pipe_handle.flush()
         except Exception as e:
-            print(f"Error writing to pipe: {e}")
+            traceback.print_exc()
 
     def _process_messages(self) -> None:
         """Process messages from the queue and send responses."""
@@ -82,7 +84,7 @@ class NamedPipeAdapter:
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f"Error processing message: {e}")
+                traceback.print_exc()
 
         if sys.platform != "win32":
             output_pipe.close()
@@ -110,9 +112,11 @@ class NamedPipeAdapter:
                         if request_id and message:
                             self.message_queue.put((request_id, message))
                     except json.JSONDecodeError:
-                        print(f"Invalid JSON received: {data}")
+                        print(f"Invalid JSON received: {data}", file=sys.stderr)
+                        traceback.print_exc()
             except Exception as e:
-                print(f"Error in main loop: {e}")
+                print(f"Error in main loop: {e}", file=sys.stderr)
+                traceback.print_exc()
                 break
 
         if sys.platform != "win32":

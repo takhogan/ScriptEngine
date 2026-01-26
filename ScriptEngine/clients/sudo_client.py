@@ -4,6 +4,8 @@ import os
 import signal
 from typing import Optional
 
+from ScriptEngine.common.logging.script_logger import ScriptLogger
+script_logger = ScriptLogger()
 class SudoClient:
     def __init__(self):
         self.process = None
@@ -52,11 +54,11 @@ class SudoClient:
                 )
             
             self.pid = self.process.pid
-            print(f"Process started with PID: {self.pid}")
+            script_logger.log(f"Process started with PID: {self.pid}")
             return self.pid
             
         except Exception as e:
-            print(f"Error running command with elevated privileges: {e}")
+            script_logger.log(f"Error running command with elevated privileges: {e}")
             return None
 
     def terminate(self):
@@ -73,7 +75,7 @@ class SudoClient:
                     # On Unix-like systems, send SIGTERM
                     os.killpg(os.getpgid(self.pid), signal.SIGTERM)
             except Exception as e:
-                print(f"Error terminating process: {e}")
+                script_logger.log(f"Error terminating process: {e}")
             finally:
                 self.process = None
                 self.pid = None
