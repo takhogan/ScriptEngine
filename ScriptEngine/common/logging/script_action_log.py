@@ -15,6 +15,7 @@ class ScriptActionLog:
         self.name = action["actionName"] + '-' + str(action["actionGroup"])
         self.script_counter = script_counter
         self.status = 'RUNNING'
+        self.summary = ''
         self.start_time = datetime.datetime.now(datetime.timezone.utc)
         self.script_log_folder = None
         self.target_system = action['actionData']['targetSystem']
@@ -55,6 +56,7 @@ class ScriptActionLog:
                 'log_object_type' : self.type,
                 'tree_entity_type' : 'node',
                 'status' : self.get_status(),
+                'summary' : self.summary,
                 'start_time' : self.start_time.strftime("%Y-%m-%d %H:%M:%S.%f"),
                 'elapsed' : (datetime.datetime.now(datetime.timezone.utc) - self.start_time).total_seconds(),
                 'pre_file' : {
@@ -226,6 +228,9 @@ class ScriptActionLog:
     def set_status(self, status):
         self.status = status
         self.to_dict()
+    
+    def set_summary(self, summary):
+        self.summary = summary
 
     def get_script_counter(self):
         return self.script_counter

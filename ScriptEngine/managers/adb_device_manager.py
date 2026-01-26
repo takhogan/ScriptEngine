@@ -689,7 +689,7 @@ class ADBDeviceManager(DeviceManager):
                     break
 
                 if time.time() - start_time > timeout:
-                    print("Emulator start timed out.")
+                    script_logger.log("Emulator start timed out.")
                     break
 
                 # Check if the process has exited (i.e., poll() returns a non-None value)
@@ -1231,7 +1231,6 @@ class ADBDeviceManager(DeviceManager):
                 mapped_y_val = int(((self.height - y) / self.height) * self.xmax)
             else:
                 raise Exception('Screen orientation not set')
-            print(mapped_x_val, mapped_y_val, x, y, self.width, self.height, self.xmax, self.ymax)
             init_click_commands = [
                 self.commands["x_command_func"](mapped_x_val),
                 self.commands["y_command_func"](mapped_y_val),

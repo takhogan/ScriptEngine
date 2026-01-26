@@ -88,7 +88,6 @@ class PiKVMDeviceManager(DeviceManager):
         return self.instance.press(key)
     
     def hotkey(self, *keys):
-        print(f"hotkey: {keys}")
         return self.instance.hotkey(*keys)
     
     def mouse_down(self, x, y, button="left"):

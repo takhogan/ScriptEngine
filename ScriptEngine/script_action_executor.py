@@ -134,6 +134,10 @@ class ScriptActionExecutor:
                 scroll_func = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'scroll')
                 scroll_func(*point_choice, scroll_distance)
             status = ScriptExecutionState.SUCCESS
+            # Create summary with action type and location
+            action_type = action["actionData"]["mouseActionType"]
+            location_str = '({}, {})'.format(point_choice[0], point_choice[1])
+            script_logger.get_action_log().set_summary('performed {} at location {}'.format(action_type, location_str))
         elif action["actionName"] == "mouseMoveAction":
             self.device_controller.ensure_device_initialized(action['actionData']['targetSystem'])
             source_point, log_source_point_choice, point_list, log_source_point_list = ClickActionHelper.get_point_choice(
@@ -245,6 +249,10 @@ class ScriptActionExecutor:
             )
 
             status = ScriptExecutionState.SUCCESS
+            # Create summary with source and target locations
+            source_str = '({}, {})'.format(source_point[0], source_point[1])
+            target_str = '({}, {})'.format(target_point[0], target_point[1])
+            script_logger.get_action_log().set_summary('moved mouse from {} to {}'.format(source_str, target_str))
         
         elif action["actionName"] == "keyboardAction":
             status, state, context = DeviceActionInterpreter.parse_keyboard_action(

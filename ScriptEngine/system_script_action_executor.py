@@ -102,10 +102,18 @@ class SystemScriptActionExecutor:
                 post_log = 'condition successful'
                 script_logger.log(post_log)
                 status = ScriptExecutionState.SUCCESS
+                result_text = 'condition successful'
             else:
                 post_log = 'condition failure'
                 script_logger.log(post_log)
                 status = ScriptExecutionState.FAILURE
+                result_text = 'condition failed'
+            
+            # Create summary with condition: truncate if too long
+            condition_summary = condition
+            if len(condition_summary) > 50:
+                condition_summary = condition_summary[:47] + '...'
+            script_logger.get_action_log().set_summary('{}: {}'.format(result_text, condition_summary))
 
             script_logger.get_action_log().add_post_file(
                 'text',
@@ -127,6 +135,7 @@ class SystemScriptActionExecutor:
                 pre_log += ' and output variable {} was not null'.format(outputVarName)
                 script_logger.log(pre_log)
                 status = ScriptExecutionState.SUCCESS
+                script_logger.get_action_log().set_summary('skipped ({} already set)'.format(outputVarName))
                 script_logger.get_action_log().append_post_file(
                     'text',
                     post_file_name,
@@ -182,6 +191,11 @@ class SystemScriptActionExecutor:
                     expression
                 )
                 status = ScriptExecutionState.SUCCESS
+                # Create summary: truncate value if too long
+                value_str = str(expression)
+                if len(value_str) > 50:
+                    value_str = value_str[:47] + '...'
+                script_logger.get_action_log().set_summary('set {} to {}'.format(outputVarName, value_str))
                 script_logger.get_action_log().append_post_file(
                     'text',
                     post_file_name,
@@ -327,6 +341,12 @@ class SystemScriptActionExecutor:
                     pre_log + '\n' + mid_log
                 )
                 time.sleep(sleep_length)
+            # Create summary with proper singular/plural
+            if sleep_length == 1:
+                summary = 'slept 1 second'
+            else:
+                summary = 'slept {} seconds'.format(sleep_length)
+            script_logger.get_action_log().set_summary(summary)
             script_logger.get_action_log().add_post_file(
                 'text',
                 'sleepStatement-end-{:.2f}'.format(sleep_length).replace('.', '_') + '.txt',
@@ -674,7 +694,14 @@ class SystemScriptActionExecutor:
                 'imageToText-results.txt',
                 pre_log + '\n' + inputs_log + '\n' + post_log
             )
-            state[action["actionData"]["outputVarName"]] = outputs[0].strip()
+            extracted_text = outputs[0].strip()
+            state[action["actionData"]["outputVarName"]] = extracted_text
+            # Create summary: truncate text if too long
+            if len(extracted_text) > 50:
+                summary_text = extracted_text[:47] + '...'
+            else:
+                summary_text = extracted_text
+            script_logger.get_action_log().set_summary("extracted text: '{}'".format(summary_text))
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "contextSwitchAction":
             success_states = context["success_states"] if "success_states" in context else None
@@ -724,6 +751,7 @@ class SystemScriptActionExecutor:
             if not self.screen_plan_server_attached:
                 script_logger.log('unable to send message, screen plan server not active')
                 status = ScriptExecutionState.FAILURE
+                script_logger.get_action_log().set_summary('message send failed')
             else:
                 message_data = state_eval(action["actionData"]["inputExpression"], {}, state)
                 subject = state_eval(action["actionData"]["subject"], {}, state)
@@ -752,6 +780,15 @@ class SystemScriptActionExecutor:
                     'sendMessage-log.txt',
                     pre_log + '\n' + mid_log + '\n' + post_log
                 )
+                # Create summary: truncate message contents if too long
+                message_str = str(message_data)
+                if len(message_str) > 30:
+                    message_str = message_str[:27] + '...'
+                subject_str = str(subject)
+                if len(subject_str) > 30:
+                    subject_str = subject_str[:27] + '...'
+                channel_str = str(action["actionData"]["messagingChannelName"])
+                script_logger.get_action_log().set_summary("sent message with subject '{}' to channel {} with contents '{}'".format(subject_str, channel_str, message_str))
                 
                 thread_script_logger = script_logger.copy()
                 self.io_executor.submit(
