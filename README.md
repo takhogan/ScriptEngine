@@ -160,9 +160,29 @@ scripts/
     "outputVarName": "detectObject_0_output",
     "positiveExamples": [
       {
-        "detectType": "floatingObject",
-        "img": "actions/0-row/0-detectObject/assets/positiveExamples/0-img.png",
-        "mask": "actions/0-row/0-detectObject/assets/positiveExamples/0-mask.png"
+        "type": "templateMatchImage",
+        "floatingObject": {
+          "detectType": "floatingObject",
+          "pairIndex": 0,
+          "img": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-floatingObject-img.png",
+          "mask": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-floatingObject-mask.png",
+          "containedAreaMask": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-floatingObject-containedAreaMask.png",
+          "icon": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-floatingObject-icon.png",
+          "centerPoint": [10.5, 10.5],
+          "sourceScreenWidth": 1512,
+          "sourceScreenHeight": 944
+        },
+        "fixedObject": {
+          "detectType": "fixedObject",
+          "pairIndex": 1,
+          "img": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-fixedObject-img.png",
+          "mask": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-fixedObject-mask.png",
+          "containedAreaMask": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-fixedObject-containedAreaMask.png",
+          "icon": "actions/0-row/0-detectObject/assets/detectTypeObject/positiveExamples/0-fixedObject-icon.png",
+          "centerPoint": [10.5, 10.5],
+          "sourceScreenWidth": 1512,
+          "sourceScreenHeight": 944
+        }
       }
     ],
     "negativeExamples": []
