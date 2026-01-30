@@ -154,22 +154,14 @@ class ClickActionHelper:
             pre_log = 'pointList in actionData, choosing point from pointlist'
             point_choice, selection_strategy = ClickActionHelper._choose_point_from_list(point_list, prefer_interior)
             log_point_choice = point_choice
-            if detectTypeData["detectActionType"] == "fixedObject":
-                fixed_detect_obj = None
-                for positive_example in detectTypeData["positiveExamples"]:
-                    if positive_example["detectType"] == "fixedObject":
-                        fixed_detect_obj = positive_example
-                        break
-                source_screen_width = fixed_detect_obj["sourceScreenWidth"]
-                source_screen_height = fixed_detect_obj["sourceScreenHeight"]
-            else:
-                floating_detect_obj = None
-                for positive_example in detectTypeData["positiveExamples"]:
-                    if positive_example["detectType"] == "floatingObject":
-                        floating_detect_obj = positive_example
-                        break
-                source_screen_width = floating_detect_obj["sourceScreenWidth"]
-                source_screen_height = floating_detect_obj["sourceScreenHeight"]
+            # positiveExamples are in pair format (normalized in script_loader)
+            positive_examples = detectTypeData["positiveExamples"]
+            first = positive_examples[0] if positive_examples else {}
+            fixed_detect_obj = first.get("fixedObject")
+            floating_detect_obj = first.get("floatingObject")
+            obj = fixed_detect_obj if detectTypeData["detectActionType"] == "fixedObject" else floating_detect_obj
+            source_screen_width = obj["sourceScreenWidth"]
+            source_screen_height = obj["sourceScreenHeight"]
 
 
 

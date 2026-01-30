@@ -108,13 +108,37 @@ def parse_script_file(
             if detect_type_action:
                 include_contained_area = (action["actionData"]['includeContainedAreaInOutput'] if 'includeContainedAreaInOutput' in action["actionData"] else False)
                 exclude_matched_area = (action["actionData"]['excludeMatchedAreaFromOutput'] if 'excludeMatchedAreaFromOutput' in action["actionData"] else False)
-                for example_index,positive_example in enumerate(action["actionData"]["positiveExamples"]):
-                    if "mask" in positive_example and not positive_example["mask"] is None:
-                        read_and_set_image(positive_example, action, "mask")
-                        positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
-                    read_and_set_image(positive_example, action, "containedAreaMask")
-                    read_and_set_image(positive_example, action, "img")
-                    set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)
+                positive_examples = action["actionData"]["positiveExamples"]
+                # Normalize legacy format (flat list with detectType) to new format (pairs with floatingObject/fixedObject)
+                if positive_examples and "floatingObject" not in positive_examples[0]:
+                    first_floating = None
+                    first_fixed = None
+                    for positive_example in positive_examples:
+                        if positive_example.get("detectType") == "floatingObject":
+                            first_floating = positive_example
+                            break
+                    for positive_example in positive_examples:
+                        if positive_example.get("detectType") == "fixedObject":
+                            first_fixed = positive_example
+                            break
+                    pair = {"type": "templateMatchImage"}
+                    if first_floating is not None:
+                        pair["floatingObject"] = first_floating
+                    if first_fixed is not None:
+                        pair["fixedObject"] = first_fixed
+                    action["actionData"]["positiveExamples"] = [pair]
+                # Load images for each pair (new format only after normalization)
+                for example_index, pair in enumerate(action["actionData"]["positiveExamples"]):
+                    for obj_key in ["floatingObject", "fixedObject"]:
+                        if obj_key not in pair:
+                            continue
+                        positive_example = pair[obj_key]
+                        if "mask" in positive_example and positive_example["mask"] is not None:
+                            read_and_set_image(positive_example, action, "mask")
+                            positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
+                        read_and_set_image(positive_example, action, "containedAreaMask")
+                        read_and_set_image(positive_example, action, "img")
+                        set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)
             
             # Handle mouseInteractionAction and mouseMoveAction point lists
             if action["actionName"] in {"mouseInteractionAction", "mouseMoveAction"}:

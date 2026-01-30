@@ -195,17 +195,10 @@ class DetectObjectHelper:
             ''
         )
         
-        # Get floating_detect_obj and fixed_detect_obj
-        fixed_detect_obj = None
-        for positive_example in action["actionData"]["positiveExamples"]:
-            if positive_example["detectType"] == "fixedObject":
-                fixed_detect_obj = positive_example
-                break
-        floating_detect_obj = None
-        for positive_example in action["actionData"]["positiveExamples"]:
-            if positive_example["detectType"] == "floatingObject":
-                floating_detect_obj = positive_example
-                break
+        positive_examples = action["actionData"]["positiveExamples"]
+        first = positive_examples[0] if positive_examples else {}
+        floating_detect_obj = first.get("floatingObject")
+        fixed_detect_obj = first.get("fixedObject")
         
         # Check if skipDetection is enabled
         skip_detection = action.get('actionData', {}).get('skipDetection')
