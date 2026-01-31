@@ -102,8 +102,6 @@ def parse_script_file(
         for action in action_row["actions"]:
             detect_type_action = action["actionName"] in {
                 "clickAction",
-                "mouseInteractionAction",
-                "mouseMoveAction",
                 "mouseScrollAction",
                 "declareScene",
                 "dragLocationSource",
