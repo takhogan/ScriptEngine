@@ -150,6 +150,7 @@ class ClickActionHelper:
     def get_point_choice(detectTypeData, var_name, point_list, state, screen_width, screen_height, point_index, prefer_interior=True):
         point_choice = (None, None)
         log_point_choice = (None, None)
+        pre_log = ''
 
         if var_name is not None and len(var_name) > 0:
             input_expression_log = 'inputExpression {} was not null or blank, reading from inputExpression'.format(
