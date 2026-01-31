@@ -150,48 +150,6 @@ class ClickActionHelper:
     def get_point_choice(detectTypeData, var_name, point_list, state, screen_width, screen_height, point_index, prefer_interior=True):
         point_choice = (None, None)
         log_point_choice = (None, None)
-        if len(point_list) > 0:
-            pre_log = 'pointList in actionData, choosing point from pointlist'
-            point_choice, selection_strategy = ClickActionHelper._choose_point_from_list(point_list, prefer_interior)
-            log_point_choice = point_choice
-            # positiveExamples are in pair format (normalized in script_loader)
-            positive_examples = detectTypeData["positiveExamples"]
-            first = positive_examples[0] if positive_examples else {}
-            fixed_detect_obj = first.get("fixedObject")
-            floating_detect_obj = first.get("floatingObject")
-            obj = fixed_detect_obj if detectTypeData["detectActionType"] == "fixedObject" else floating_detect_obj
-            source_screen_width = obj["sourceScreenWidth"]
-            source_screen_height = obj["sourceScreenHeight"]
-
-
-
-            input_params_valid = len(str(source_screen_width)) > 0 and\
-                int(source_screen_width) > 0 and\
-                len(str(source_screen_height)) > 0 and\
-                int(source_screen_height) > 0
-            script_logger.log(pre_log)
-            point_choice_log = 'Point chosen ({}): {}'.format(selection_strategy, str(point_choice))
-            pre_log += '\n' + point_choice_log
-            script_logger.log(point_choice_log)
-            log_point_list = {
-                'input_type': 'point_list',
-                'point_list': point_list
-            }
-
-            point_list, point_choice, remap_log = ClickActionHelper.remap_points_to_screen(
-                input_params_valid, source_screen_width, source_screen_height,
-                screen_width, screen_height, point_list, point_choice
-            )
-            point_list = {
-                'input_type': 'point_list',
-                'point_list': point_list
-            }
-            pre_log += '\n' + remap_log
-
-        else:
-            log_point_list = []
-            pre_log = 'pointList not in actionData'
-            script_logger.log(pre_log)
 
         if var_name is not None and len(var_name) > 0:
             input_expression_log = 'inputExpression {} was not null or blank, reading from inputExpression'.format(
@@ -241,6 +199,55 @@ class ClickActionHelper:
             pre_log += '\n' + input_expression_point_choice_log
             script_logger.log(input_expression_point_choice_log)
             log_point_list = point_list = input_point
+        elif len(point_list) > 0:
+            pre_log = 'pointList in actionData, choosing point from pointlist'
+            point_choice, selection_strategy = ClickActionHelper._choose_point_from_list(point_list, prefer_interior)
+            log_point_choice = point_choice
+            # positiveExamples are in pair format (normalized in script_loader)
+            positive_examples = detectTypeData["positiveExamples"]
+            first = positive_examples[0] if positive_examples else {}
+            fixed_detect_obj = first.get("fixedObject")
+            floating_detect_obj = first.get("floatingObject")
+            obj = fixed_detect_obj if detectTypeData["detectActionType"] == "fixedObject" else floating_detect_obj
+            # Legacy pairs may have only one of floatingObject/fixedObject; use the other for source dimensions if needed
+            if obj is None:
+                obj = floating_detect_obj if fixed_detect_obj is None else fixed_detect_obj
+            if obj is not None:
+                source_screen_width = obj["sourceScreenWidth"]
+                source_screen_height = obj["sourceScreenHeight"]
+            else:
+                source_screen_width = 0
+                source_screen_height = 0
+
+
+
+            input_params_valid = len(str(source_screen_width)) > 0 and\
+                int(source_screen_width) > 0 and\
+                len(str(source_screen_height)) > 0 and\
+                int(source_screen_height) > 0
+            script_logger.log(pre_log)
+            point_choice_log = 'Point chosen ({}): {}'.format(selection_strategy, str(point_choice))
+            pre_log += '\n' + point_choice_log
+            script_logger.log(point_choice_log)
+            log_point_list = {
+                'input_type': 'point_list',
+                'point_list': point_list
+            }
+
+            point_list, point_choice, remap_log = ClickActionHelper.remap_points_to_screen(
+                input_params_valid, source_screen_width, source_screen_height,
+                screen_width, screen_height, point_list, point_choice
+            )
+            point_list = {
+                'input_type': 'point_list',
+                'point_list': point_list
+            }
+            pre_log += '\n' + remap_log
+
+        else:
+            log_point_list = []
+            pre_log = 'pointList not in actionData and inputExpression is None'
+            script_logger.log(pre_log)
         script_logger.get_action_log().add_supporting_file(
             'text',
             'clickActionPointChoice-{}-log.txt'.format(str(point_index)),
