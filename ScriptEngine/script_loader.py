@@ -135,7 +135,7 @@ def parse_script_file(
                         if obj_key not in pair:
                             continue
                         positive_example = pair[obj_key]
-                        if "mask" in positive_example and positive_example["mask"] is not None:
+                        if "mask" in positive_example and positive_example["mask"] is not None and type(positive_example["mask"]) == str:
                             read_and_set_image(positive_example, action, "mask")
                             positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
                         read_and_set_image(positive_example, action, "containedAreaMask")
