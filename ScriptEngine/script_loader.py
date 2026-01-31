@@ -79,7 +79,7 @@ def parse_script_file(
         script_path_in_zip=None):
     script_logger.log('SCRIPT LOAD: loading script ', script_name)
     def read_and_set_image(example, action, img_type):
-        if img_type in example and not example[img_type] is None:
+        if img_type in example and not example[img_type] is None and type(example[img_type]) == str:
             script_logger.log(dir_path, example[img_type])
             example[img_type] = cv2.imread(dir_path + '/' + example[img_type])
     def read_json_file(file_path):
