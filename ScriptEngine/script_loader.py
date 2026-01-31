@@ -79,7 +79,9 @@ def parse_script_file(
         script_path_in_zip=None):
     script_logger.log('SCRIPT LOAD: loading script ', script_name)
     def read_and_set_image(example, action, img_type):
-        if img_type in example and not example[img_type] is None and type(example[img_type]) == str:
+        if type(example[img_type]) != str:
+            del example[img_type]
+        if img_type in example and not example[img_type] is None:
             script_logger.log(dir_path, example[img_type])
             example[img_type] = cv2.imread(dir_path + '/' + example[img_type])
     def read_json_file(file_path):
@@ -135,7 +137,9 @@ def parse_script_file(
                         if obj_key not in pair:
                             continue
                         positive_example = pair[obj_key]
-                        if "mask" in positive_example and positive_example["mask"] is not None and type(positive_example["mask"]) == str:
+                        if type(positive_example["mask"]) != str:
+                            del positive_example["mask"]
+                        if "mask" in positive_example and positive_example["mask"] is not None:
                             read_and_set_image(positive_example, action, "mask")
                             positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
                         read_and_set_image(positive_example, action, "containedAreaMask")
