@@ -209,8 +209,8 @@ class ClickActionHelper:
             fixed_detect_obj = first.get("fixedObject")
             floating_detect_obj = first.get("floatingObject")
             obj = fixed_detect_obj if detectTypeData["detectActionType"] == "fixedObject" else floating_detect_obj
-            source_screen_width = obj["sourceScreenWidth"]
-            source_screen_height = obj["sourceScreenHeight"]
+            source_screen_width = obj["sourceScreenWidth"] if obj is not None and "sourceScreenWidth" in obj else 0
+            source_screen_height = obj["sourceScreenHeight"] if obj is not None and "sourceScreenHeight" in obj else 0
 
 
 
