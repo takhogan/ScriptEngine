@@ -138,6 +138,11 @@ class DetectSceneHelper:
         final_log = 'Matched scene at location {}'.format(str(location_val))
         script_logger.log(final_log)
 
+        # When input is a crop (e.g. from a prior floatingObject), add its origin
+        # so output point is in full-screen coordinates (same as floatingObject path).
+        match_point = sceneAction['input_obj'].get('match_point', (0, 0))
+        output_point = (location_val[0] + match_point[0], location_val[1] + match_point[1])
+
         script_logger.get_action_log().add_supporting_file(
             'text',
             'detectScene-log.txt',
@@ -149,7 +154,7 @@ class DetectSceneHelper:
 
         return [{
             'input_type': 'shape',
-            'point': location_val,
+            'point': output_point,
             'shape': output_mask_single_channel,
             'matched_area': match_img_bgr,
             'height': floating_detect_obj["outputMask_single_channel"].shape[0],
