@@ -1,4 +1,8 @@
-from concurrent.futures import ThreadPoolExecutor,ALL_COMPLETED, wait
+import logging
+from concurrent.futures import ThreadPoolExecutor, ALL_COMPLETED, wait
+
+logger = logging.getLogger(__name__)
+
 
 class CustomThreadPool(ThreadPoolExecutor):
     def __init__(self, max_workers=None):
@@ -9,9 +13,20 @@ class CustomThreadPool(ThreadPoolExecutor):
         # Submit the task and track it
         future = super().submit(fn, *args, **kwargs)
         self.active_tasks.append(future)
-        # Add a callback to remove the task from active list once done
+        # Add callbacks: log any exception, then remove the task from active list
+        future.add_done_callback(self._log_task_exception)
         future.add_done_callback(self._remove_task)
         return future
+
+    def _log_task_exception(self, future):
+        """If the task raised, log it so errors are visible instead of swallowed."""
+        exc = future.exception()
+        if exc is not None:
+            logger.error(
+                "io_executor task failed: %s",
+                exc,
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
 
     def _remove_task(self, future):
         # Remove the completed task from the active list
