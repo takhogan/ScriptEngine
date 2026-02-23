@@ -323,22 +323,29 @@ class ImageMatcher:
                         best_point[1]:best_point[1] + box_h, best_point[0]:best_point[0] + box_w
                     ] = screencap_search_bgr[:slice_h,:slice_w]
                     result_im_bgr = cv2.addWeighted(result_im_bgr, 0.3, screencap_im_bgr, 0.7, 0)
+                    top_left = (int(best_point[0]), int(best_point[1]))
+                    bottom_right = (int(best_point[0] + box_w), int(best_point[1] + box_h))
                     cv2.rectangle(
                         result_im_bgr,
-                        best_point,
-                        (best_point[0] + box_w,
-                         best_point[1] + box_h),
+                        top_left,
+                        bottom_right,
                         (0, 0, int((255 * best_point_score + 255) / 2)),
                         2
                     )
         else:
+            top_left = (
+                int(matches[0]['point'][0] - source_match_point[0]),
+                int(matches[0]['point'][1] - source_match_point[1]),
+            )
+            bottom_right = (
+                int(matches[0]['point'][0] + w - source_match_point[0]),
+                int(matches[0]['point'][1] + h - source_match_point[1]),
+            )
             cv2.rectangle(
                 screencap_im_bgr,
-                (matches[0]['point'][0] - source_match_point[0], matches[0]['point'][1] - source_match_point[1]),
-                (
-                    matches[0]['point'][0] + w - source_match_point[0],
-                    matches[0]['point'][1] + h - source_match_point[1],
-                ), (0, 0, int(255 * matches[0]['score'])), 2
+                top_left,
+                bottom_right,
+                (0, 0, int(255 * matches[0]['score'])), 2
             )
 
         result_log = 'Best valid match: {} with score {}\n'.format(
@@ -360,7 +367,7 @@ class ImageMatcher:
         if detectObject['actionData']['detectActionType'] == "floatingObject":
             for match_obj in matches:
                 pt = tuple(map(int, match_obj['point']))
-                pt = (pt[0] - source_match_point[0], pt[1] - source_match_point[1])
+                pt = (int(pt[0] - source_match_point[0]), int(pt[1] - source_match_point[1]))
                 box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
                 end_y = min(pt[1] + box_h, result_im_bgr.shape[0])
                 end_x = min(pt[0] + box_w, result_im_bgr.shape[1])
@@ -375,7 +382,7 @@ class ImageMatcher:
         # color in match area of matches above threshold with red
         for match_obj in matches:
             pt = tuple(map(int, match_obj['point']))
-            pt = (pt[0] - source_match_point[0], pt[1] - source_match_point[1])
+            pt = (int(pt[0] - source_match_point[0]), int(pt[1] - source_match_point[1]))
 
             score = match_obj['score']
             if score < threshold:
@@ -384,7 +391,7 @@ class ImageMatcher:
             cv2.rectangle(
                 overlay,
                 pt,
-                (pt[0] + box_w, pt[1] + box_h),
+                (int(pt[0] + box_w), int(pt[1] + box_h)),
                 (0, 0, 255),
                 thickness=-1
             )
@@ -398,7 +405,7 @@ class ImageMatcher:
         # draw blue rectangle around matches above threshold
         for match_index in range(0, min(max_matches, len(matches))):
             pt = tuple(map(int, matches[match_index]['point']))
-            pt = (pt[0] - source_match_point[0], pt[1] - source_match_point[1])
+            pt = (int(pt[0] - source_match_point[0]), int(pt[1] - source_match_point[1]))
 
             score = matches[match_index]['score']
             if score < threshold:
@@ -407,7 +414,7 @@ class ImageMatcher:
             cv2.rectangle(
                 result_im_bgr,
                 pt,
-                (pt[0] + box_w, pt[1] + box_h),
+                (int(pt[0] + box_w), int(pt[1] + box_h)),
                 (int((255 * matches[match_index]['score'] + 255) / 2), 0, 0),
                 2
             )
@@ -421,10 +428,12 @@ class ImageMatcher:
                 match_point[0]:match_point[0] + screencap_im_bgr.shape[1]
             ] = result_im_bgr
 
+            top_left = (int(match_point[0]), int(match_point[1]))
+            bottom_right = (int(match_point[0] + screencap_im_bgr.shape[1]), int(match_point[1] + screencap_im_bgr.shape[0]))
             cv2.rectangle(
                 rescaled_result_im_bgr,
-                match_point,
-                (match_point[0] + screencap_im_bgr.shape[1], match_point[1] + screencap_im_bgr.shape[0]),
+                top_left,
+                bottom_right,
                 (255, 0, 0),
                 1
             )

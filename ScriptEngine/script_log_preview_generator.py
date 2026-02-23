@@ -160,19 +160,17 @@ class ScriptLogPreviewGenerator:
             return None
 
     @staticmethod
-    def images_to_video(image_paths, output_path, fps=30, codec="H264", realtime=False):
+    def images_to_video(image_paths, output_path, fps=30, realtime=False):
         # Read the first image to get the width and height
         first_image = cv2.imread(image_paths[0]['post_file'])
 
         height, width, layers = first_image.shape
 
-        # Define the codec and create VideoWriter object
-        if codec == "H264":
-            fourcc = cv2.VideoWriter_fourcc(*'H264')  # H.264 codec
-        else:
-            fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Fallback codec
-
+        # avc1 is the MP4-friendly H.264 tag; 'H264' triggers fallback warnings on some builds
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
         video = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        if not video.isOpened():
+            raise RuntimeError(f"Failed to open VideoWriter for {output_path}")
 
         if realtime:
             # Real-time mode: calculate frame durations based on start_time
@@ -233,7 +231,6 @@ class ScriptLogPreviewGenerator:
 
         # Release everything when job is finished
         video.release()
-        cv2.destroyAllWindows()
 
     @staticmethod
     def assemble_script_log_preview(action_log_path, output_path, realtime=False):
