@@ -24,6 +24,7 @@ import base64
 import glob
 import platform
 import subprocess
+import threading
 from typing import List
 
 
@@ -66,6 +67,9 @@ class DesktopDeviceManager(DeviceManager):
         self.app_mapping = self.list_applications()
         
         self.sct = mss.mss()
+        # MSS on Windows uses thread-local GDI resources (srcdc); one instance cannot be
+        # used from another thread. Use thread-local MSS on Windows when grabbing.
+        self._mss_thread_local = threading.local() if platform.system() == 'Windows' else None
     
     def set_scale_factor(self, scale_factor):
         self.scale_factor = scale_factor
@@ -110,7 +114,15 @@ class DesktopDeviceManager(DeviceManager):
             script_logger.log('PythonHostController: script in dummy mode, returning screenshot from input source')
             return self.input_source['screenshot']()
         
-        img = np.array(self.sct.grab(self.sct.monitors[1]))
+        # On Windows, MSS uses thread-local GDI handles; only use thread-local for non-main
+        # threads so the main thread keeps using self.sct
+        if self._mss_thread_local is not None and threading.current_thread() is not threading.main_thread():
+            if not hasattr(self._mss_thread_local, 'sct') or self._mss_thread_local.sct is None:
+                self._mss_thread_local.sct = mss.mss()
+            sct = self._mss_thread_local.sct
+        else:
+            sct = self.sct
+        img = np.array(sct.grab(sct.monitors[1]))
         return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
     def key_up(self, key):
