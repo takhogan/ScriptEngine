@@ -336,7 +336,6 @@ class ClickActionHelper:
             )
             traverse_x += delta_pair[0]
             traverse_y += delta_pair[1]
-            script_logger.log('drawing path', (int(traverse_x), int(traverse_y)), (int(traverse_x + delta_pair[0]), int(traverse_y + delta_pair[1])))
 
         output_image_relative_path = 'dragPath.png'
         cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
