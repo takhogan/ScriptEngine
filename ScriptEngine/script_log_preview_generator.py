@@ -4,7 +4,11 @@ import os
 import datetime
 import sys
 
-from .script_log_tree_generator import ScriptLogTreeGenerator
+try:
+    from .script_log_tree_generator import ScriptLogTreeGenerator
+except ImportError:
+    from ScriptEngine.script_log_tree_generator import ScriptLogTreeGenerator
+
 bin_path = os.path.abspath("bin")
 os.environ["PATH"] += os.pathsep + bin_path
 
