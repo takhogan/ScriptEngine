@@ -41,7 +41,7 @@ log_preview_a = Analysis(
         (torch_path, "torch"),
     ],
     hiddenimports=[
-        'PIL', 'numpy'
+        'PIL', 'numpy', 'ScriptEngine.script_log_tree_generator'
     ],
     hookspath=[],
     hooksconfig={},

@@ -205,29 +205,32 @@ class DetectObjectHelper:
         if skip_detection == True or skip_detection == "true":
             script_logger.log('skipDetection is true, skipping detection methods and returning default match')
             
+            if action['actionData'].get('detectActionType') == 'fixedObject':
+                location_val = action['actionData']['sceneLocation'][0]
+            else:
+                location_val = (0, 0)
+            output_point = (location_val[0] + match_point[0], location_val[1] + match_point[1])
+
             # Create proper match structure emulating regular match
             output_mask_bgr = floating_detect_obj["outputMask"]
             output_mask_single_channel = floating_detect_obj["outputMask_single_channel"]
-            location_val = (0, 0)
-            
+
             # Check for output cropping
             output_cropping = action["actionData"].get("maskLocation") if (
                 action["actionData"].get("maskLocation") != 'null' and
                 action['actionData'].get("excludeMatchedAreaFromOutput", False)
             ) else None
-            
-            # Apply output mask to input at point (0, 0) using helper function
+
             match_img_bgr = apply_output_mask(
                 screencap_im_bgr,
                 location_val,
                 output_mask_bgr,
                 output_cropping
             )
-            
-            # Create match structure emulating regular match
+
             matches = [{
                 'input_type': 'shape',
-                'point': location_val,
+                'point': output_point,
                 'shape': output_mask_single_channel.copy(),
                 'matched_area': match_img_bgr,
                 'height': output_mask_single_channel.shape[0],
