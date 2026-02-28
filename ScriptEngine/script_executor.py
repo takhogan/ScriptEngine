@@ -20,8 +20,6 @@ import datetime
 from dateutil import tz
 
 import random
-import re
-import glob
 
 from ScriptEngine.device_controller import DeviceController
 from .engine_manager import EngineManager
@@ -369,6 +367,7 @@ class ScriptExecutor:
             if script_name[0] == '{' and script_name[-1] == '}':
                 script_name = state_eval(script_name[1:-1], {}, self.state)
             if script_name[0] == '[' and script_name[-1] == ']':
+                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading system script from disk', script_name, ' include_scripts: ', ','.join(list(self.include_scripts.keys())))
                 script_name = script_name[1:-1]
                 system_script = True
                 script_details = script_name.split(':')
@@ -380,12 +379,11 @@ class ScriptExecutor:
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading script from memory', script_name)
                 ref_script = self.include_scripts[script_name]
             else:
-                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading script from disk', script_name, ' include_scripts: ', ','.join(list(self.include_scripts.keys())))
+                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading user script from disk', script_name, ' include_scripts: ', ','.join(list(self.include_scripts.keys())))
                 ref_script = parse_zip(script_name, False)
                 if self.context['script_memory_mode'] != 'low':
                     self.include_scripts[script_name] = ref_script
             # script_logger.log(' state (3) : ', state)
-
             child_context["actionOrder"] = action["actionData"]["actionOrder"] if "actionOrder" in action["actionData"] else "sequential"
             child_context["scriptMaxActionAttempts"] = action["actionData"]["scriptMaxActionAttempts"] if "scriptMaxActionAttempts" in action["actionData"] else ""
             child_context["onOutOfActionAttempts"] = action["actionData"]["onOutOfActionAttempts"] if "onOutOfActionAttempts" in action["actionData"] else "returnFailure"

@@ -175,24 +175,28 @@ class ADBDeviceManager(DeviceManager):
         if len(adb_args) == 0 and input_source is None:
             raise Exception('ADB HOST CONTROLLER: no adb args or input source provided')
 
-        try:
-            status, _, _ = self.configure_adb({
-                'actionData' : {
-                    'adbPath' : adb_args['adbPath'] if 'adbPath' in adb_args else None,
-                    'emulatorType' : '"' + adb_args['type'] + '"',
-                    'emulatorPath' : adb_args['emulatorPath'] if 'emulatorPath' in adb_args else None,
-                    'deviceName' : ('"' + adb_args['deviceName'] + '"') if "deviceName" in adb_args else None,
-                    'windowName' : '"' + adb_args['name'] + '"',
-                    'adbPort' : '"' + adb_args['port'] + '"',
-                    'adbIp' : adb_args['ip'] if 'ip' in adb_args else None
-                }
-            }, {}, {})
-        except Exception as e:
-            script_logger.log('ADB HOST CONTROLLER: exception', e)
-            status = ScriptExecutionState.FAILURE
-        if status == ScriptExecutionState.FAILURE:
-            script_logger.log('ADB HOST CONTROLLER: adb configuration failed')
-            raise Exception('ADB configuration failed')
+        if input_source is not None:
+            # File/test mode: skip ADB configuration, use screenshot from input_source
+            status = ScriptExecutionState.SUCCESS
+        else:
+            try:
+                status, _, _ = self.configure_adb({
+                    'actionData' : {
+                        'adbPath' : adb_args['adbPath'] if 'adbPath' in adb_args else None,
+                        'emulatorType' : '"' + adb_args['type'] + '"',
+                        'emulatorPath' : adb_args['emulatorPath'] if 'emulatorPath' in adb_args else None,
+                        'deviceName' : ('"' + adb_args['deviceName'] + '"') if "deviceName" in adb_args else None,
+                        'windowName' : '"' + adb_args['name'] + '"',
+                        'adbPort' : '"' + adb_args['port'] + '"',
+                        'adbIp' : adb_args['ip'] if 'ip' in adb_args else None
+                    }
+                }, {}, {})
+            except Exception as e:
+                script_logger.log('ADB HOST CONTROLLER: exception', e)
+                status = ScriptExecutionState.FAILURE
+            if status == ScriptExecutionState.FAILURE:
+                script_logger.log('ADB HOST CONTROLLER: adb configuration failed')
+                raise Exception('ADB configuration failed')
     
     def configure_adb(self, configurationAction, state, context):
         emulator_type = state_eval(configurationAction['actionData']['emulatorType'], {}, state)
