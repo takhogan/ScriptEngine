@@ -25,6 +25,7 @@ from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_
 from ScriptEngine.common.script_engine_utils import state_eval
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_RESULT_MARKER
+from ScriptEngine.common.types import ScreenPlanImage
 from .image_matcher import ImageMatcher
 from .detect_scene_helper import DetectSceneHelper, apply_output_mask
 script_logger = ScriptLogger()
@@ -185,7 +186,7 @@ class DetectObjectHelper:
             script_mode='train'
     ):
         screencap_im_bgr = action['input_obj']['screencap_im_bgr']
-        match_point = action['input_obj']['match_point']
+        input_expression_match_point_xy_absolute = action['input_obj']['match_point']
         check_image_scale = not action['input_obj']['fixed_scale']
         script_logger.log('Starting handle detect object')
 
@@ -206,10 +207,13 @@ class DetectObjectHelper:
             script_logger.log('skipDetection is true, skipping detection methods and returning default match')
             
             if action['actionData'].get('detectActionType') == 'fixedObject':
-                location_val = action['actionData']['sceneLocation'][0]
+                fixed_location_xy_relative = action['actionData']['sceneLocation'][0]
             else:
-                location_val = (0, 0)
-            output_point = (location_val[0] + match_point[0], location_val[1] + match_point[1])
+                fixed_location_xy_relative = (0, 0)
+            fixed_location_xy_absolute = (
+                fixed_location_xy_relative[0] + input_expression_match_point_xy_absolute[0], 
+                fixed_location_xy_relative[1] + input_expression_match_point_xy_absolute[1]
+            )
 
             # Create proper match structure emulating regular match
             output_mask_bgr = floating_detect_obj["outputMask"]
@@ -223,14 +227,14 @@ class DetectObjectHelper:
 
             match_img_bgr = apply_output_mask(
                 screencap_im_bgr,
-                location_val,
+                fixed_location_xy_absolute,
                 output_mask_bgr,
                 output_cropping
             )
 
-            matches = [{
+            matches: list[ScreenPlanImage] = [{
                 'input_type': 'shape',
-                'point': output_point,
+                'point': fixed_location_xy_absolute,
                 'shape': output_mask_single_channel.copy(),
                 'matched_area': match_img_bgr,
                 'height': output_mask_single_channel.shape[0],
@@ -245,7 +249,7 @@ class DetectObjectHelper:
             
             # Set log_objs based on detectActionType
             log_objs = {
-                'base': (screencap_im_bgr.copy() if screencap_im_bgr is not None else None, floating_detect_obj, match_point),
+                'base': (screencap_im_bgr.copy() if screencap_im_bgr is not None else None, floating_detect_obj, input_expression_match_point_xy_absolute),
                 'fixedObject': None,
                 'floatingObject': None
             }
@@ -273,7 +277,7 @@ class DetectObjectHelper:
         )
 
         log_objs = {
-            'base': (screencap_im_bgr.copy(), floating_detect_obj, match_point),
+            'base': (screencap_im_bgr.copy(), floating_detect_obj, input_expression_match_point_xy_absolute),
             'fixedObject' : None,
             'floatingObject' : None
         }
@@ -283,7 +287,7 @@ class DetectObjectHelper:
         detect_scene_result_log = ''
         if is_detect_object_first_match or \
                 action['actionData']['detectActionType'] == 'fixedObject':
-            detect_scene_pre_log = 'Performing detectActionType detect scene'
+            detect_scene_pre_log = 'Performing Fixed Object Detection'
             script_logger.log(detect_scene_pre_log)
             detect_scene_result_log += detect_scene_pre_log + '\n'
 
@@ -332,7 +336,7 @@ class DetectObjectHelper:
         if (action['actionData']['detectActionType'] == 'floatingObject' and action['actionData'][
             'matchMode'] == 'bestMatch') or \
                 (is_detect_object_first_match and len(matches) == 0):
-            detect_object_result_log = 'Performing detectActionType detect object'
+            detect_object_result_log = 'Performing Floating Object Detection'
             script_logger.log(detect_object_result_log)
             matches, match_result = ImageMatcher.template_match(
                 action,
@@ -340,7 +344,7 @@ class DetectObjectHelper:
                 floating_detect_obj,
                 action['actionData']['detectorName'],
                 script_mode,
-                match_point,
+                input_expression_match_point_xy_absolute,
                 check_image_scale=check_image_scale,
                 output_cropping=action["actionData"]["maskLocation"] if
                 (action["actionData"]["maskLocation"] != 'null' and
@@ -472,14 +476,6 @@ class DetectObjectHelper:
         if script_logger.get_log_level() == 'info':
             script_logger.log('DetectObjectHelper: starting detect object log thread')
             thread_script_logger = script_logger.copy()
-            # def catch_err():
-            #     try:
-            #         DetectObjectHelper.create_detect_action_log_images(thread_script_logger, action, log_obj)
-            #     except Exception as e:
-            #         import traceback
-            #         traceback.print_exc()
-            #         script_logger.log('Error creating detect action log images', e)
-            # io_executor.submit(catch_err)
             io_executor.submit(
                 DetectObjectHelper.create_detect_action_log_images,
                 thread_script_logger,

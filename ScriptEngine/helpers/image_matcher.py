@@ -20,6 +20,7 @@ import numpy as np
 import random
 from ScriptEngine.common.script_engine_utils import dist
 from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_RESULT_MARKER
+from ScriptEngine.common.types import ScreenPlanImage, TemplateMatch
 
 MINIMUM_MATCH_PIXEL_SPACING = 15
 from ScriptEngine.common.logging.script_logger import ScriptLogger
@@ -35,7 +36,7 @@ class ImageMatcher:
                        detector_name, script_mode, match_point,
                        check_image_scale=True,
                        output_cropping=None,
-                       threshold=0.96, use_color=True, use_mask=True):
+                       threshold=0.96, use_color=True, use_mask=True) -> tuple[list[ScreenPlanImage], np.ndarray]:
         if detector_name == "pixelDifference":
             matches, match_result = ImageMatcher.produce_template_matches(
                 detectObject,
@@ -61,18 +62,18 @@ class ImageMatcher:
         n_matches = len(matches)
         return [{
                 'input_type': 'shape',
-                'point': (match[0] + match_point[0], match[1] + match_point[1]) if match_point is not None else match,
+                'point': (m.point[0] + match_point[0], m.point[1] + match_point[1]) if match_point is not None else m.point,
                 'shape': floating_detect_obj["outputMask_single_channel"],
-                'matched_area': match_area,
+                'matched_area': m.matched_area,
                 'height': h,
                 'width': w,
                 'original_image': detectObject['input_obj']['original_image'],
                 'original_height': detectObject['input_obj']['original_height'],
                 'original_width': detectObject['input_obj']['original_width'],
-                'score': score,
+                'score': m.score,
                 'n_matches': n_matches,
                 DETECT_OBJECT_RESULT_MARKER: True
-        } for match, score, match_area in matches], match_result
+        } for m in matches], match_result
 
 
     @staticmethod
@@ -82,7 +83,7 @@ class ImageMatcher:
             floating_detect_obj,
             check_image_scale,
             output_cropping=None,
-            threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
+            threshold=0.96, use_color=True, use_mask=True, script_mode='test') -> tuple[list[TemplateMatch], np.ndarray]:
         # https://docs.opencv.org/3.4/de/da9/tutorial_template_matching.html
         screencap_search_bgr = floating_detect_obj["img"]
         screencap_mask_gray = floating_detect_obj["mask_single_channel"]
@@ -98,7 +99,9 @@ class ImageMatcher:
         match_result = None
         thresholded_match_results = None
         is_match_error = False
-        threshold_match_results = lambda match_results: np.where((np.inf > match_results) & (match_results >= threshold))
+        threshold_match_results = lambda match_results: np.where(
+            ~np.isnan(match_results) & (np.inf > match_results) & (match_results >= threshold)
+        )
         use_resized_im_only = detectObject["actionData"]["useImageRescaledToScreenOnly"] == "true" or detectObject["actionData"]["useImageRescaledToScreenOnly"]
 
         pre_log = 'Performing template match with options use_color {}, use_mask {}\n'.format(
@@ -209,11 +212,11 @@ class ImageMatcher:
             screencap_outputmask_bgr,
             height_translation=1,
             width_translation=1,
-            script_mode='test', output_cropping=None):
+            script_mode='test', output_cropping=None) -> tuple[list[TemplateMatch], np.ndarray]:
 
         h, w = screencap_search_bgr.shape[0:2]
         dist_threshold = max(min(h, w) * 0.2, MINIMUM_MATCH_PIXEL_SPACING)
-        matches = []
+        matches: list[TemplateMatch] = []
         match_img_index = 1
         if thresholded_match_results is None:
             script_logger.log('image matching failed as thresholded_match_results is None, check inputExpression of action')
@@ -237,7 +240,7 @@ class ImageMatcher:
             # script_logger.log('filtered matches : ', len(matches), pt)
             for match_index in range(0, len(matches)):
                 match = matches[match_index]
-                match_coord = match[0]
+                match_coord = match.point
                 match_dist = dist(
                     match_coord[0],
                     match_coord[1],
@@ -247,11 +250,11 @@ class ImageMatcher:
                 # script_logger.log('dist_comparison : ', match_coord, pt, match_dist, dist_threshold)
                 # script_logger.log('dist ', match_dist)
                 if match_dist < dist_threshold:
-                    if match_score > match[1]:
-                        matches[match_index] = (
-                            (adjusted_pt_x, adjusted_pt_y),
-                            match_score,
-                            match_img_bgr
+                    if match_score > match.score:
+                        matches[match_index] = TemplateMatch(
+                            point=(adjusted_pt_x, adjusted_pt_y),
+                            score=match_score,
+                            matched_area=match_img_bgr
                         )
                     redundant = True
                     break
@@ -259,14 +262,14 @@ class ImageMatcher:
                 continue
             else:
                 matches.append(
-                    (
-                        (adjusted_pt_x, adjusted_pt_y),
-                        match_score,
-                        match_img_bgr
+                    TemplateMatch(
+                        point=(adjusted_pt_x, adjusted_pt_y),
+                        score=match_score,
+                        matched_area=match_img_bgr
                     )
                 )
                 match_img_index += 1
-        matches.sort(reverse=True, key=lambda match: match[1])
+        matches.sort(reverse=True, key=lambda match: match.score)
         initial_result_log = '{} initial matches meeting threshold. {} matches after pruning.\n'.format(
             initial_matches,
             len(matches)
@@ -278,7 +281,6 @@ class ImageMatcher:
             'detect_result.txt',
             initial_result_log
         )
-
         return matches, match_result
 
     @staticmethod
@@ -291,9 +293,9 @@ class ImageMatcher:
         )
 
     @staticmethod
-    def create_result_im(detectObject, screencap_im_bgr, source_match_point, screencap_search_bgr, matches, match_result, input_rescaled):
+    def create_result_im(detectObject, screencap_im_bgr, input_expression_match_point_xy_absolute, screencap_search_bgr, matches, match_result, input_rescaled):
         script_logger = ScriptLogger.get_logger()
-        best_point = 'None'
+        best_point_xy_absolute = 'None'
         best_point_score = 0
         result_im_bgr = screencap_im_bgr.copy()
         h, w = screencap_search_bgr.shape[0:2]
@@ -301,30 +303,37 @@ class ImageMatcher:
             script_logger.log('converting search image to BGR for logging')
             screencap_search_bgr = cv2.cvtColor(screencap_search_bgr, cv2.COLOR_GRAY2BGR)
         threshold = float(detectObject['actionData']['threshold'])
-
         # draw red box around best match
         if detectObject['actionData']['detectActionType'] == "floatingObject":
             if len(matches) > 0:
-                best_point = matches[0]['point']
+                best_point_xy_absolute = matches[0]['point']
                 best_point_score = matches[0]['score']
             else:
                 valid_matched_points = np.where(np.isinf(match_result) | np.isnan(match_result), -np.inf, match_result)
                 max_valid_point = np.max(valid_matched_points)
                 if max_valid_point != -np.inf:
-                    best_point = np.unravel_index(np.argmax(valid_matched_points), valid_matched_points.shape)
-                    best_point_score = float(match_result[best_point])
-                    best_point = (best_point[1] - source_match_point[1], best_point[0] - source_match_point[0])
-                    box_w, box_h = ImageMatcher.adjust_box_to_bounds(best_point, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-                    end_y = min(best_point[1] + box_h, result_im_bgr.shape[0])
-                    end_x = min(best_point[0] + box_w, result_im_bgr.shape[1])
-                    slice_h = end_y - best_point[1]
-                    slice_w = end_x - best_point[0]
+                    best_point_yx_relative = np.unravel_index(np.argmax(valid_matched_points), valid_matched_points.shape)
+                    best_point_score = float(match_result[best_point_yx_relative])
+
+                    best_point_xy_relative = (best_point_yx_relative[1], best_point_yx_relative[0])
+                    best_point_xy_absolute = (
+                        best_point_xy_relative[0] + input_expression_match_point_xy_absolute[0], 
+                        best_point_xy_relative[1] + input_expression_match_point_xy_absolute[1]
+                    )
+                    
+                    box_w, box_h = ImageMatcher.adjust_box_to_bounds(best_point_xy_relative, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+                    end_y = min(best_point_xy_relative[1] + box_h, result_im_bgr.shape[0])
+                    end_x = min(best_point_xy_relative[0] + box_w, result_im_bgr.shape[1])
+                    slice_h = end_y - best_point_xy_relative[1]
+                    slice_w = end_x - best_point_xy_relative[0]
                     result_im_bgr[
-                        best_point[1]:best_point[1] + box_h, best_point[0]:best_point[0] + box_w
+                        best_point_xy_relative[1]:best_point_xy_relative[1] + box_h, 
+                        best_point_xy_relative[0]:best_point_xy_relative[0] + box_w
                     ] = screencap_search_bgr[:slice_h,:slice_w]
                     result_im_bgr = cv2.addWeighted(result_im_bgr, 0.3, screencap_im_bgr, 0.7, 0)
-                    top_left = (int(best_point[0]), int(best_point[1]))
-                    bottom_right = (int(best_point[0] + box_w), int(best_point[1] + box_h))
+
+                    top_left = (int(best_point_xy_relative[0]), int(best_point_xy_relative[1]))
+                    bottom_right = (int(best_point_xy_relative[0] + box_w), int(best_point_xy_relative[1] + box_h))
                     cv2.rectangle(
                         result_im_bgr,
                         top_left,
@@ -334,12 +343,12 @@ class ImageMatcher:
                     )
         else:
             top_left = (
-                int(matches[0]['point'][0] - source_match_point[0]),
-                int(matches[0]['point'][1] - source_match_point[1]),
+                int(matches[0]['point'][0] - input_expression_match_point_xy_absolute[0]),
+                int(matches[0]['point'][1] - input_expression_match_point_xy_absolute[1]),
             )
             bottom_right = (
-                int(matches[0]['point'][0] + w - source_match_point[0]),
-                int(matches[0]['point'][1] + h - source_match_point[1]),
+                int(matches[0]['point'][0] + w - input_expression_match_point_xy_absolute[0]),
+                int(matches[0]['point'][1] + h - input_expression_match_point_xy_absolute[1]),
             )
             cv2.rectangle(
                 screencap_im_bgr,
@@ -349,7 +358,7 @@ class ImageMatcher:
             )
 
         result_log = 'Best valid match: {} with score {}\n'.format(
-            str(best_point),
+            str(best_point_xy_absolute),
             str(best_point_score)
         )
 
@@ -363,12 +372,32 @@ class ImageMatcher:
         overlay = result_im_bgr.copy()
         alpha = 0.5
 
-        # draw search image over matches
+        # Precompute match geometry once per match
+        match_data = []
+        for match_obj in matches:
+            if match_obj['score'] < threshold:
+                continue
+            match_point_xy_absolute = tuple(map(int, match_obj['point']))
+            match_point_xy_relative = (
+                int(match_point_xy_absolute[0] - input_expression_match_point_xy_absolute[0]), 
+                int(match_point_xy_absolute[1] - input_expression_match_point_xy_absolute[1])
+            )
+            box_w, box_h = ImageMatcher.adjust_box_to_bounds(
+                match_point_xy_relative, 
+                w, h, 
+                screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2
+            )
+            
+            match_data.append((match_point_xy_relative, box_w, box_h, match_obj['score']))
+
+        if 'maxMatches' in detectObject['actionData'] and str(detectObject['actionData']['maxMatches']).isdigit():
+            max_matches = int(detectObject['actionData']['maxMatches'])
+        else:
+            max_matches = 1
+
+        # Draw all search images first (floatingObject only)
         if detectObject['actionData']['detectActionType'] == "floatingObject":
-            for match_obj in matches:
-                pt = tuple(map(int, match_obj['point']))
-                pt = (int(pt[0] - source_match_point[0]), int(pt[1] - source_match_point[1]))
-                box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+            for pt, box_w, box_h, score in match_data:
                 end_y = min(pt[1] + box_h, result_im_bgr.shape[0])
                 end_x = min(pt[0] + box_w, result_im_bgr.shape[1])
                 slice_h = end_y - pt[1]
@@ -378,16 +407,9 @@ class ImageMatcher:
                 ] = screencap_search_bgr[:slice_h, :slice_w]
             result_im_bgr = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
 
-
-        # color in match area of matches above threshold with red
-        for match_obj in matches:
-            pt = tuple(map(int, match_obj['point']))
-            pt = (int(pt[0] - source_match_point[0]), int(pt[1] - source_match_point[1]))
-
-            score = match_obj['score']
-            if score < threshold:
-                continue
-            box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+        # Then color in match areas with red
+        for pt, box_w, box_h, score in match_data:
+            
             cv2.rectangle(
                 overlay,
                 pt,
@@ -397,39 +419,34 @@ class ImageMatcher:
             )
         result_im_bgr = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
 
-        if 'maxMatches' in detectObject['actionData'] and str(detectObject['actionData']['maxMatches']).isdigit():
-            max_matches = int(detectObject['actionData']['maxMatches'])
-        else:
-            max_matches = 1
-
-        # draw blue rectangle around matches above threshold
-        for match_index in range(0, min(max_matches, len(matches))):
-            pt = tuple(map(int, matches[match_index]['point']))
-            pt = (int(pt[0] - source_match_point[0]), int(pt[1] - source_match_point[1]))
-
-            score = matches[match_index]['score']
-            if score < threshold:
-                continue
-            box_w, box_h = ImageMatcher.adjust_box_to_bounds(pt, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
+        # Draw blue rectangle around first max_matches above threshold (reuses match_data)
+        for match_index, (pt, box_w, box_h, score) in enumerate(match_data):
+            if match_index >= max_matches:
+                break
             cv2.rectangle(
                 result_im_bgr,
                 pt,
                 (int(pt[0] + box_w), int(pt[1] + box_h)),
-                (int((255 * matches[match_index]['score'] + 255) / 2), 0, 0),
+                (int((255 * score + 255) / 2), 0, 0),
                 2
             )
 
         # place subimage inside original image if input expression is an image
         if detectObject['input_obj']['fixed_scale'] and not input_rescaled:
             rescaled_result_im_bgr = detectObject['input_obj']['original_image'].copy()
-            match_point = detectObject['input_obj']['match_point']
             rescaled_result_im_bgr[
-                match_point[1]:match_point[1] + screencap_im_bgr.shape[0],
-                match_point[0]:match_point[0] + screencap_im_bgr.shape[1]
+                input_expression_match_point_xy_absolute[1]:input_expression_match_point_xy_absolute[1] + screencap_im_bgr.shape[0],
+                input_expression_match_point_xy_absolute[0]:input_expression_match_point_xy_absolute[0] + screencap_im_bgr.shape[1]
             ] = result_im_bgr
 
-            top_left = (int(match_point[0]), int(match_point[1]))
-            bottom_right = (int(match_point[0] + screencap_im_bgr.shape[1]), int(match_point[1] + screencap_im_bgr.shape[0]))
+            top_left = (
+                int(input_expression_match_point_xy_absolute[0]), 
+                int(input_expression_match_point_xy_absolute[1])
+            )
+            bottom_right = (
+                int(input_expression_match_point_xy_absolute[0] + screencap_im_bgr.shape[1]), 
+                int(input_expression_match_point_xy_absolute[1] + screencap_im_bgr.shape[0])
+            )
             cv2.rectangle(
                 rescaled_result_im_bgr,
                 top_left,
