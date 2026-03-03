@@ -95,13 +95,13 @@ class DetectSceneHelper:
         script_logger.log(mid_log_3)
 
         object_h,object_w = object_mask_single_channel.shape
-        location_val = sceneAction["actionData"]["sceneLocation"][0]
+        fixed_location_xy_relative = sceneAction["actionData"]["sceneLocation"][0]
         
         mid_log_4 = 'Applying output mask'
         mid_log_5 = ''
         match_img_bgr = apply_output_mask(
             screencap_im_bgr, 
-            location_val, 
+            fixed_location_xy_relative, 
             screencap_outputmask_bgr,
             output_cropping
         )
@@ -125,7 +125,7 @@ class DetectSceneHelper:
         if needs_rescale:
             width_translation = original_width / int(fixed_detect_obj["sourceScreenWidth"])
             height_translation = original_height / int(fixed_detect_obj["sourceScreenHeight"])
-            location_val = (location_val[0] * width_translation, location_val[1] * height_translation)
+            fixed_location_xy_relative = (fixed_location_xy_relative[0] * width_translation, fixed_location_xy_relative[1] * height_translation)
 
             post_post_log = 'Remapping scene location for resized input'
             script_logger.log(post_post_log)
@@ -135,13 +135,13 @@ class DetectSceneHelper:
             #     (original_height, original_width),
             #     interpolation=cv2.INTER_AREA
             # )
-        final_log = 'Matched scene at location {}'.format(str(location_val))
+        final_log = 'Matched scene at location {}'.format(str(fixed_location_xy_relative))
         script_logger.log(final_log)
 
         # When input is a crop (e.g. from a prior floatingObject), add its origin
         # so output point is in full-screen coordinates (same as floatingObject path).
-        match_point = sceneAction['input_obj'].get('match_point', (0, 0))
-        output_point = (location_val[0] + match_point[0], location_val[1] + match_point[1])
+        input_expression_match_point_xy_absolute = sceneAction['input_obj'].get('match_point', (0, 0))
+        fixed_location_xy_absolute = (fixed_location_xy_relative[0] + input_expression_match_point_xy_absolute[0], fixed_location_xy_relative[1] + input_expression_match_point_xy_absolute[1])
 
         script_logger.get_action_log().add_supporting_file(
             'text',
@@ -154,7 +154,7 @@ class DetectSceneHelper:
 
         return [{
             'input_type': 'shape',
-            'point': output_point,
+            'point': fixed_location_xy_absolute,
             'shape': output_mask_single_channel,
             'matched_area': match_img_bgr,
             'height': floating_detect_obj["outputMask_single_channel"].shape[0],

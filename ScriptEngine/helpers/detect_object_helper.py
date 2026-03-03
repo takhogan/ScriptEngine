@@ -227,7 +227,7 @@ class DetectObjectHelper:
 
             match_img_bgr = apply_output_mask(
                 screencap_im_bgr,
-                fixed_location_xy_absolute,
+                fixed_location_xy_relative,
                 output_mask_bgr,
                 output_cropping
             )
