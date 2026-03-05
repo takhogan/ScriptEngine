@@ -23,6 +23,7 @@ packaging
 pillow
 psutil
 PyAutoGUI
+pydirectinput-rgx
 PyGetWindow
 pyinstaller
 pymongo

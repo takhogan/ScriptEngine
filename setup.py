@@ -9,6 +9,7 @@ setup(
         'opencv-python>=4.9.0.80',
         'numpy>=1.26.3',
         'PyAutoGUI>=0.9.54',
+        'pydirectinput-rgx',
         'pymongo>=4.6.1',
         'python-dateutil>=2.8.2',
         'scikit-image>=0.22.0',
