@@ -71,12 +71,13 @@ class DesktopDeviceManager(DeviceManager):
             self.dummy_mode = False
         
         self.scale_factor = 1
-        self.app_mapping = self.list_applications()
-        
+        # Initialize sct before list_applications() so ensure_device_initialized() can use it
         self.sct = mss.mss()
         # MSS on Windows uses thread-local GDI resources (srcdc); one instance cannot be
         # used from another thread. Use thread-local MSS on Windows when grabbing.
         self._mss_thread_local = threading.local() if platform.system() == 'Windows' else None
+
+        self.app_mapping = self.list_applications()
     
     def set_scale_factor(self, scale_factor):
         self.scale_factor = scale_factor
