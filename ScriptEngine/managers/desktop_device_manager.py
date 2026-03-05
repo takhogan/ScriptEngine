@@ -29,9 +29,16 @@ from typing import List
 
 
 import numpy as np
-import pyautogui 
+import pyautogui
 import cv2
 from ScriptEngine.common.script_engine_utils import is_null, DummyFile
+
+# On Windows use pydirectinput_rgx for input (better DirectX/game compatibility); use pyautogui only for screenshot.
+# See https://github.com/reggx/pydirectinput_rgx
+if platform.system() == 'Windows':
+    import pydirectinput as _input_module  # type: ignore[import-not-found]
+else:
+    _input_module = pyautogui
 
 from ..helpers.click_path_generator import ClickPathGenerator
 from ..helpers.device_action_interpreter import DeviceActionInterpreter
@@ -84,13 +91,21 @@ class DesktopDeviceManager(DeviceManager):
                 script_logger.log('PythonHostController: script in dummy mode, initialized to input source')
                 return
             script_logger.log('PythonHostController: Taking screenshot to initialize python host')
-            host_dimensions = pyautogui.size()
-            self.click_width = host_dimensions.width
-            self.click_height = host_dimensions.height
-            
+            host_dimensions = _input_module.size()
+            # pydirectinput returns (width, height) tuple; pyautogui returns object with .width/.height
+            if hasattr(host_dimensions, 'width'):
+                self.click_width = host_dimensions.width
+                self.click_height = host_dimensions.height
+            else:
+                self.click_width, self.click_height = host_dimensions[0], host_dimensions[1]
+
             self.xmax = self.width
             self.ymax = self.height
-            height, width, _ = np.array(pyautogui.screenshot()).shape
+            if platform.system() == 'Windows':
+                img = np.array(self.sct.grab(self.sct.monitors[1]))
+                height, width = img.shape[:2]
+            else:
+                height, width, _ = np.array(pyautogui.screenshot()).shape
             self.width = width
             self.height = height
             if (not is_null(self.props['width']) and (self.props['width'] != width)) or \
@@ -129,25 +144,25 @@ class DesktopDeviceManager(DeviceManager):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from keyUp')
-        pyautogui.keyUp(key)
+        _input_module.keyUp(key)
 
     def key_down(self, key):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from keyDown')
-        pyautogui.keyDown(key)
+        _input_module.keyDown(key)
 
     def key_press(self, key):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from press')
-        pyautogui.press(key)
+        _input_module.press(key)
 
     def hotkey(self, keys):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from hotKey')
-        pyautogui.hotkey(*keys)
+        _input_module.hotkey(*keys)
 
     def mouse_up(self, x, y, button='left'):
         self.ensure_device_initialized()
@@ -161,10 +176,10 @@ class DesktopDeviceManager(DeviceManager):
         x = int(x * self.scale_factor)
         y = int(y * self.scale_factor)
 
-        current_position = pyautogui.position()
+        current_position = _input_module.position()
         if current_position != (x, y):
             self.smooth_move(*current_position, x, y)
-        pyautogui.mouseUp(x=x, y=y, button=button)
+        _input_module.mouseUp(x=x, y=y, button=button)
 
 
     def mouse_down(self, x, y, button='left'):
@@ -179,10 +194,10 @@ class DesktopDeviceManager(DeviceManager):
         x = int(x * self.scale_factor)
         y = int(y * self.scale_factor)
 
-        current_position = pyautogui.position()
+        current_position = _input_module.position()
         if current_position != (x, y):
             self.smooth_move(*current_position, x, y)
-        pyautogui.mouseDown(x=x, y=y, button=button)
+        _input_module.mouseDown(x=x, y=y, button=button)
 
 
     def scroll(self, x, y, distance):
@@ -196,8 +211,8 @@ class DesktopDeviceManager(DeviceManager):
         #     script_logger.log('scroll: adjusted coords for pyautogui', x, y, flush=True)
         x = int(x * self.scale_factor)
         y = int(y * self.scale_factor)
-        pyautogui.moveTo(x, y)
-        pyautogui.scroll(distance)
+        _input_module.moveTo(x, y)
+        _input_module.scroll(distance)
 
     # if the dimensions of your source image are different from the dimensions of pyautogui
     # desktop device manager will not scale to coordinates for you
@@ -218,7 +233,7 @@ class DesktopDeviceManager(DeviceManager):
         x = int(x * self.scale_factor)
         y = int(y * self.scale_factor)
         
-        pyautogui.click(x=x, y=y, button=button)
+        _input_module.click(x=x, y=y, button=button)
 
     def smooth_move(self, source_x, source_y, target_x, target_y, drag=False, button='left'):
         self.ensure_device_initialized()
@@ -249,24 +264,24 @@ class DesktopDeviceManager(DeviceManager):
         traverse_y = source_y
         for delta_pair in zip(delta_x, delta_y):
             if drag and sys.platform == 'darwin':
-                pyautogui.dragTo(
+                _input_module.dragTo(
                     traverse_x + delta_pair[0],
                     traverse_y + delta_pair[1],
                     button=button,
                     mouseDownUp=False
                 )
             else:
-                pyautogui.moveTo(traverse_x + delta_pair[0], traverse_y + delta_pair[1])
+                _input_module.moveTo(traverse_x + delta_pair[0], traverse_y + delta_pair[1])
             traverse_x += delta_pair[0]
             traverse_y += delta_pair[1]
         return delta_x, delta_y
 
     def click_and_drag(self, source_x, source_y, target_x, target_y, mouse_down=True, mouse_up=True):
         self.ensure_device_initialized()
-        script_logger.log('pyautogui size', pyautogui.size())
+        script_logger.log('input size', _input_module.size())
         script_logger.log(
             'moving from initial position {} to click and drag start {}'.format(
-                str(pyautogui.position()), str((source_x, source_y))
+                str(_input_module.position()), str((source_x, source_y))
             )
         )
 
