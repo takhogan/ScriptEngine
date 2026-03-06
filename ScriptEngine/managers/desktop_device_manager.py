@@ -157,7 +157,7 @@ class DesktopDeviceManager(DeviceManager):
         self.ensure_device_initialized()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from press')
-        _input_module.press(key)
+        pyautogui.press(key)
 
     def hotkey(self, keys):
         self.ensure_device_initialized()
