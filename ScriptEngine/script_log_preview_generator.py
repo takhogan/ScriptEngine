@@ -37,7 +37,8 @@ class ScriptLogPreviewGenerator:
         elif log_tree['name'].startswith('detectObject') or\
             log_tree['name'].startswith('mouseInteractionAction') or\
             log_tree['name'].startswith('mouseMoveAction') or\
-            log_tree['name'].startswith('sendMessageAction'):
+            log_tree['name'].startswith('sendMessageAction') or\
+            log_tree['name'].startswith('keyboardAction'):
             if "file_path" in log_tree['post_file']:
                 image_list.append({
                     'script_name': log_tree['base_path'].split('/')[-2],

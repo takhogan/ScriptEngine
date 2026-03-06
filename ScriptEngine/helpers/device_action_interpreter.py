@@ -87,6 +87,7 @@ class DeviceActionInterpreter:
             'keyboardAction-log.txt',
             typed_chars_log
         )
+        script_logger.get_action_log().set_summary(typed_chars_log.strip())
         return ScriptExecutionState.SUCCESS, state, context
         
     @staticmethod
