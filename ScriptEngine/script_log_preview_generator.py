@@ -166,9 +166,19 @@ class ScriptLogPreviewGenerator:
 
     @staticmethod
     def images_to_video(image_paths, output_path, fps=30, realtime=False):
-        # Read the first image to get the width and height
-        first_image = cv2.imread(image_paths[0]['post_file'])
-
+        if not image_paths:
+            raise ValueError("image_paths is empty; cannot create video")
+        # Iterate until we find an action that has an actual image (readable and valid shape)
+        first_image = None
+        for entry in image_paths:
+            img = cv2.imread(entry['post_file'])
+            if img is not None and hasattr(img, 'shape') and len(img.shape) >= 2 and img.shape[0] > 0 and img.shape[1] > 0:
+                first_image = img
+                break
+        if first_image is None:
+            raise RuntimeError(
+                "Could not read any valid image from image_paths. Check that post_file paths exist and are valid images."
+            )
         height, width, layers = first_image.shape
 
         # avc1 is the MP4-friendly H.264 tag; 'H264' triggers fallback warnings on some builds
