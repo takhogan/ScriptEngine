@@ -22,7 +22,8 @@ class ScriptLogPreviewGenerator:
         if log_tree['name'].startswith('variableAssignment') or\
             log_tree['name'].startswith('sleepStatement') or\
             log_tree['name'].startswith('conditionalStatement') or\
-            log_tree['name'].startswith('imageToTextAction'):
+            log_tree['name'].startswith('imageToTextAction') or\
+            log_tree['name'].startswith('keyboardAction'):
             if last_image is not None:
                 # Reuse the previous image
                 image_list.append({
@@ -37,8 +38,7 @@ class ScriptLogPreviewGenerator:
         elif log_tree['name'].startswith('detectObject') or\
             log_tree['name'].startswith('mouseInteractionAction') or\
             log_tree['name'].startswith('mouseMoveAction') or\
-            log_tree['name'].startswith('sendMessageAction') or\
-            log_tree['name'].startswith('keyboardAction'):
+            log_tree['name'].startswith('sendMessageAction'):
             if "file_path" in log_tree['post_file']:
                 image_list.append({
                     'script_name': log_tree['base_path'].split('/')[-2],
