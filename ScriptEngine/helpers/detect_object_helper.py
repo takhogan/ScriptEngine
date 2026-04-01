@@ -24,7 +24,6 @@ import numpy as np
 from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_storage
 from ScriptEngine.common.script_engine_utils import state_eval
 from ScriptEngine.common.enums import ScriptExecutionState
-from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_RESULT_MARKER
 from ScriptEngine.common.types import ScreenPlanImage
 from .image_matcher import ImageMatcher
 from .detect_scene_helper import DetectSceneHelper, apply_output_mask
@@ -54,9 +53,13 @@ class DetectObjectHelper:
                 pre_log = 'parsing inputExpression {} from state'.format(var_name)
             script_logger.log(pre_log)
             input_area = state_eval(var_name, {}, state)
-            if len(input_area) > 0:
+            has_input = (
+                isinstance(input_area, ScreenPlanImage)
+                or (isinstance(input_area, dict) and len(input_area) > 0)
+            )
+            if has_input:
                 mid_log = 'input expression exists but unable to parse'
-                if not isinstance(input_area, dict) or "input_type" not in input_area:
+                if isinstance(input_area, dict) and "input_type" not in input_area:
                     error_log = 'inputExpression {} returned unexpected value: {}'.format(
                         var_name,
                         repr(input_area)
@@ -67,11 +70,11 @@ class DetectObjectHelper:
                             var_name
                         )
                     )
-                if input_area["input_type"] == "rectangle":
+                if isinstance(input_area, dict) and input_area["input_type"] == "rectangle":
                     pass
                 elif input_area["input_type"] == "shape":
                     screencap_im_bgr = input_area["matched_area"]
-                    screencap_mask = input_area["shape"]
+                    screencap_mask = input_area["output_mask"]
                     match_point = (
                         input_area["point"][0],
                         input_area["point"][1]
@@ -232,20 +235,22 @@ class DetectObjectHelper:
                 output_cropping
             )
 
-            matches: list[ScreenPlanImage] = [{
-                'input_type': 'shape',
-                'point': fixed_location_xy_absolute,
-                'shape': output_mask_single_channel.copy(),
-                'matched_area': match_img_bgr,
-                'height': output_mask_single_channel.shape[0],
-                'width': output_mask_single_channel.shape[1],
-                'original_image': action['input_obj'].get('original_image'),
-                'original_height': action['input_obj'].get('original_height', 0),
-                'original_width': action['input_obj'].get('original_width', 0),
-                'score': 1.0,
-                'n_matches': 1,
-                DETECT_OBJECT_RESULT_MARKER: True
-            }]
+            matches: list[ScreenPlanImage] = [
+                ScreenPlanImage(
+                    input_type='shape',
+                    point=fixed_location_xy_absolute,
+                    output_mask=output_mask_single_channel.copy(),
+                    matched_area=match_img_bgr,
+                    height=output_mask_single_channel.shape[0],
+                    width=output_mask_single_channel.shape[1],
+                    original_image=action['input_obj'].get('original_image'),
+                    original_height=action['input_obj'].get('original_height', 0),
+                    original_width=action['input_obj'].get('original_width', 0),
+                    score=1.0,
+                    n_matches=1,
+                    detect_object_result=True,
+                )
+            ]
             
             # Set log_objs based on detectActionType
             log_objs = {

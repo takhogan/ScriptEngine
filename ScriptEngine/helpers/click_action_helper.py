@@ -168,7 +168,7 @@ class ClickActionHelper:
                 point_choice = (input_point["point"][0] + width_coord, input_point["point"][1] + height_coord)
                 input_expression_type = 'rectangle'
             elif input_point["input_type"] == "shape":
-                shape_ys, shape_xs = np.where(input_point["shape"] > 1)
+                shape_ys, shape_xs = np.where(input_point["output_mask"] > 1)
                 relative_points = list(zip(shape_xs.tolist(), shape_ys.tolist()))
                 if len(relative_points) == 0:
                     assert False, 'attempted to fetch point from input shape, but input shape was empty'
@@ -267,7 +267,7 @@ class ClickActionHelper:
                 thickness=-1
             )
         elif point_list['input_type'] == 'shape':
-            shape_ys, shape_xs = np.where(point_list["shape"] > 1)
+            shape_ys, shape_xs = np.where(point_list["output_mask"] > 1)
             for point in zip(shape_xs, shape_ys):
                 cv2.circle(
                     overlay,

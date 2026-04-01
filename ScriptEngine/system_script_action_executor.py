@@ -37,6 +37,7 @@ from .helpers.detect_object_helper import DetectObjectHelper
 from .helpers.random_variable_helper import RandomVariableHelper
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.constants.script_engine_constants import *
+from ScriptEngine.common.types import ScreenPlanImage
 from ScriptEngine.common.script_engine_utils import generate_context_switch_action, state_eval
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from typing import Callable, Dict, List, Tuple
@@ -484,7 +485,7 @@ class SystemScriptActionExecutor:
                 state[action['actionData']['outputVarName']] = state[action['actionData']['inputExpression']].copy()
                 state[action['actionData']['outputVarName']]['matched_area'] = transform_im
                 state[action['actionData']['outputVarName']]['height'] = transform_im.shape[0]
-                state[action['actionData']['outputVarName']]['height'] = transform_im.shape[1]
+                state[action['actionData']['outputVarName']]['width'] = transform_im.shape[1]
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "imageToTextAction":
             input_obj = DetectObjectHelper.get_detect_area(
@@ -858,7 +859,9 @@ class SystemScriptActionExecutor:
             first_loop = True
             script_logger.log(pre_log)
             in_variable = state_eval(action["actionData"]["inVariables"], {}, state)
-            if isinstance(in_variable, dict) and in_variable.get(DETECT_OBJECT_RESULT_MARKER):
+            if (
+                isinstance(in_variable, dict) and in_variable.get(DETECT_OBJECT_RESULT_MARKER)
+            ) or isinstance(in_variable, ScreenPlanImage):
                 error_msg = (
                     f"forLoopAction inVariables '{action['actionData']['inVariables']}' references a detectObject "
                     "result that was produced with maxMatches = 1. Set maxMatches > 1 or wrap the result in a list "
@@ -989,17 +992,18 @@ class SystemScriptActionExecutor:
             elif action["actionData"]["fileActionType"] in ["r", "rb"]:
                 if action["actionData"]["fileType"] == "image":
                     image = cv2.imread(file_path)
-                    state[output_var_name] = {
-                        'input_type': 'shape',
-                        'point': (0, 0),
-                        'shape': np.full((image.shape[0], image.shape[1]), 255, dtype=np.uint8),
-                        'matched_area': image,
-                        'height': image.shape[0],
-                        'width': image.shape[1],
-                        'score': 0.99999,
-                        'n_matches': 1
-                    }
-                    file_properties = 'shape: ' + str(state[output_var_name].shape)
+                    state[output_var_name] = ScreenPlanImage(
+                        input_type='shape',
+                        point=(0, 0),
+                        output_mask=np.full((image.shape[0], image.shape[1]), 255, dtype=np.uint8),
+                        matched_area=image,
+                        height=image.shape[0],
+                        width=image.shape[1],
+                        score=0.99999,
+                        n_matches=1,
+                        detect_object_result=True,
+                    )
+                    file_properties = 'shape: ' + str(state[output_var_name].matched_area.shape)
 
                 elif action["actionData"]["fileType"] == "json":
                     with open(file_path, action["actionData"]["fileActionType"]) as json_file:

@@ -19,7 +19,6 @@ import cv2
 import numpy as np
 import random
 from ScriptEngine.common.script_engine_utils import dist
-from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_RESULT_MARKER
 from ScriptEngine.common.types import ScreenPlanImage, TemplateMatch
 
 MINIMUM_MATCH_PIXEL_SPACING = 15
@@ -60,20 +59,27 @@ class ImageMatcher:
         h, w = floating_detect_obj["outputMask_single_channel"].shape[0:2]
 
         n_matches = len(matches)
-        return [{
-                'input_type': 'shape',
-                'point': (m.point[0] + match_point[0], m.point[1] + match_point[1]) if match_point is not None else m.point,
-                'shape': floating_detect_obj["outputMask_single_channel"],
-                'matched_area': m.matched_area,
-                'height': h,
-                'width': w,
-                'original_image': detectObject['input_obj']['original_image'],
-                'original_height': detectObject['input_obj']['original_height'],
-                'original_width': detectObject['input_obj']['original_width'],
-                'score': m.score,
-                'n_matches': n_matches,
-                DETECT_OBJECT_RESULT_MARKER: True
-        } for m in matches], match_result
+        return [
+            ScreenPlanImage(
+                input_type='shape',
+                point=(
+                    (m.point[0] + match_point[0], m.point[1] + match_point[1])
+                    if match_point is not None
+                    else m.point
+                ),
+                output_mask=floating_detect_obj["outputMask_single_channel"],
+                matched_area=m.matched_area,
+                height=h,
+                width=w,
+                original_image=detectObject['input_obj']['original_image'],
+                original_height=detectObject['input_obj']['original_height'],
+                original_width=detectObject['input_obj']['original_width'],
+                score=m.score,
+                n_matches=n_matches,
+                detect_object_result=True,
+            )
+            for m in matches
+        ], match_result
 
 
     @staticmethod
@@ -221,6 +227,11 @@ class ImageMatcher:
         if thresholded_match_results is None:
             script_logger.log('image matching failed as thresholded_match_results is None, check inputExpression of action')
             exit(1)
+        if output_cropping is not None:
+            output_cropping = (
+                (int(output_cropping[0][0]), int(output_cropping[0][1])),
+                (int(output_cropping[1][0]), int(output_cropping[1][1])),
+            )
         unpacked_results = list(zip(*thresholded_match_results[::-1]))
         initial_matches = len(unpacked_results)
         for pt in unpacked_results:
@@ -434,10 +445,10 @@ class ImageMatcher:
         # place subimage inside original image if input expression is an image
         if detectObject['input_obj']['fixed_scale'] and not input_rescaled:
             rescaled_result_im_bgr = detectObject['input_obj']['original_image'].copy()
-            rescaled_result_im_bgr[
-                input_expression_match_point_xy_absolute[1]:input_expression_match_point_xy_absolute[1] + screencap_im_bgr.shape[0],
-                input_expression_match_point_xy_absolute[0]:input_expression_match_point_xy_absolute[0] + screencap_im_bgr.shape[1]
-            ] = result_im_bgr
+            ix = int(input_expression_match_point_xy_absolute[0])
+            iy = int(input_expression_match_point_xy_absolute[1])
+            h0, w0 = int(screencap_im_bgr.shape[0]), int(screencap_im_bgr.shape[1])
+            rescaled_result_im_bgr[iy : iy + h0, ix : ix + w0] = result_im_bgr
 
             top_left = (
                 int(input_expression_match_point_xy_absolute[0]), 
