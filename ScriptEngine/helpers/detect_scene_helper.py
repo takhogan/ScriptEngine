@@ -15,10 +15,14 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+from __future__ import annotations
+
+from typing import Any, List, Mapping, Optional, Tuple
+
 import cv2
 import numpy as np
 from ScriptEngine.common.logging.script_logger import ScriptLogger
-from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_RESULT_MARKER
+from ScriptEngine.common.types import ScreenPlanImage
 
 script_logger = ScriptLogger()
 
@@ -38,6 +42,10 @@ def apply_output_mask(screencap_im_bgr, location_val, output_mask_bgr, output_cr
     match_img_bgr = cv2.bitwise_and(match_img_bgr, output_mask_bgr)
     
     if output_cropping is not None:
+        output_cropping = (
+            (int(output_cropping[0][0]), int(output_cropping[0][1])),
+            (int(output_cropping[1][0]), int(output_cropping[1][1])),
+        )
         match_img_bgr = match_img_bgr[output_cropping[0][1]:output_cropping[1][1],
                                       output_cropping[0][0]:output_cropping[1][0]]
         crop_log = 'Cropping masked output'
@@ -51,12 +59,13 @@ class DetectSceneHelper:
 
     @staticmethod
     def get_match(
-            sceneAction,
-            screencap_im_bgr,
-            floating_detect_obj,
-            fixed_detect_obj,
-            needs_rescale,
-            output_cropping=None):
+        sceneAction: Mapping[str, Any],
+        screencap_im_bgr: np.ndarray,
+        floating_detect_obj: Mapping[str, Any],
+        fixed_detect_obj: Mapping[str, Any],
+        needs_rescale: bool,
+        output_cropping: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
+    ) -> Tuple[List[ScreenPlanImage], float, np.ndarray]:
         screencap_compare = fixed_detect_obj["img"]
         scene_screencap_mask = fixed_detect_obj["mask"]
         scene_screencap_mask_single_channel = fixed_detect_obj["mask_single_channel"]
@@ -152,17 +161,19 @@ class DetectSceneHelper:
             final_log
         )
 
-        return [{
-            'input_type': 'shape',
-            'point': fixed_location_xy_absolute,
-            'shape': output_mask_single_channel,
-            'matched_area': match_img_bgr,
-            'height': floating_detect_obj["outputMask_single_channel"].shape[0],
-            'width': floating_detect_obj["outputMask_single_channel"].shape[1],
-            'original_image': sceneAction['input_obj']['original_image'],
-            'original_height': sceneAction['input_obj']['original_height'],
-            'original_width': sceneAction['input_obj']['original_width'],
-            'score': ssim_coeff,
-            'n_matches' : 1,
-            DETECT_OBJECT_RESULT_MARKER: True
-        }], ssim_coeff, screencap_masked
+        return [
+            ScreenPlanImage(
+                input_type='shape',
+                point=fixed_location_xy_absolute,
+                output_mask=output_mask_single_channel,
+                matched_area=match_img_bgr,
+                height=floating_detect_obj["outputMask_single_channel"].shape[0],
+                width=floating_detect_obj["outputMask_single_channel"].shape[1],
+                original_image=sceneAction['input_obj']['original_image'],
+                original_height=sceneAction['input_obj']['original_height'],
+                original_width=sceneAction['input_obj']['original_width'],
+                score=ssim_coeff,
+                n_matches=1,
+                detect_object_result=True,
+            )
+        ], ssim_coeff, screencap_masked

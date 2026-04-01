@@ -1,6 +1,6 @@
 from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_storage
 from ScriptEngine.clients.screenplan_api import ScreenPlanAPI, ScreenPlanAPIRequest
-from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_RESULT_MARKER
+from ScriptEngine.common.types import is_screenplan_image_result
 
 script_logger = ScriptLogger()
 
@@ -31,7 +31,7 @@ class MessagingHelper:
                 "type": "text",
                 "content": element
             }], image_files
-        elif isinstance(element, dict) and element.get(DETECT_OBJECT_RESULT_MARKER):
+        elif is_screenplan_image_result(element):
             # Single screenplan image
             image_bytes, filename = self._serialize_image(element, index)
             image_files.append((image_bytes, filename))
@@ -283,7 +283,7 @@ class MessagingHelper:
                 text_img = self._render_text_to_image(element, max_width, text_padding)
                 components.append(text_img)
                 
-            elif isinstance(element, dict) and element.get(DETECT_OBJECT_RESULT_MARKER):
+            elif is_screenplan_image_result(element):
                 # Image element - convert cv2 BGR to PIL RGB
                 matched_area = element["matched_area"]
                 # Convert BGR to RGB
