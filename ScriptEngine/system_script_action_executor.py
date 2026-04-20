@@ -22,15 +22,9 @@ import re
 import cv2
 import json
 import time
-import glob
 import datetime
 import os
 import sys
-import platform
-import shutil
-import random
-import math
-import collections
 
 
 from .helpers.detect_object_helper import DetectObjectHelper
@@ -38,7 +32,7 @@ from .helpers.random_variable_helper import RandomVariableHelper
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.types import ScreenPlanImage
-from ScriptEngine.common.script_engine_utils import generate_context_switch_action, state_eval
+from ScriptEngine.common.script_engine_utils import generate_context_switch_action, state_eval, state_exec
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from typing import Callable, Dict, List, Tuple
 script_logger = ScriptLogger()
@@ -935,23 +929,7 @@ class SystemScriptActionExecutor:
             pre_log = 'Running Code Block: \n{}'.format(action["actionData"]["codeBlock"])
             # statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
             script_logger.log(pre_log)
-            globals = {
-                'glob': glob,
-                'datetime': datetime,
-                'os' : os,
-                'sys' : sys,
-                'platform' : platform,
-                'shutil' : shutil,
-                'numpy' : np,
-                're' : re,
-                'json' : json,
-                'random' : random,
-                'math' : math,
-                'collections' : collections
-            }
-
-
-            exec(action["actionData"]["codeBlock"],globals,state)
+            state_exec(action["actionData"]["codeBlock"], {}, state)
             script_logger.get_action_log().add_post_file(
                 'text',
                 'codeBlock-log.txt',

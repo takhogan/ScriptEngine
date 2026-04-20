@@ -1,3 +1,5 @@
+import builtins
+
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
@@ -254,6 +256,7 @@ class StateEvaluator:
     import platform
     import shutil
     import numpy as np
+    import cv2
     import re
     import json
     import random
@@ -268,6 +271,8 @@ class StateEvaluator:
         'platform': platform,
         'shutil': shutil,
         'numpy': np,
+        'np': np,
+        'cv2': cv2,
         're': re,
         'json': json,
         'random': random,
@@ -299,7 +304,7 @@ class StateEvaluator:
         env_globals.setdefault('script', cls._script_context)
 
         try:
-            return eval(statement, env_globals, local_scope)
+            return builtins.eval(statement, env_globals, local_scope)
         except KeyError:
             script_logger.log(
                 'ERROR: key error while parsing eval, keys present in state: ' + ', '.join(list(env_globals))
@@ -309,6 +314,30 @@ class StateEvaluator:
                 return None
             raise
 
+    @classmethod
+    def exec(cls, code, global_overrides, local_scope, crashonerror=True):
+        env_globals = cls._base_globals.copy()
+        if global_overrides:
+            env_globals.update(global_overrides)
+        if local_scope:
+            env_globals.update(local_scope)
+        env_globals.setdefault('script', cls._script_context)
+
+        try:
+            builtins.exec(code, env_globals, local_scope)
+        except KeyError:
+            script_logger.log(
+                'ERROR: key error while parsing exec, keys present in state: ' + ', '.join(list(env_globals))
+            )
+            if not crashonerror:
+                script_logger.log('script finished with failure, ignoring key error')
+                return None
+            raise
+
 
 def state_eval(statement, globals, locals, crashonerror=True):
     return StateEvaluator.eval(statement, globals, locals, crashonerror=crashonerror)
+
+
+def state_exec(code, globals, locals, crashonerror=True):
+    return StateEvaluator.exec(code, globals, locals, crashonerror=crashonerror)

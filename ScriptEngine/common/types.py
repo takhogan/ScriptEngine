@@ -32,22 +32,6 @@ class TemplateMatch(NamedTuple):
     matched_area: np.ndarray
 
 
-class _ScreenPlanImageDict(TypedDict, total=False):
-    """Structural typing for legacy dict-shaped detect-object results."""
-
-    input_type: str
-    point: tuple[float, float]
-    output_mask: np.ndarray
-    matched_area: np.ndarray
-    height: int
-    width: int
-    original_image: np.ndarray | None
-    original_height: int
-    original_width: int
-    score: float
-    n_matches: int
-
-
 _STR_KEYS = frozenset({
     'input_type',
     'point',
@@ -155,11 +139,45 @@ def _spatial_hw_swapped(axes: tuple[int, ...]) -> bool:
 
 @dataclass
 class ScreenPlanImage:
-    """Detect-object result: string keys like a dict; index with ``img[:5]``, ``img[:, 10:20]``, etc. on ``matched_area``.
+    """Structured detect-object result exposed to ScreenPlan scripts as a dict-like image handle.
 
-    ``shape``, ``size``, ``ndim``, and ``ndims`` mirror ``matched_area``. Reductions ``min``/``max``/``mean``/``sum``,
-    ``clip``, ``copy``, ``transpose``/``T`` apply to ``matched_area`` (with ``transpose``/``T`` also updating
-    ``output_mask``, ``point``, ``height``, and ``width`` when spatial axes swap).
+    Image payloads (``matched_area``, ``original_image``) are OpenCV ``cv2`` images: ``np.ndarray`` values in the
+    usual layout (height × width × channels for color; typically BGR when three channels).
+
+    **Type reference**
+
+    **Fields**
+
+    - ``input_type`` (``str``): Source or mode label for the detection input.
+    - ``point`` (``tuple[float, float]``): Anchor coordinates in screen space (typically top-left of the match).
+    - ``output_mask`` (``np.ndarray``): Binary or label mask aligned with ``matched_area`` spatial layout.
+    - ``matched_area`` (``np.ndarray``): Cropped ``cv2`` image region, the primary array payload.
+    - ``height`` / ``width`` (``int``): Extents of ``matched_area`` along spatial axes (rows / columns).
+    - ``original_image`` (``np.ndarray | None``): Full-frame ``cv2`` image when available; may be ``None`` if not retained.
+    - ``original_height`` / ``original_width`` (``int``): Size of ``original_image`` when present.
+    - ``score`` (``float``): Template or detector confidence score.
+    - ``n_matches`` (``int``): Number of matches (default ``1`` for a single crop).
+    - ``detect_object_result`` (``bool``): Marker that this object is a detect-object result; mirrored by the
+      string key ``DETECT_OBJECT_RESULT_MARKER`` (``'X_Screenplan_DetectObject_Result'``).
+
+    **String keys** (``obj[key]``, ``obj[key] = value``, ``obj.get(key)``)
+
+    Readable/writable keys match the field names above, plus ``DETECT_OBJECT_RESULT_MARKER`` for the boolean
+    marker. Properties such as ``shape`` / ``size`` / ``ndim`` / ``ndims`` are not assignable via string keys.
+
+    **Array-style indexing** (non-string ``key``)
+
+    NumPy-style indexing applies to ``matched_area`` (e.g. ``img[:5]``, ``img[:, 10:20]``). Slicing returns a new
+    ``ScreenPlanImage`` with adjusted ``matched_area``, ``output_mask``, ``point``, ``height``, and ``width``.
+
+    **Delegated behavior**
+
+    - ``shape``, ``size``, ``ndim``, and ``ndims`` mirror ``matched_area``.
+    - ``min``, ``max``, ``mean``, and ``sum`` forward to ``matched_area``.
+    - ``clip`` returns a new ``ScreenPlanImage`` with clipped ``matched_area``; ``output_mask`` is copied unchanged;
+      the ``out=`` argument is not supported.
+    - ``copy``, ``transpose``, and ``T`` return a new instance; ``transpose`` / ``T`` also permute ``output_mask``
+      and swap ``point`` x/y and ``height`` / ``width`` when spatial height and width are swapped.
     """
 
     input_type: str
