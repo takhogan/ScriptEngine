@@ -342,6 +342,10 @@ class ScreenPlanImage:
         else:
             raise KeyError(key)
 
+    def __repr__(self) -> str:
+        h, w = self.matched_area.shape[:2]
+        return f'ScreenPlanImage({h}x{w}, point={self.point}, score={self.score})'
+
     def get(self, key: str, default: Any = None) -> Any:
         try:
             return self[key]

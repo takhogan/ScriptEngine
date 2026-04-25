@@ -1,6 +1,11 @@
 import datetime
 import uuid
 import json
+from concurrent.futures import ThreadPoolExecutor
+
+# Single worker keeps JSON writes ordered and off the main thread.
+# Non-daemon by default so pending writes complete before interpreter exit.
+_log_executor = ThreadPoolExecutor(max_workers=1)
 
 
 class ScriptActionLog:
@@ -17,10 +22,10 @@ class ScriptActionLog:
         self.status = 'RUNNING'
         self.summary = ''
         self.start_time = datetime.datetime.now(datetime.timezone.utc)
+        self.sync_end_time = None
         self.script_log_folder = None
         self.target_system = action['actionData']['targetSystem']
         self.attributes = {}
-
         if action["actionName"] == "scriptReference":
             self.type = "script"
             self.script_name = action["actionData"]["scriptName"]
@@ -42,7 +47,11 @@ class ScriptActionLog:
 
         self.to_dict()
 
-    def to_dict(self):
+    def _write_text_file(self, path, mode, contents, end):
+        with open(path, mode, encoding='utf-8', errors='replace') as f:
+            f.write(contents + end)
+
+    def _flush(self):
         with open(self.default_path_header + 'action-log.json', 'w') as action_log_file:
             json.dump({
                 'base_path' : self.base_path,
@@ -58,7 +67,12 @@ class ScriptActionLog:
                 'status' : self.get_status(),
                 'summary' : self.summary,
                 'start_time' : self.start_time.strftime("%Y-%m-%d %H:%M:%S.%f"),
-                'elapsed' : (datetime.datetime.now(datetime.timezone.utc) - self.start_time).total_seconds(),
+                'elapsed' : (
+                    (self.sync_end_time - self.start_time).total_seconds()
+                    if self.sync_end_time is not None
+                    else (datetime.datetime.now(datetime.timezone.utc) - self.start_time).total_seconds()
+                ),
+                'async_elapsed' : (datetime.datetime.now(datetime.timezone.utc) - self.start_time).total_seconds(),
                 'pre_file' : {
                     'file_type' : self.pre_file[0],
                     'file_path' : self.pre_file[1]
@@ -84,6 +98,8 @@ class ScriptActionLog:
                 ],
                 'attributes' : self.attributes
             }, action_log_file)
+    def to_dict(self):
+        _log_executor.submit(self._flush)
 
     def set_pre_file(self, file_type, relative_path : str, log_header : bool =True, absolute_path : bool =False):
         self.pre_file = (
@@ -101,8 +117,7 @@ class ScriptActionLog:
         )
         self.to_dict()
         if file_type == 'text':
-            with open(self.pre_file[1], 'w', encoding='utf-8', errors='replace') as pre_file:
-                pre_file.write(file_contents + end)
+            _log_executor.submit(self._write_text_file, self.pre_file[1], 'w', file_contents, end)
         else:
             raise Exception('Unsupported File Type')
 
@@ -114,8 +129,7 @@ class ScriptActionLog:
                 ' contents: ' + str(file_contents)
             )
         if file_type == 'text':
-            with open(self.pre_file[1], 'a', encoding='utf-8', errors='replace') as pre_file:
-                pre_file.write(file_contents + end)
+            _log_executor.submit(self._write_text_file, self.pre_file[1], 'a', file_contents, end)
         else:
             raise Exception('Unsupported File Type')
 
@@ -135,8 +149,7 @@ class ScriptActionLog:
         )
         self.to_dict()
         if file_type == 'text':
-            with open(self.post_file[1], 'w', encoding='utf-8', errors='replace') as post_file:
-                post_file.write(file_contents + end)
+            _log_executor.submit(self._write_text_file, self.post_file[1], 'w', file_contents, end)
         else:
             raise Exception('Unsupported File Type')
 
@@ -148,8 +161,7 @@ class ScriptActionLog:
                 ' contents: ' + str(file_contents)
             )
         if file_type == 'text':
-            with open(self.post_file[1], 'a', encoding='utf-8', errors='replace') as post_file:
-                post_file.write(file_contents + end)
+            _log_executor.submit(self._write_text_file, self.post_file[1], 'a', file_contents, end)
         else:
             raise Exception('Unsupported File Type')
 
@@ -180,8 +192,7 @@ class ScriptActionLog:
         self.supporting_files.append((file_type, new_supporting_file_path))
         self.to_dict()
         if file_type == 'text':
-            with open(new_supporting_file_path, 'w', encoding='utf-8', errors='replace') as supporting_file:
-                supporting_file.write(file_contents + end)
+            _log_executor.submit(self._write_text_file, new_supporting_file_path, 'w', file_contents, end)
         else:
             raise Exception('Unsupported File Type')
 
@@ -204,8 +215,7 @@ class ScriptActionLog:
                         ' to file ' + str(existing_supporting_file_path) +
                         ' contents: ' + str(file_contents))
         if file_type == 'text':
-            with open(existing_supporting_file_path, 'a', encoding='utf-8', errors='replace') as supporting_file:
-                supporting_file.write(file_contents + end)
+            _log_executor.submit(self._write_text_file, existing_supporting_file_path, 'a', file_contents, end)
         else:
             raise Exception('Unsupported File Type')
 
@@ -227,6 +237,8 @@ class ScriptActionLog:
 
     def set_status(self, status):
         self.status = status
+        if status != 'RUNNING' and self.sync_end_time is None:
+            self.sync_end_time = datetime.datetime.now(datetime.timezone.utc)
         self.to_dict()
     
     def set_summary(self, summary):

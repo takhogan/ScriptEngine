@@ -18,7 +18,6 @@ warnings.filterwarnings(
 )
 
 import numpy as np
-import re
 import cv2
 import json
 import time
@@ -32,7 +31,7 @@ from .helpers.random_variable_helper import RandomVariableHelper
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.types import ScreenPlanImage
-from ScriptEngine.common.script_engine_utils import generate_context_switch_action, state_eval, state_exec
+from ScriptEngine.common.script_engine_utils import generate_context_switch_action, sanitize_statement_input, state_eval, state_exec
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from typing import Callable, Dict, List, Tuple
 script_logger = ScriptLogger()
@@ -62,34 +61,13 @@ class SystemScriptActionExecutor:
         # Initialize status to FAILURE as default (will be overridden by action handlers)
         status = ScriptExecutionState.ERROR
         
-        def sanitize_input(statement_input, state):
-            statement_input = statement_input.strip()
-            statement_input = statement_input.replace('\n', ' ')
-            operator_pattern = r'[\[\]\(\)+-/*%=<>!^|&~]'
-            word_operator_pattern = r'( is )|( in )|( not )|( and )|( or )'
-            statement_strip = re.sub(operator_pattern, ' ', statement_input)
-            statement_strip = re.sub(word_operator_pattern, ' ', statement_strip)
-            statement_strip = re.sub(word_operator_pattern, ' ', statement_strip)
-            statement_strip = list(filter(lambda term: (len(term) > 0) and "'" not in term and "\"" not in term, statement_strip.split(' ')))
-            for term_index,term in enumerate(statement_strip):
-                if term.isidentifier() and term not in state:
-                    term_str = str(term) + ': N/A'
-                else:
-                    try:
-                        term_eval = state_eval(term, {}, state)
-                    except (TypeError,KeyError,SyntaxError) as p_err:
-                        script_logger.log(p_err)
-                        term_eval = None
-                    term_str = str(term) + ': ' + str(term_eval) + ': ' + str(type(term_eval))
-                statement_strip[term_index] = term_str
-            return statement_strip
         if action["actionName"] == "shellScript":
             from .helpers.shell_script_helper import ShellScriptHelper
             state = ShellScriptHelper.run_shell_script(action, state)
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "conditionalStatement":
             condition = action["actionData"]["condition"].replace("\n", " ").strip()
-            statement_strip = sanitize_input(condition, state)
+            statement_strip = sanitize_statement_input(condition, state)
             pre_log = 'condition: {} {}'.format(condition, statement_strip)
             script_logger.log(pre_log)
             
@@ -138,7 +116,7 @@ class SystemScriptActionExecutor:
                 )
             else:
                 pre_log += ('and output variable {} was null'.format(outputVarName) if isSetIfNull else '')
-                statement_strip = sanitize_input(action["actionData"]["inputExpression"], state)
+                statement_strip = sanitize_statement_input(action["actionData"]["inputExpression"], state)
 
                 mid_log = ('inputExpression : ' + action["actionData"]["inputExpression"])
                 mid_log_2 = ('inputs: ' + str(statement_strip))
@@ -210,8 +188,8 @@ class SystemScriptActionExecutor:
             if isinstance(resetCounterAfterBreached, str):
                 resetCounterAfterBreached = resetCounterAfterBreached.lower() == "true"
 
-            threhold_stripped = sanitize_input(counterThreshold, state)
-            incrementby_stripped = sanitize_input(incrementBy, state)
+            threhold_stripped = sanitize_statement_input(counterThreshold, state)
+            incrementby_stripped = sanitize_statement_input(incrementBy, state)
             pre_log = 'with counter name {}'.format(counterVarName) +\
                 'threshold params {}'.format(threhold_stripped) +\
                 'and incrementBy params {}'.format(incrementby_stripped) +\
@@ -266,7 +244,7 @@ class SystemScriptActionExecutor:
                 initial_value = state_eval(initialValue, {}, state)
                 
                 if not counterVarName in state:
-                    initial_value_stripped = sanitize_input(initialValue, state)
+                    initial_value_stripped = sanitize_statement_input(initialValue, state)
 
                     initial_value_logs = 'Setting initial value with initialValue params {}'.format(initial_value_stripped)
                     script_logger.log(initial_value_logs)
@@ -927,7 +905,7 @@ class SystemScriptActionExecutor:
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "codeBlock":
             pre_log = 'Running Code Block: \n{}'.format(action["actionData"]["codeBlock"])
-            # statement_strip = sanitize_input(action["actionData"]["codeBlock"], state_copy)
+            # statement_strip = sanitize_statement_input(action["actionData"]["codeBlock"], state_copy)
             script_logger.log(pre_log)
             state_exec(action["actionData"]["codeBlock"], {}, state)
             script_logger.get_action_log().add_post_file(
@@ -949,59 +927,66 @@ class SystemScriptActionExecutor:
             pre_log += 'Writing inputs to variable: ' + action["actionData"]["outputVarName"]
             script_logger.get_action_log().add_pre_file('text', 'inputs.txt', pre_log)
             script_logger.log(pre_log)
-            
+
             file_path = state_eval(action["actionData"]["filePath"], {}, state)
             output_var_name = action["actionData"]["outputVarName"]
-            file_properties = ''
-            if action["actionData"]["fileActionType"] in ["w", "wb", "a"]:
-                input_value = state_eval(action["actionData"]["inputExpression"], {}, state)
-                if action["actionData"]["fileType"] == "image":
-                    file_properties = 'shape: ' + str(input_value["matched_area"].shape)
-                    cv2.imwrite(file_path, input_value["matched_area"])
-                elif action["actionData"]["fileType"] == "json":
-                    file_properties = 'key: ' + str(list(input_value))
-                    with open(file_path, action["actionData"]["fileActionType"]) as json_file:
-                        json.dump(input_value, json_file)
-                elif action["actionData"]["fileType"] == "text":
-                    file_properties = 'n characters:  ' + str(len(input_value))
-                    with open(file_path, action["actionData"]["fileActionType"]) as text_file:
-                        text_file.write(input_value)
-                state[output_var_name] = input_value
-            elif action["actionData"]["fileActionType"] in ["r", "rb"]:
-                if action["actionData"]["fileType"] == "image":
-                    image = cv2.imread(file_path)
-                    state[output_var_name] = ScreenPlanImage(
-                        input_type='shape',
-                        point=(0, 0),
-                        output_mask=np.full((image.shape[0], image.shape[1]), 255, dtype=np.uint8),
-                        matched_area=image,
-                        height=image.shape[0],
-                        width=image.shape[1],
-                        score=0.99999,
-                        n_matches=1,
-                        detect_object_result=True,
-                    )
-                    file_properties = 'shape: ' + str(state[output_var_name].matched_area.shape)
+            file_action_type = action["actionData"]["fileActionType"]
+            file_type = action["actionData"]["fileType"]
+            input_expression = action["actionData"]["inputExpression"]
+            run_async = action["actionData"].get("async", False)
 
-                elif action["actionData"]["fileType"] == "json":
-                    with open(file_path, action["actionData"]["fileActionType"]) as json_file:
-                        state[output_var_name] = json.load(json_file)
-                    file_properties = 'keys: ' + str(list(state[output_var_name]))
-                elif action["actionData"]["fileType"] == "text":
-                    with open(file_path, action["actionData"]["fileActionType"]) as text_file:
-                        state[output_var_name] = text_file.read()
-                    file_properties = 'n characters:  ' + str(len(state[output_var_name]))
-            post_log = (
-                'Wrote to' if
-                action["actionData"]["fileActionType"] in ["w", "wb", "a"]
-                else 'Read from'
-            ) + file_path + '\n'
-            post_log += 'Contents of type: ' + action["actionData"]["fileType"] +\
-                       ' with mode ' + action["actionData"]["fileActionType"] + '\n'
-            post_log += 'File properties: ' + file_properties + '\n'
-            post_log += 'Input expression: ' + action["actionData"]["inputExpression"] + '\n'
-            post_log += 'Wrote inputs to variable: ' + action["actionData"]["outputVarName"]
-            script_logger.get_action_log().add_post_file('text', 'post.txt', post_log)
+            def _do_file_io():
+                file_properties = ''
+                if file_action_type in ["w", "wb", "a"]:
+                    input_value = state_eval(input_expression, {}, state)
+                    if file_type == "image":
+                        file_properties = 'shape: ' + str(input_value["matched_area"].shape)
+                        cv2.imwrite(file_path, input_value["matched_area"])
+                    elif file_type == "json":
+                        file_properties = 'key: ' + str(list(input_value))
+                        with open(file_path, file_action_type) as json_file:
+                            json.dump(input_value, json_file)
+                    elif file_type == "text":
+                        file_properties = 'n characters:  ' + str(len(input_value))
+                        with open(file_path, file_action_type) as text_file:
+                            text_file.write(input_value)
+                    state[output_var_name] = input_value
+                elif file_action_type in ["r", "rb"]:
+                    if file_type == "image":
+                        image = cv2.imread(file_path)
+                        state[output_var_name] = ScreenPlanImage(
+                            input_type='shape',
+                            point=(0, 0),
+                            output_mask=np.full((image.shape[0], image.shape[1]), 255, dtype=np.uint8),
+                            matched_area=image,
+                            height=image.shape[0],
+                            width=image.shape[1],
+                            score=0.99999,
+                            n_matches=1,
+                            detect_object_result=True,
+                        )
+                        file_properties = 'shape: ' + str(state[output_var_name].matched_area.shape)
+                    elif file_type == "json":
+                        with open(file_path, file_action_type) as json_file:
+                            state[output_var_name] = json.load(json_file)
+                        file_properties = 'keys: ' + str(list(state[output_var_name]))
+                    elif file_type == "text":
+                        with open(file_path, file_action_type) as text_file:
+                            state[output_var_name] = text_file.read()
+                        file_properties = 'n characters:  ' + str(len(state[output_var_name]))
+                post_log = (
+                    'Wrote to' if file_action_type in ["w", "wb", "a"] else 'Read from'
+                ) + file_path + '\n'
+                post_log += 'Contents of type: ' + file_type + ' with mode ' + file_action_type + '\n'
+                post_log += 'File properties: ' + file_properties + '\n'
+                post_log += 'Input expression: ' + input_expression + '\n'
+                post_log += 'Wrote inputs to variable: ' + output_var_name
+                script_logger.get_action_log().add_post_file('text', 'post.txt', post_log)
+
+            if run_async:
+                self.io_executor.submit(_do_file_io)
+            else:
+                _do_file_io()
             status = ScriptExecutionState.SUCCESS
         #TODO : unsupported for now
         elif action["actionName"] == "databaseCRUD":

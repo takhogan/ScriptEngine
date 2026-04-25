@@ -1,4 +1,5 @@
 import builtins
+import types
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
@@ -262,6 +263,7 @@ class StateEvaluator:
     import random
     import math
     import collections
+    import itertools
 
     _base_globals = {
         'glob': glob,
@@ -278,6 +280,7 @@ class StateEvaluator:
         'random': random,
         'math': math,
         'collections': collections,
+        'itertools' : itertools
     }
 
     _script_context = None
@@ -316,23 +319,47 @@ class StateEvaluator:
 
     @classmethod
     def exec(cls, code, global_overrides, local_scope, crashonerror=True):
-        env_globals = cls._base_globals.copy()
+        env = cls._base_globals.copy()
+
         if global_overrides:
-            env_globals.update(global_overrides)
+            env.update(global_overrides)
+
         if local_scope:
-            env_globals.update(local_scope)
-        env_globals.setdefault('script', cls._script_context)
+            env.update(local_scope)
+
+        env.setdefault('script', cls._script_context)
+        env.setdefault('__builtins__', builtins)
+
+        before_keys = set(env.keys())
 
         try:
-            builtins.exec(code, env_globals, local_scope)
+            builtins.exec(code, env, env)
         except KeyError:
             script_logger.log(
-                'ERROR: key error while parsing exec, keys present in state: ' + ', '.join(list(env_globals))
+                'ERROR: key error while parsing exec, keys present in state: ' + ', '.join(list(env))
             )
             if not crashonerror:
                 script_logger.log('script finished with failure, ignoring key error')
                 return None
             raise
+
+        for key, value in env.items():
+            if key.startswith('__'):
+                continue
+
+            if key in cls._base_globals:
+                continue
+
+            if global_overrides and key in global_overrides:
+                continue
+
+            if isinstance(value, types.ModuleType):
+                continue
+
+            if key not in before_keys or local_scope.get(key) is not value:
+                local_scope[key] = value
+
+        return None
 
 
 def state_eval(statement, globals, locals, crashonerror=True):
@@ -341,3 +368,34 @@ def state_eval(statement, globals, locals, crashonerror=True):
 
 def state_exec(code, globals, locals, crashonerror=True):
     return StateEvaluator.exec(code, globals, locals, crashonerror=crashonerror)
+
+
+def sanitize_statement_input(statement_input, state):
+    """Split a condition/expression into tokens and resolve each to a debug string via one state_eval."""
+    statement_input = statement_input.strip()
+    statement_input = statement_input.replace('\n', ' ')
+    operator_pattern = r'[\[\]\(\)+-/*%=<>!^|&~]'
+    word_operator_pattern = r'( is )|( in )|( not )|( and )|( or )'
+    statement_strip = re.sub(operator_pattern, ' ', statement_input)
+    statement_strip = re.sub(word_operator_pattern, ' ', statement_strip)
+    statement_strip = re.sub(word_operator_pattern, ' ', statement_strip)
+    terms = list(filter(
+        lambda term: (len(term) > 0) and "'" not in term and "\"" not in term,
+        statement_strip.split(' ')
+    ))
+    if not terms:
+        return []
+
+    state_keys = state.keys() if hasattr(state, 'keys') else ()
+    parts = []
+    for term in terms:
+        if term.isidentifier() and term not in state_keys:
+            parts.append(repr(f'{term}: N/A'))
+        else:
+            parts.append(f'({repr(term)} + ": " + str({term}) + ": " + str(type({term})))')
+    expr = f'[{", ".join(parts)}]'
+    try:
+        return state_eval(expr, {}, state)
+    except (TypeError, KeyError, SyntaxError) as p_err:
+        script_logger.log(p_err)
+        return [f'{term}: None: {type(None)}' for term in terms]
