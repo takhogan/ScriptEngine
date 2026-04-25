@@ -42,7 +42,21 @@ class ScriptLogger:
                 message = self._write_queue.get(timeout=1)
                 if message is None:
                     break
-                
+
+                if self.log_to_stdout:
+                    try:
+                        sys.stdout.write(message)
+                        sys.stdout.flush()
+                    except UnicodeEncodeError:
+                        try:
+                            sys.stdout.write(message.encode('ascii', 'replace').decode('ascii'))
+                            sys.stdout.flush()
+                        except Exception:
+                            pass
+                    except Exception:
+                        # stdout may be closed or finalized during interpreter shutdown
+                        pass
+
                 with open(self.log_file_path, 'a', encoding='utf-8', errors='replace') as log_file:
                     log_file.write(message)
                     log_file.flush()
@@ -129,28 +143,12 @@ class ScriptLogger:
         header_str = str(self.log_header) if (log_header and self.log_header is not None) else ''
         text = f"{datetime.datetime.now()}: {header_str} {sep.join(map(str, args))}{end}"
 
-        # Queue the message for non-blocking file writing
         if file is None:
             self._write_queue.put(text)
         else:
             file.write(text)
             if flush:
                 file.flush()
-
-        # Print to console with error handling (only if log_to_stdout is enabled)
-        if self.log_to_stdout:
-            try:
-                print(text, sep=sep, end=end, flush=flush)
-            except UnicodeEncodeError:
-                # If console can't handle the encoding, try to print a sanitized version
-                try:
-                    # Remove or replace problematic characters
-                    sanitized_text = text.encode('ascii', 'replace').decode('ascii')
-                    print(sanitized_text, sep=sep, end=end, flush=flush)
-                except Exception:
-                    # If all else fails, print a basic message
-                    print(f"{datetime.datetime.now()}: [Output contained unprintable characters]", 
-                          flush=flush)
 
     def set_log_file_path(self, log_file_path):
         self.log_file_path = log_file_path
