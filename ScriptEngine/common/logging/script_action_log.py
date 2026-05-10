@@ -1,7 +1,21 @@
 import datetime
+import os
 import uuid
 import json
 from concurrent.futures import ThreadPoolExecutor
+
+# Shared cross-project contract. The on-disk shape of action-log.json is
+# defined by `ScriptActionLog` in screenplan_contracts (packages/screenplan-contracts).
+# We validate every flush against that schema when SHARED_CONTRACTS_VALIDATE=1
+# is set so the contract is enforced opt-in during development without
+# affecting production runs.
+try:  # soft import — engine still runs if screenplan_contracts isn't installed
+    from screenplan_contracts import validate_script_action_log as _validate_action_log
+    from screenplan_contracts import ContractValidationError as _ContractValidationError
+except Exception:  # pragma: no cover - dev fallback
+    _validate_action_log = None
+    _ContractValidationError = Exception
+_CONTRACTS_ENABLED = os.environ.get('SHARED_CONTRACTS_VALIDATE') == '1'
 
 # Single worker keeps JSON writes ordered and off the main thread.
 # Non-daemon by default so pending writes complete before interpreter exit.
@@ -52,8 +66,7 @@ class ScriptActionLog:
             f.write(contents + end)
 
     def _flush(self):
-        with open(self.default_path_header + 'action-log.json', 'w') as action_log_file:
-            json.dump({
+        payload = {
                 'base_path' : self.base_path,
                 'action_log_path' : self.get_action_log_path(),
                 'id' : self.id,
@@ -97,7 +110,15 @@ class ScriptActionLog:
                     } for child in self.children
                 ],
                 'attributes' : self.attributes
-            }, action_log_file)
+            }
+        if _CONTRACTS_ENABLED and _validate_action_log is not None:
+            try:
+                _validate_action_log(payload)
+            except _ContractValidationError as exc:
+                # Fail fast in dev; never silently corrupt the contract.
+                raise
+        with open(self.default_path_header + 'action-log.json', 'w') as action_log_file:
+            json.dump(payload, action_log_file)
     def to_dict(self):
         _log_executor.submit(self._flush)
 

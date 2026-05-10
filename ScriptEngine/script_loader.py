@@ -10,6 +10,90 @@ from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
 
+def _set_by_path(root, path, value):
+    """Write a value at a dot-path inside `root` (mirrors the writer-side
+    helper). Numeric segments traverse arrays; everything else is treated as
+    object-key access. Parent containers must already exist."""
+    parts = path.split('.')
+    cur = root
+    for part in parts[:-1]:
+        if isinstance(cur, list):
+            cur = cur[int(part)]
+        else:
+            cur = cur[part]
+    last = parts[-1]
+    if isinstance(cur, list):
+        cur[int(last)] = value
+    else:
+        cur[last] = value
+
+
+def _read_asset_payload(asset_path, asset_type, dir_path, script_zip, script_path_in_zip):
+    """Load a single asset file as the appropriate Python type for its
+    `assetType`. Returns None if the file cannot be located."""
+    image_types = {'image'}
+    json_types = {'json', 'pointList'}
+    text_types = {'text', 'shellScript'}
+
+    if script_zip is not None and script_path_in_zip is not None:
+        zip_path = (script_path_in_zip + '/' + asset_path.lstrip('/')).replace('\\', '/')
+        if zip_path not in script_zip.namelist():
+            return None
+        with script_zip.open(zip_path, 'r') as f:
+            blob = f.read()
+        if asset_type in json_types:
+            return json.loads(blob.decode('utf-8'))
+        if asset_type in text_types:
+            return blob.decode('utf-8')
+        # default: image bytes → ndarray via cv2.imdecode
+        arr = np.frombuffer(blob, dtype=np.uint8)
+        return cv2.imdecode(arr, cv2.IMREAD_COLOR)
+
+    full_path = os.path.join(dir_path, asset_path) if dir_path else asset_path
+    if not os.path.exists(full_path):
+        return None
+    if asset_type in json_types:
+        with open(full_path, 'r') as f:
+            return json.load(f)
+    if asset_type in text_types:
+        with open(full_path, 'r') as f:
+            return f.read()
+    return cv2.imread(full_path)
+
+
+def _walk_action_assets(action, dir_path, script_zip, script_path_in_zip):
+    """Apply each entry in `action.actionAssets` to the action: load the
+    referenced file and place it at the entry's `attributePath`. No-ops for
+    actions without an asset registry (legacy scripts).
+
+    Raises if any registered asset cannot be loaded or placed — a missing
+    or unreadable asset means the on-disk script is malformed and we'd
+    otherwise run with silently-dropped images at runtime."""
+    action_name = action.get("actionName", "<unknown>")
+    asset_entries = action.get("actionAssets") or []
+    for entry in asset_entries:
+        if not isinstance(entry, dict):
+            continue
+        file_path = entry.get("filePath")
+        attribute_path = entry.get("attributePath")
+        if not file_path or not attribute_path:
+            msg = f"actionAssets: malformed entry on {action_name} (missing filePath or attributePath): {entry!r}"
+            script_logger.log(msg)
+            raise ValueError(msg)
+        asset_type = entry.get("assetType", "image")
+        value = _read_asset_payload(file_path, asset_type, dir_path, script_zip, script_path_in_zip)
+        if value is None:
+            msg = f"actionAssets: missing payload for {file_path} (action {action_name}, attribute {attribute_path})"
+            script_logger.log(msg)
+            raise FileNotFoundError(msg)
+        try:
+            _set_by_path(action, attribute_path, value)
+        except (KeyError, IndexError, TypeError) as e:
+            msg = f"actionAssets: could not set {attribute_path} on {action_name}: {e}"
+            script_logger.log(msg)
+            raise RuntimeError(msg) from e
+
+
 def set_output_mask(positive_example, img_type_prefix, include_contained_area, exclude_matched_area):
     if include_contained_area and exclude_matched_area:
         if "containedAreaMask" not in positive_example:
@@ -79,12 +163,16 @@ def parse_script_file(
         script_path_in_zip=None):
     script_logger.log('SCRIPT LOAD: loading script ', script_name)
     def read_and_set_image(example, action, img_type):
-        if img_type in example and not example[img_type] is None:
-            if type(example[img_type]) != str:
-                del example[img_type]
-                return
-            script_logger.log(dir_path, example[img_type])
-            example[img_type] = cv2.imread(dir_path + '/' + example[img_type])
+        """Resolve a string path field on `example` into a loaded ndarray.
+        No-op when the field is missing, None, or already loaded — the new
+        flat-assets path populates ndarrays before this runs, so this only
+        kicks in for legacy scripts that still carry path strings."""
+        if img_type not in example or example[img_type] is None:
+            return
+        if not isinstance(example[img_type], str):
+            return
+        script_logger.log(dir_path, example[img_type])
+        example[img_type] = cv2.imread(dir_path + '/' + example[img_type])
     def read_json_file(file_path):
         """Read JSON file from either zip or filesystem"""
         if script_zip is not None:
@@ -100,6 +188,12 @@ def parse_script_file(
     script_logger.log(script_to_string(script_name, action_rows))
     for action_row in action_rows:
         for action in action_row["actions"]:
+            # New flat-assets format: each action carries its own asset
+            # registry. Load every entry into the in-data fields before any
+            # legacy path-string fallback runs. Older scripts without the
+            # registry fall through unchanged.
+            _walk_action_assets(action, dir_path, script_zip, script_path_in_zip)
+
             detect_type_action = action["actionName"] in {
                 "clickAction",
                 "mouseScrollAction",
@@ -136,16 +230,14 @@ def parse_script_file(
                         if obj_key not in pair:
                             continue
                         positive_example = pair[obj_key]
-                        if "mask" in positive_example and positive_example["mask"] is not None:
-                            if type(positive_example["mask"]) != str:
-                                del positive_example["mask"]
-                            else:
-                                read_and_set_image(positive_example, action, "mask")
-                                positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(positive_example["mask"].copy(), cv2.COLOR_BGR2GRAY))
+                        read_and_set_image(positive_example, action, "mask")
+                        mask_value = positive_example.get("mask")
+                        if mask_value is not None and not isinstance(mask_value, str):
+                            positive_example["mask_single_channel"] = np.uint8(cv2.cvtColor(mask_value.copy(), cv2.COLOR_BGR2GRAY))
                         read_and_set_image(positive_example, action, "containedAreaMask")
                         read_and_set_image(positive_example, action, "img")
                         set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)
-            
+
             # Handle mouseInteractionAction and mouseMoveAction point lists
             if action["actionName"] in {"mouseInteractionAction", "mouseMoveAction"}:
                 if "actionData" in action and "sourcePointList" in action["actionData"]:
@@ -165,7 +257,7 @@ def parse_script_file(
                             file_path = dir_path + '/' + source_point_list
                             if os.path.exists(file_path):
                                 action["actionData"]["sourcePointList"] = read_json_file(file_path)
-                
+
                 # For mouseMoveAction, also handle targetPointList
                 if action["actionName"] == "mouseMoveAction":
                     if "actionData" in action and "targetPointList" in action["actionData"]:

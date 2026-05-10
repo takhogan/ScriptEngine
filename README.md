@@ -126,10 +126,23 @@ Scripts are organized in the `scripts/` directory with the following structure:
 scripts/
 └── scriptLibrary/          # User-created scripts
     └── MyScript/
-        ├── actions/        # Action definitions
+        ├── actionRows.json # Action definitions (interfaceVersion >= 21)
+        ├── assets/         # Flat asset folder; files named
+        │                   # {md5}-{actionName}-{actionGroup}-{specificFileName}.{ext}
         ├── include/        # Included sub-scripts
-        └── scriptAssets/   # Script resources
+        └── tmp/            # Runtime jsonFileAction read/write target
+                            # (formerly named scriptAssets/ — see legacy note)
 ```
+
+Each `ScriptAction` carries an `actionAssets` array that registers the assets
+it owns. Each entry has `path`, `attributePath` (where to place the loaded
+value on the action), `assetType` (`image` | `json` | `pointList` | `text`),
+and the file's `md5` so the writer can skip rehashing on subsequent saves.
+
+Legacy scripts saved before `interfaceVersion` 21 use the old nested
+`actions/N-row/M-{actionName}/assets/...` layout and the `scriptAssets/`
+folder name. Both readers fall back to the old layout when `actionAssets` is
+absent or `interfaceVersion < 21`.
 
 ### Example Script Actions
 
