@@ -16,6 +16,11 @@ setup(
         'scipy>=1.11.4',
         'cx_Freeze>=6.15.12',
         'tzlocal>=5.0',
+        # ScreenPlan cross-project contracts. Pulled directly from GitHub.
+        # For local dev:  pip install -e ../../packages/screenplan-contracts \
+        #                            -e ../../packages/screenplan-contracts-py
+        'screenplan-contracts-schemas @ git+https://github.com/takhogan/screenplan-contracts.git@main',
+        'screenplan-contracts @ git+https://github.com/takhogan/screenplan-contracts-py.git@main',
         # Add other dependencies from setup/venv_requirements.txt
     ],
     entry_points={

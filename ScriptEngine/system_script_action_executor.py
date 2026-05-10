@@ -56,7 +56,19 @@ class SystemScriptActionExecutor:
             self.messaging_helper = None
             self.calendar_action_helper = None
         self.easy_ocr_reader = None
-    
+
+    def _resolve_tmp_file(self, file_name):
+        """Locate a runtime jsonFileAction read target. Prefers `tmp/` (new
+        layout); falls back to `scriptAssets/` for scripts that haven't been
+        re-saved since the rename. Returns None if neither exists."""
+        tmp_path = os.path.join(self.props['dir_path'], 'tmp', file_name)
+        if os.path.exists(tmp_path):
+            return tmp_path
+        legacy_path = os.path.join(self.props['dir_path'], 'scriptAssets', file_name)
+        if os.path.exists(legacy_path):
+            return legacy_path
+        return tmp_path
+
     def handle_action(self, action, state, context, run_queue) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
         # Initialize status to FAILURE as default (will be overridden by action handlers)
         status = ScriptExecutionState.ERROR
@@ -348,8 +360,8 @@ class SystemScriptActionExecutor:
         #TODO: will be removed, need a new file io type action
         elif action["actionName"] == "jsonFileAction":
             if action["actionData"]["mode"] == "read":
-                json_filepath = self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"]
-                if os.path.exists(json_filepath):
+                json_filepath = self._resolve_tmp_file(action["actionData"]["fileName"])
+                if json_filepath is not None and os.path.exists(json_filepath):
                     with open(json_filepath, "r") as read_file:
                         state[action["actionData"]["varName"]] = json.load(read_file)
                 else:
@@ -357,7 +369,9 @@ class SystemScriptActionExecutor:
                 status = ScriptExecutionState.SUCCESS
             elif action["actionData"]["mode"] == "write":
                 script_logger.log('writing file: ', state[action["actionData"]["varName"]])
-                with open(self.props['dir_path'] + '/scriptAssets/' + action["actionData"]["fileName"],
+                tmp_dir = os.path.join(self.props['dir_path'], 'tmp')
+                os.makedirs(tmp_dir, exist_ok=True)
+                with open(os.path.join(tmp_dir, action["actionData"]["fileName"]),
                           'w') as write_file:
                     json.dump(state[action["actionData"]["varName"]], write_file)
                 status = ScriptExecutionState.SUCCESS
@@ -897,12 +911,16 @@ class SystemScriptActionExecutor:
                 switch_actions.append(switch_action)
             for switch_action in reversed(switch_actions):
                 run_queue.append(switch_action)
+            if first_loop:
+                post_log += '\n' + 'inVariable was empty, skipping loop body'
+                status = ScriptExecutionState.FINISHED_BRANCH
+            else:
+                status = ScriptExecutionState.SUCCESS
             script_logger.get_action_log().add_post_file(
                 'text',
                 'forLoopAction-log.txt',
                 pre_log + '\n' + mid_log_1 + '\n' + mid_log_2 + '\n' + post_log
             )
-            status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "codeBlock":
             pre_log = 'Running Code Block: \n{}'.format(action["actionData"]["codeBlock"])
             # statement_strip = sanitize_statement_input(action["actionData"]["codeBlock"], state_copy)
