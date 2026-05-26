@@ -127,7 +127,7 @@ async def close_threads_and_processes(io_executor, process_executor, timeout=30)
     import asyncio
     await asyncio.gather(io_executor.soft_shutdown(script_logger, timeout), process_executor.soft_shutdown(script_logger, timeout))
 
-def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False, read_env=False, write_env=False):
+def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False, read_env=False, write_env=False, workspace="Default"):
     import os
     import json
     import datetime
@@ -141,8 +141,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
     import numpy as np
     np.set_printoptions(threshold=3, edgeitems=0, linewidth=80, precision=2, suppress=True)
     script_logger.log('constants : ', constants)
-    from ScriptEngine.script_loader import parse_zip
-    script_object = parse_zip(script_name, system_script)
+    from ScriptEngine.script_loader import parse_script
+    script_object = parse_script(script_name, system_script, workspace)
     device_params = {}
     if device_details is not None and device_details != '' and device_details != 'null':
         if device_details.startswith('file'):
@@ -205,7 +205,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
             script_action_executor,
             process_executor,
             script_start_time=start_time,
-            screen_plan_server_attached=screen_plan_server_attached
+            screen_plan_server_attached=screen_plan_server_attached,
+            workspace=workspace
         )
 
         try:
@@ -285,6 +286,7 @@ def main():
         parser.add_argument('--script-id', '-id', help='Script ID (UUID)')
         parser.add_argument('--device', '-d', help='Device details')
         parser.add_argument('--system-script', '-sys', action='store_true', help='Whether this is a system script')
+        parser.add_argument('--workspace', '-w', default='Default', help='Workspace name (defaults to "Default"). Only used for library scripts.')
         parser.add_argument('--screen-plan-server-attached', '-spsa', action='store_true', help='Whether a screenplan client server is attached')
         parser.add_argument('--constants', '-c', nargs='*', help='Constants in format key:value')
         parser.add_argument('--read-env', action='store_true', help='Read environment variables and pass them to parse_inputs')
@@ -357,7 +359,8 @@ def main():
         device_details=device_details,
         system_script=system_script,
         screen_plan_server_attached=args.screen_plan_server_attached,
-        read_env=args.read_env
+        read_env=args.read_env,
+        workspace=args.workspace
         # write_env=args.write_env
     )
 

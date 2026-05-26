@@ -83,7 +83,8 @@ class ScriptExecutor:
                  context=None,
                  state=None,
                  create_log_folders=True,
-                 screen_plan_server_attached=False):
+                 screen_plan_server_attached=False,
+                 workspace="Default"):
         self.include_scripts = include_scripts
         self.script_id = script_id
         self.base_script_name = base_script_name
@@ -94,6 +95,7 @@ class ScriptExecutor:
         self.process_executor = process_executor
         self.screen_plan_server_attached = screen_plan_server_attached
         self.script_action_executor = script_action_executor
+        self.workspace = workspace
         self.parallelized_executor = ParallelizedScriptExecutor(device_controller, process_executor)
         self.state = {
             'SCRIPT_CONTEXT': {
@@ -374,13 +376,13 @@ class ScriptExecutor:
                 handle_status = SystemScriptHandler.handle_system_script(self.device_controller, script_details[0], script_details[1])
                 if handle_status == 'return':
                     return action, ScriptExecutionState.SUCCESS, state, context, run_queue, []
-                ref_script = parse_zip(script_details[0], system_script)
+                ref_script = parse_zip(script_details[0], system_script, self.workspace)
             elif script_name in self.include_scripts:
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading script from memory', script_name)
                 ref_script = self.include_scripts[script_name]
             else:
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading user script from disk', script_name, ' include_scripts: ', ','.join(list(self.include_scripts.keys())))
-                ref_script = parse_zip(script_name, False)
+                ref_script = parse_zip(script_name, False, self.workspace)
                 if self.context['script_memory_mode'] != 'low':
                     self.include_scripts[script_name] = ref_script
             # script_logger.log(' state (3) : ', state)
@@ -406,7 +408,8 @@ class ScriptExecutor:
                 context=child_context,
                 state={},
                 create_log_folders=False,
-                screen_plan_server_attached=self.screen_plan_server_attached
+                screen_plan_server_attached=self.screen_plan_server_attached,
+                workspace=self.workspace
             )
             
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: configuring script action log', action['actionData']['scriptName'])
@@ -673,7 +676,7 @@ class ScriptExecutor:
                     raise Exception('ScriptName {} is in call stack, please rename the script before swapping'.format(swap_script_name))
                 del self.include_scripts[swap_script_name]
                 if self.props["script_name"] == swap_script_name:
-                    hot_swap_script = parse_zip(swap_script_name, False)
+                    hot_swap_script = parse_zip(swap_script_name, False, self.workspace)
                     self.parse_script_obj(hot_swap_script)
                     self.context['action_path'] = self.find_action_paths(
                         self.context['parent_action']['actionGroup'] if self.context['parent_action'] is not None else None,
