@@ -58,9 +58,10 @@ class ScriptActionExecutor:
                     script_logger.log('Storing original image')
 
                     input_obj['screencap_im_bgr'] = screencap_im_bgr
-                    original_image = cv2.copyMakeBorder(screencap_im_bgr.copy(), 15, 15, 15, 15, cv2.BORDER_REPLICATE)
-                    original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
-                    input_obj["original_image"] = original_image[15:-15, 15:-15]
+                    input_obj["original_image"] = screencap_im_bgr
+                    original_image_blurred = cv2.copyMakeBorder(screencap_im_bgr.copy(), 15, 15, 15, 15, cv2.BORDER_REPLICATE)
+                    original_image_blurred = cv2.GaussianBlur(original_image_blurred, (31, 31), 0)
+                    input_obj["original_image_blurred"] = original_image_blurred[15:-15, 15:-15]
 
                     input_obj['original_height'] = screencap_im_bgr.shape[0]
                     input_obj['original_width'] = screencap_im_bgr.shape[1]
@@ -266,16 +267,19 @@ class ScriptActionExecutor:
                 script_logger.log('No cached screenshot or input expression, taking screenshot')
                 screencap_im_bgr = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'screenshot')()
                 input_obj['screencap_im_bgr'] = screencap_im_bgr
-                original_image = cv2.copyMakeBorder(screencap_im_bgr.copy(), 15, 15, 15, 15, cv2.BORDER_REPLICATE)
-                original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
-                input_obj["original_image"] = original_image[15:-15, 15:-15]
+                input_obj["original_image"] = screencap_im_bgr
+                original_image_blurred = cv2.copyMakeBorder(screencap_im_bgr.copy(), 15, 15, 15, 15, cv2.BORDER_REPLICATE)
+                original_image_blurred = cv2.GaussianBlur(original_image_blurred, (31, 31), 0)
+                input_obj["original_image_blurred"] = original_image_blurred[15:-15, 15:-15]
 
                 input_obj['original_height'] = screencap_im_bgr.shape[0]
                 input_obj['original_width'] = screencap_im_bgr.shape[1]
                 input_obj['fixed_scale'] = False
             action["input_obj"] = input_obj
 
-            color_score = ColorCompareHelper.handle_color_compare(action)
+            color_score = ColorCompareHelper.handle_color_compare(action, self.io_executor)
+            if len(action['actionData'].get('outputVarName', '')) > 0:
+                state[action['actionData']['outputVarName']] = color_score
             if color_score > float(action['actionData']['threshold']):
                 script_logger.get_action_log().append_supporting_file(
                     'text',

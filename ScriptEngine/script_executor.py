@@ -84,7 +84,8 @@ class ScriptExecutor:
                  state=None,
                  create_log_folders=True,
                  screen_plan_server_attached=False,
-                 workspace="Default"):
+                 workspace="Default",
+                 system_script=False):
         self.include_scripts = include_scripts
         self.script_id = script_id
         self.base_script_name = base_script_name
@@ -96,6 +97,11 @@ class ScriptExecutor:
         self.screen_plan_server_attached = screen_plan_server_attached
         self.script_action_executor = script_action_executor
         self.workspace = workspace
+        # When set (testScript run), plain scriptReference resolution searches
+        # `.system` ahead of the user workspace (see _resolve_library_script_path
+        # in script_loader). Propagated to child executors so nested references
+        # resolve the same way. Bracketed `[name]` system scripts are unaffected.
+        self.system_script = system_script
         self.parallelized_executor = ParallelizedScriptExecutor(device_controller, process_executor)
         self.state = {
             'SCRIPT_CONTEXT': {
@@ -382,7 +388,7 @@ class ScriptExecutor:
                 ref_script = self.include_scripts[script_name]
             else:
                 script_logger.log(self.props['script_name'] + ' CONTROL FLOW: loading user script from disk', script_name, ' include_scripts: ', ','.join(list(self.include_scripts.keys())))
-                ref_script = parse_zip(script_name, False, self.workspace)
+                ref_script = parse_zip(script_name, self.system_script, self.workspace)
                 if self.context['script_memory_mode'] != 'low':
                     self.include_scripts[script_name] = ref_script
             # script_logger.log(' state (3) : ', state)
@@ -409,7 +415,8 @@ class ScriptExecutor:
                 state={},
                 create_log_folders=False,
                 screen_plan_server_attached=self.screen_plan_server_attached,
-                workspace=self.workspace
+                workspace=self.workspace,
+                system_script=self.system_script
             )
             
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: configuring script action log', action['actionData']['scriptName'])
@@ -676,7 +683,7 @@ class ScriptExecutor:
                     raise Exception('ScriptName {} is in call stack, please rename the script before swapping'.format(swap_script_name))
                 del self.include_scripts[swap_script_name]
                 if self.props["script_name"] == swap_script_name:
-                    hot_swap_script = parse_zip(swap_script_name, False, self.workspace)
+                    hot_swap_script = parse_zip(swap_script_name, self.system_script, self.workspace)
                     self.parse_script_obj(hot_swap_script)
                     self.context['action_path'] = self.find_action_paths(
                         self.context['parent_action']['actionGroup'] if self.context['parent_action'] is not None else None,

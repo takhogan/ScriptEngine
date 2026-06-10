@@ -207,12 +207,34 @@ def parse_script_file(
     }
 # self.use_library = use_library if use_library is not None \
 #             else (True if self.props['deploymentToLibrary'] == 'true' else False)
+def _resolve_library_script_path(script_name, system_script, workspace):
+    """Resolve a (non-zip) script directory to load from.
+
+    Regular runs read `scripts/scriptLibrary/{workspace}/{name}`. For a
+    testScript run (`system_script=True`) resolve the first existing directory
+    among the `.system` scratch workspace, the user's workspace, then the legacy
+    `systemScripts/` location — so changed scripts staged in `.system` win,
+    unchanged ones fall back to the user workspace, and any handled/legacy system
+    script still resolves to systemScripts. Falls back to the systemScripts path
+    string when nothing exists (preserves the legacy `.zip` handling below for a
+    `.zip` script_name).
+    """
+    if not system_script:
+        return './scripts/scriptLibrary/' + workspace + '/' + script_name
+    candidates = [
+        './scripts/scriptLibrary/.system/' + script_name,
+        './scripts/scriptLibrary/' + workspace + '/' + script_name,
+        './scripts/systemScripts/' + script_name,
+    ]
+    for candidate in candidates:
+        if os.path.isdir(candidate):
+            return candidate
+    return './scripts/systemScripts/' + script_name
+
+
 def parse_script(script_name, system_script=False, workspace="Default"):
     # is_backslash_system = script_file_path.count('/') > script_file_path.count('\\')
-    if system_script:
-        script_file_path = './scripts/systemScripts/' + script_name
-    else:
-        script_file_path = './scripts/scriptLibrary/' + workspace + '/' + script_name
+    script_file_path = _resolve_library_script_path(script_name, system_script, workspace)
     dir_path = os.path.splitext(script_file_path)[0]
     if system_script and os.path.splitext(script_file_path)[1] == '.zip':
         script_path = os.path.splitext(os.path.basename(script_file_path))[0]
@@ -294,7 +316,7 @@ def parse_script(script_name, system_script=False, workspace="Default"):
         for include_file_path in map(lambda filepath: filepath.replace('\\','/'), glob.glob(script_path + '/include/*/')):
             include_file_path = include_file_path[:-1]
             include_script_name = include_file_path.split('/')[-1]
-            include_parse_file_path = './scripts/scriptLibrary/' + workspace + '/' + os.path.basename(include_file_path) \
+            include_parse_file_path = _resolve_library_script_path(os.path.basename(include_file_path), system_script, workspace) \
                 if use_library_scripts else include_file_path
             action_rows_file_obj = open(include_parse_file_path + '/actionRows.json', 'r')
             props_file_obj = open(include_parse_file_path + '/props.json', 'r')

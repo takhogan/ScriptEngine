@@ -72,6 +72,7 @@ class ImageMatcher:
                 height=h,
                 width=w,
                 original_image=detectObject['input_obj']['original_image'],
+                original_image_blurred=detectObject['input_obj'].get('original_image_blurred'),
                 original_height=detectObject['input_obj']['original_height'],
                 original_width=detectObject['input_obj']['original_width'],
                 score=m.score,
@@ -444,7 +445,10 @@ class ImageMatcher:
 
         # place subimage inside original image if input expression is an image
         if detectObject['input_obj']['fixed_scale'] and not input_rescaled:
-            rescaled_result_im_bgr = detectObject['input_obj']['original_image'].copy()
+            rescaled_base = detectObject['input_obj'].get('original_image_blurred')
+            if rescaled_base is None:
+                rescaled_base = detectObject['input_obj']['original_image']
+            rescaled_result_im_bgr = rescaled_base.copy()
             ix = int(input_expression_match_point_xy_absolute[0])
             iy = int(input_expression_match_point_xy_absolute[1])
             h0, w0 = int(screencap_im_bgr.shape[0]), int(screencap_im_bgr.shape[1])

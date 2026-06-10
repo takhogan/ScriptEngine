@@ -206,7 +206,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
             process_executor,
             script_start_time=start_time,
             screen_plan_server_attached=screen_plan_server_attached,
-            workspace=workspace
+            workspace=workspace,
+            system_script=system_script
         )
 
         try:

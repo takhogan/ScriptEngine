@@ -39,6 +39,7 @@ class DetectObjectHelper:
         screencap_im_bgr = None
         screencap_mask = None
         original_image = None
+        original_image_blurred = None
         match_point = (0, 0)
         original_width = 0
         original_height = 0
@@ -82,6 +83,7 @@ class DetectObjectHelper:
                     original_height = input_area["original_height"]
                     original_width = input_area["original_width"]
                     original_image = input_area["original_image"]
+                    original_image_blurred = input_area.get("original_image_blurred")
                     fixed_scale = True
 
                     mid_log = 'parsed inputExpression, found matched area and match point {}'.format(
@@ -109,6 +111,7 @@ class DetectObjectHelper:
             "original_height" : original_height,
             "original_width" : original_width,
             "original_image" : original_image,
+            "original_image_blurred" : original_image_blurred,
             "fixed_scale" : fixed_scale
         }
 
@@ -244,6 +247,7 @@ class DetectObjectHelper:
                     height=output_mask_single_channel.shape[0],
                     width=output_mask_single_channel.shape[1],
                     original_image=action['input_obj'].get('original_image'),
+                    original_image_blurred=action['input_obj'].get('original_image_blurred'),
                     original_height=action['input_obj'].get('original_height', 0),
                     original_width=action['input_obj'].get('original_width', 0),
                     score=1.0,
