@@ -170,6 +170,7 @@ class DetectSceneHelper:
                 height=floating_detect_obj["outputMask_single_channel"].shape[0],
                 width=floating_detect_obj["outputMask_single_channel"].shape[1],
                 original_image=sceneAction['input_obj']['original_image'],
+                original_image_blurred=sceneAction['input_obj'].get('original_image_blurred'),
                 original_height=sceneAction['input_obj']['original_height'],
                 original_width=sceneAction['input_obj']['original_width'],
                 score=ssim_coeff,

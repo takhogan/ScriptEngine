@@ -28,14 +28,14 @@ import sys
 
 from .helpers.detect_object_helper import DetectObjectHelper
 from .helpers.random_variable_helper import RandomVariableHelper
+from .helpers.match_merge_helper import MatchMergeHelper
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.constants.script_engine_constants import *
-from ScriptEngine.common.types import ScreenPlanImage
+from ScriptEngine.common.types import ScreenPlanImage, is_screenplan_image_result
 from ScriptEngine.common.script_engine_utils import generate_context_switch_action, sanitize_statement_input, state_eval, state_exec
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from typing import Callable, Dict, List, Tuple
 script_logger = ScriptLogger()
-
 
 
 class SystemScriptActionExecutor:
@@ -55,6 +55,7 @@ class SystemScriptActionExecutor:
         else:
             self.messaging_helper = None
             self.calendar_action_helper = None
+        self.match_merge_helper = MatchMergeHelper()
         self.easy_ocr_reader = None
 
     def _resolve_tmp_file(self, file_name):
@@ -925,12 +926,21 @@ class SystemScriptActionExecutor:
             pre_log = 'Running Code Block: \n{}'.format(action["actionData"]["codeBlock"])
             # statement_strip = sanitize_statement_input(action["actionData"]["codeBlock"], state_copy)
             script_logger.log(pre_log)
-            state_exec(action["actionData"]["codeBlock"], {}, state)
-            script_logger.get_action_log().add_post_file(
-                'text',
-                'codeBlock-log.txt',
-                pre_log + '\n' + 'Code Block completed successfully'
-            )
+            code_block = action["actionData"]["codeBlock"]
+            run_async = action["actionData"].get("async", False)
+
+            def _do_code_block():
+                state_exec(code_block, {}, state)
+                # script_logger.get_action_log().add_post_file(
+                #     'text',
+                #     'codeBlock-log.txt',
+                #     pre_log + '\n' + 'Code Block completed successfully'
+                # )
+
+            if run_async:
+                self.io_executor.submit(_do_code_block)
+            else:
+                _do_code_block()
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "fileIOAction":
             pre_log = 'FileIOAction\n' + \
@@ -1057,20 +1067,8 @@ class SystemScriptActionExecutor:
                 script_logger.log("DB provider unimplemented")
                 raise Exception(action["actionName"] + ' DB provider unimplemented')
             status = ScriptExecutionState.SUCCESS
-        elif action["actionName"] == "maskMergeAction":
-            # // leftInputExpression: string,
-            # // rightInputExpression: string,
-            # // joinLeftAt: 'angle' | 'topLeft' | 'top' | 'topRight' | 'right' | 'bottomRight' | 'bottom' | 'bottomLeft' | 'left',
-            # // joinRightAt: 'angle' | 'topLeft' | 'top' | 'topRight' | 'right' | 'bottomRight' | 'bottom' | 'bottomLeft' | 'left',
-            # // leftMaskType: 'floating' | 'fixed',
-            # // rightMaskType: 'floating' | 'fixed',
-            # // includeLeftMask: boolean,
-            # // includeRightMask: boolean,
-            # // includeSpaceBetween: boolean,
-            # // fillWith: 'horizontalOverlap' | 'verticalOverlap' | 'linear'
-            # // useFillBoundaries: 'left' | 'right' | 'both',
-            # // outputVarName: string
-            pass
+        elif action["actionName"] == "matchMergeAction":
+            status, state = self.match_merge_helper.handle_action(action, state)
         elif action["actionName"] == "userSecretManagementAction":
             if not self.screen_plan_server_attached:
                 script_logger.log('unable to send message, screen plan server not active')

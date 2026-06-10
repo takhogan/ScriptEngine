@@ -69,9 +69,10 @@ class ParallelizedScriptExecutor:
                     input_obj = system_inputs[target_system]
                 else:
                     input_obj['screencap_im_bgr'] = self.device_controller.get_device_action(target_system, 'screenshot')()
-                    original_image = cv2.copyMakeBorder(input_obj['screencap_im_bgr'].copy(), 15, 15, 15, 15,cv2.BORDER_REPLICATE)
-                    original_image = cv2.GaussianBlur(original_image, (31, 31), 0)
-                    input_obj["original_image"] = original_image[15:-15, 15:-15]
+                    input_obj["original_image"] = input_obj['screencap_im_bgr']
+                    original_image_blurred = cv2.copyMakeBorder(input_obj['screencap_im_bgr'].copy(), 15, 15, 15, 15,cv2.BORDER_REPLICATE)
+                    original_image_blurred = cv2.GaussianBlur(original_image_blurred, (31, 31), 0)
+                    input_obj["original_image_blurred"] = original_image_blurred[15:-15, 15:-15]
                     input_obj['original_height'] = input_obj['screencap_im_bgr'].shape[0]
                     input_obj['original_width'] = input_obj['screencap_im_bgr'].shape[1]
                     input_obj['fixed_scale'] = False

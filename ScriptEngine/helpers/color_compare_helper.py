@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.logging.script_logger import ScriptLogger, thread_local_storage
 script_logger = ScriptLogger()
 
 
@@ -10,14 +10,45 @@ class ColorCompareHelper:
         pass
 
     @staticmethod
-    def handle_color_compare(action):
+    def write_input_image_log(thread_script_logger, screencap_im_bgr, input_image_relative_path):
+        thread_local_storage.script_logger = thread_script_logger
+        thread_logger = ScriptLogger.get_logger()
+        cv2.imwrite(thread_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
+        thread_logger.get_action_log().set_pre_file(
+            'image',
+            input_image_relative_path
+        )
+
+    @staticmethod
+    def create_color_compare_logs(thread_script_logger, img_colors, ref_color_ints, compare_mode, color_score):
+        thread_local_storage.script_logger = thread_script_logger
+        thread_logger = ScriptLogger.get_logger()
+
+        reference_color_relative_path = 'reference_color.png'
+        ColorCompareHelper.create_color_image(
+            ref_color_ints, thread_logger.get_log_path_prefix() + reference_color_relative_path
+        )
+        thread_logger.get_action_log().add_supporting_file_reference('image', reference_color_relative_path)
+
+        results_text = (
+            'Compare Mode: {}\n'.format(compare_mode) +
+            'Input Color: {}\n'.format(img_colors) +
+            'Reference Color: {}\n'.format(ref_color_ints) +
+            'Similarity Score: {}'.format(color_score)
+        )
+        thread_logger.get_action_log().add_supporting_file('text', 'results.txt', results_text)
+
+    @staticmethod
+    def handle_color_compare(action, io_executor):
 
         screencap_im_bgr = action['input_obj']['screencap_im_bgr'].copy()
         if script_logger.get_log_level() == 'info':
-            input_image_relative_path = script_logger.get_log_header() + '-colorCompareAction-inputImage.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
-            script_logger.get_action_log().set_pre_file(
-                'image',
+            input_image_relative_path = 'colorCompareAction-inputImage.png'
+            thread_script_logger = script_logger.copy()
+            io_executor.submit(
+                ColorCompareHelper.write_input_image_log,
+                thread_script_logger,
+                screencap_im_bgr,
                 input_image_relative_path
             )
 
@@ -92,11 +123,15 @@ class ColorCompareHelper:
         )
         script_logger.get_action_log().set_post_file('image', input_color_relative_path)
 
-        reference_color_relative_path = 'reference_color.png'
-        ColorCompareHelper.create_color_image(
-            ref_color_ints, script_logger.get_log_path_prefix() + reference_color_relative_path
+        compare_logs_script_logger = script_logger.copy()
+        io_executor.submit(
+            ColorCompareHelper.create_color_compare_logs,
+            compare_logs_script_logger,
+            img_colors,
+            ref_color_ints,
+            action["actionData"]["compareMode"],
+            color_score
         )
-        script_logger.get_action_log().set_post_file('image', reference_color_relative_path)
 
         return color_score
 

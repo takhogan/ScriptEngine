@@ -40,6 +40,7 @@ _STR_KEYS = frozenset({
     'height',
     'width',
     'original_image',
+    'original_image_blurred',
     'original_height',
     'original_width',
     'score',
@@ -101,6 +102,7 @@ def _screenplan_index_to_new_image(spi: ScreenPlanImage, key: Any) -> ScreenPlan
         height=new_h,
         width=new_w,
         original_image=spi.original_image,
+        original_image_blurred=spi.original_image_blurred,
         original_height=spi.original_height,
         original_width=spi.original_width,
         score=spi.score,
@@ -141,7 +143,7 @@ def _spatial_hw_swapped(axes: tuple[int, ...]) -> bool:
 class ScreenPlanImage:
     """Structured detect-object result exposed to ScreenPlan scripts as a dict-like image handle.
 
-    Image payloads (``matched_area``, ``original_image``) are OpenCV ``cv2`` images: ``np.ndarray`` values in the
+    Image payloads (``matched_area``, ``original_image``, ``original_image_blurred``) are OpenCV ``cv2`` images: ``np.ndarray`` values in the
     usual layout (height × width × channels for color; typically BGR when three channels).
 
     **Type reference**
@@ -153,7 +155,8 @@ class ScreenPlanImage:
     - ``output_mask`` (``np.ndarray``): Binary or label mask aligned with ``matched_area`` spatial layout.
     - ``matched_area`` (``np.ndarray``): Cropped ``cv2`` image region, the primary array payload.
     - ``height`` / ``width`` (``int``): Extents of ``matched_area`` along spatial axes (rows / columns).
-    - ``original_image`` (``np.ndarray | None``): Full-frame ``cv2`` image when available; may be ``None`` if not retained.
+    - ``original_image`` (``np.ndarray | None``): Full-frame unblurred ``cv2`` image when available; may be ``None`` if not retained.
+    - ``original_image_blurred`` (``np.ndarray | None``): Blurred copy of the full frame, retained for logging/visualization; may be ``None``.
     - ``original_height`` / ``original_width`` (``int``): Size of ``original_image`` when present.
     - ``score`` (``float``): Template or detector confidence score.
     - ``n_matches`` (``int``): Number of matches (default ``1`` for a single crop).
@@ -187,6 +190,7 @@ class ScreenPlanImage:
     height: int
     width: int
     original_image: np.ndarray | None = None
+    original_image_blurred: np.ndarray | None = None
     original_height: int = 0
     original_width: int = 0
     score: float = 0.0
@@ -224,6 +228,7 @@ class ScreenPlanImage:
             height=self.height,
             width=self.width,
             original_image=None if self.original_image is None else self.original_image.copy(),
+            original_image_blurred=None if self.original_image_blurred is None else self.original_image_blurred.copy(),
             original_height=self.original_height,
             original_width=self.original_width,
             score=self.score,
@@ -270,6 +275,7 @@ class ScreenPlanImage:
             height=self.height,
             width=self.width,
             original_image=self.original_image,
+            original_image_blurred=self.original_image_blurred,
             original_height=self.original_height,
             original_width=self.original_width,
             score=self.score,
@@ -300,6 +306,7 @@ class ScreenPlanImage:
             height=nh,
             width=nw,
             original_image=self.original_image,
+            original_image_blurred=self.original_image_blurred,
             original_height=self.original_height,
             original_width=self.original_width,
             score=self.score,
@@ -337,7 +344,7 @@ class ScreenPlanImage:
             self.n_matches = value
         elif key == 'input_type':
             self.input_type = value
-        elif key in ('original_image', 'original_height', 'original_width'):
+        elif key in ('original_image', 'original_image_blurred', 'original_height', 'original_width'):
             setattr(self, key, value)
         else:
             raise KeyError(key)
