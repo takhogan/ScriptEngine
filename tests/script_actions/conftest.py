@@ -10,6 +10,7 @@ from ScriptEngine.system_script_action_executor import SystemScriptActionExecuto
 from ScriptEngine.common.enums import ScriptExecutionState
 import ScriptEngine.script_action_executor as sae_mod
 import ScriptEngine.system_script_action_executor as ssae_mod
+import ScriptEngine.helpers.image_to_text_action_helper as image_to_text_action_helper_mod
 
 
 class FakeActionLog:
@@ -103,6 +104,7 @@ def device_executor(monkeypatch):
 def system_executor(monkeypatch):
     logger = FakeLogger()
     monkeypatch.setattr(ssae_mod, "script_logger", logger)
+    monkeypatch.setattr(image_to_text_action_helper_mod, "script_logger", logger)
     io = FakeIOExecutor()
     executor = SystemScriptActionExecutor(
         base_script_name="script",
