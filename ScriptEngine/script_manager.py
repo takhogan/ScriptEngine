@@ -196,7 +196,9 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
                 main_script.context["script_counter"],
                 script_logger.get_action_log()
             )
-            script_logger.get_action_log().add_supporting_file_reference('text', 'global-stdout.txt', log_header=False)
+            # force keeps the global run log as a supporting file even at error
+            # level, where supporting artifacts are otherwise dropped.
+            script_logger.get_action_log().add_supporting_file_reference('text', 'global-stdout.txt', log_header=False, force=True)
             if system_script:
                 handle_result = SystemScriptHandler.handle_system_script(device_controller, script_name, {})
                 if handle_result == "return":
