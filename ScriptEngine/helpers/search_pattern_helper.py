@@ -39,7 +39,7 @@ class SearchPatternHelper:
                 delta_displacement = truncnorm.rvs(0.05, max_displacement, loc=max_displacement/2, scale=max_displacement/3)
                 new_theta = (math.sqrt(2) * math.sqrt(
                     2 * math.pi * (displacement + delta_displacement) - 1)) / math.sqrt(a)
-                script_logger.log('new_theta ', new_theta)
+                script_logger.log('new_theta ', new_theta, level='debug')
                 new_r = direction * a * new_theta / (2 * math.pi)
                 return new_r * math.cos(new_theta), new_r * math.sin(new_theta), displacement + delta_displacement
 
@@ -66,10 +66,10 @@ class SearchPatternHelper:
             # pick an angle from 0 to 90, do a grid search, randomize movement length
             # need to figure out when you've hit the edge, set a threshold for change in image, don't do it with pure pixel values, use keypoint displacement or something, use stitching!
             #once you hit an edge need to go in another direction
-            script_logger.log('search pattern not implemented ' + search_pattern)
+            script_logger.log('search pattern not implemented ' + search_pattern, level='error')
             exit(0)
         else:
-            script_logger.log('search pattern not implemented ' + search_pattern)
+            script_logger.log('search pattern not implemented ' + search_pattern, level='error')
             exit(0)
 
 
@@ -92,7 +92,7 @@ class SearchPatternHelper:
         elif pattern_obj["pattern_type"] == 'grid':
             pass
         else:
-            script_logger.log('search pattern not implemented ' + pattern_obj["pattern_type"])
+            script_logger.log('search pattern not implemented ' + pattern_obj["pattern_type"], level='error')
             exit(0)
         # delays = truncnorm.rvs(mins, maxes, loc=mean, scale=stddev) if action["actionData"]["clickCount"] > 1 else [
             # truncnorm.rvs(mins, maxes, loc=mean, scale=stddev)]

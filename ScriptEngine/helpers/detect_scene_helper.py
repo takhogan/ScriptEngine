@@ -37,7 +37,7 @@ def apply_output_mask(screencap_im_bgr, location_val, output_mask_bgr, output_cr
     mid_log = 'Applying mask to output. Output has size of {}. Output mask has size of {}'.format(
         str(match_img_bgr.shape), str(output_mask_bgr.shape)
     )
-    script_logger.log(mid_log)
+    script_logger.log(mid_log, level='debug')
     
     match_img_bgr = cv2.bitwise_and(match_img_bgr, output_mask_bgr)
     
@@ -49,7 +49,7 @@ def apply_output_mask(screencap_im_bgr, location_val, output_mask_bgr, output_cr
         match_img_bgr = match_img_bgr[output_cropping[0][1]:output_cropping[1][1],
                                       output_cropping[0][0]:output_cropping[1][0]]
         crop_log = 'Cropping masked output'
-        script_logger.log(crop_log)
+        script_logger.log(crop_log, level='debug')
     
     return match_img_bgr
 
@@ -90,18 +90,18 @@ class DetectSceneHelper:
             )
             resize_log = 'Resized input to expected size {}'.format(str(screencap_im_bgr.shape))
             pre_log += '\n' + resize_log
-            script_logger.log(resize_log)
+            script_logger.log(resize_log, level='debug')
         mid_log_1 = 'Masking input'
-        script_logger.log(mid_log_1)
+        script_logger.log(mid_log_1, level='debug')
         screencap_masked = cv2.bitwise_and(screencap_im_bgr, scene_screencap_mask)
 
         mid_log_2 = 'Performing masked MSE'
-        script_logger.log(mid_log_2)
+        script_logger.log(mid_log_2, level='debug')
 
         ssim_coeff = masked_mse(screencap_masked, screencap_compare, mask_size * 3 * 255)
 
         mid_log_3 = 'Masked MSE returned a ssim coef of {}'.format(ssim_coeff)
-        script_logger.log(mid_log_3)
+        script_logger.log(mid_log_3, level='debug')
 
         object_h,object_w = object_mask_single_channel.shape
         fixed_location_xy_relative = sceneAction["actionData"]["sceneLocation"][0]
@@ -118,7 +118,7 @@ class DetectSceneHelper:
             mid_log_5 = 'Cropping masked output'
 
         post_log = 'Final output image size is {}'.format(str(match_img_bgr.shape))
-        script_logger.log(post_log)
+        script_logger.log(post_log, level='debug')
 
         # cv2.rectangle(
         #     screencap_im_bgr,
@@ -137,7 +137,7 @@ class DetectSceneHelper:
             fixed_location_xy_relative = (fixed_location_xy_relative[0] * width_translation, fixed_location_xy_relative[1] * height_translation)
 
             post_post_log = 'Remapping scene location for resized input'
-            script_logger.log(post_post_log)
+            script_logger.log(post_post_log, level='debug')
             # script_logger.log('output shape', output_mask_single_channel.shape, (original_height, original_width))
             # output_mask_single_channel = cv2.resize(
             #     output_mask_single_channel,
@@ -145,7 +145,7 @@ class DetectSceneHelper:
             #     interpolation=cv2.INTER_AREA
             # )
         final_log = 'Matched scene at location {}'.format(str(fixed_location_xy_relative))
-        script_logger.log(final_log)
+        script_logger.log(final_log, level='debug')
 
         # When input is a crop (e.g. from a prior floatingObject), add its origin
         # so output point is in full-screen coordinates (same as floatingObject path).

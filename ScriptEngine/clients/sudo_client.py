@@ -58,7 +58,7 @@ class SudoClient:
             return self.pid
             
         except Exception as e:
-            script_logger.log(f"Error running command with elevated privileges: {e}")
+            script_logger.log(f"Error running command with elevated privileges: {e}", level='error')
             return None
 
     def terminate(self):
@@ -75,7 +75,7 @@ class SudoClient:
                     # On Unix-like systems, send SIGTERM
                     os.killpg(os.getpgid(self.pid), signal.SIGTERM)
             except Exception as e:
-                script_logger.log(f"Error terminating process: {e}")
+                script_logger.log(f"Error terminating process: {e}", level='error')
             finally:
                 self.process = None
                 self.pid = None

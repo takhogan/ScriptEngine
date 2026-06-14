@@ -48,11 +48,11 @@ class ParallelizedScriptExecutor:
     def start_processes(self, script_executor, parallel_actions):
         self.processes = {}
         parent_action_log = script_executor.parent_action_log
-        script_logger.log('CONTROL FLOW: starting parallel execution')
+        script_logger.log('CONTROL FLOW: starting parallel execution', level='error')
         # if you want to implement for other actions keep in mind you should filter here
         system_inputs = {}
         for process_index,parallel_action in enumerate(parallel_actions):
-            script_logger.log('Creating parallel process for ' + str(parallel_action["actionGroup"]))
+            script_logger.log('Creating parallel process for ' + str(parallel_action["actionGroup"]), level='debug')
             script_executor.context["script_counter"] += 1
             action_log = script_logger.configure_action_logger(parallel_action, script_executor.context["script_counter"], parent_action_log)
             parallel_action["script_logger"] = (
@@ -78,17 +78,17 @@ class ParallelizedScriptExecutor:
                     input_obj['fixed_scale'] = False
                     system_inputs[target_system] = input_obj
                 
-            script_logger.log('Generating parallel action handler for ' + str(parallel_action["actionGroup"]))
+            script_logger.log('Generating parallel action handler for ' + str(parallel_action["actionGroup"]), level='debug')
             parallel_action["input_obj"] = input_obj
             (action_handler, action_handler_args) = script_executor.handle_action(parallel_action, lazy_eval=True)
             helper = ParallelizedScriptExecutorHelper(action_handler)
-            script_logger.log('Started parallel process for ' + str(parallel_action["actionGroup"]))
+            script_logger.log('Started parallel process for ' + str(parallel_action["actionGroup"]), level='debug')
 
             future = self.process_executor.submit(
                 helper.handle_parallel_action,
                 action_handler_args
             )
 
-            script_logger.log('Parallel process submitted to pool for ' + str(parallel_action["actionGroup"]))
+            script_logger.log('Parallel process submitted to pool for ' + str(parallel_action["actionGroup"]), level='debug')
 
             self.processes[parallel_action["actionGroup"]] = future

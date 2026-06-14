@@ -17,7 +17,7 @@ class FeatureMatcher:
         kp1, des1 = orb.detectAndCompute(img1, None)
         kp2, des2 = orb.detectAndCompute(img2, None)
 
-        script_logger.log('kp1 : ', kp1, ' des1 : ', des1, ' kp2 : ', kp2, ' des2 : ', des2)
+        script_logger.log('kp1 : ', kp1, ' des1 : ', des1, ' kp2 : ', kp2, ' des2 : ', des2, level='debug')
 
         index_params = dict(algorithm=6,
                             table_number=6,
@@ -107,18 +107,18 @@ class FeatureMatcher:
             # y_coords.append(y - h)
             sizes.append(w)
 
-        script_logger.log(source_pts)
-        script_logger.log(dest_pts)
+        script_logger.log(source_pts, level='debug')
+        script_logger.log(dest_pts, level='debug')
 
         source_pts = np.array(source_pts)
         dest_pts = np.array(dest_pts)
 
         h, status = cv2.findHomography(source_pts, dest_pts)
-        script_logger.log(np.dot(h, np.array([0,0,1])))
-        script_logger.log(x_coords)
-        script_logger.log(y_coords)
-        script_logger.log(widths)
-        script_logger.log(heights)
+        script_logger.log(np.dot(h, np.array([0,0,1])), level='debug')
+        script_logger.log(x_coords, level='debug')
+        script_logger.log(y_coords, level='debug')
+        script_logger.log(widths, level='debug')
+        script_logger.log(heights, level='debug')
         # plt.plot(y_coords, widths)
         # plt.show()
         # cv2.waitKey(0)

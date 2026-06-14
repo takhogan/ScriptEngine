@@ -116,7 +116,7 @@ class MatchMergeHelper:
             action_data.get("includeRightMatch"),
             action_data.get("joinTogetherAs", "rectangle"),
         )
-        script_logger.log(pre_log)
+        script_logger.log(pre_log, level='debug')
         script_logger.get_action_log().add_pre_file('text', 'matchMergeAction-params.txt', pre_log)
         left_obj = state_eval(action_data["leftInputExpression"], {}, state)
         right_obj = state_eval(action_data["rightInputExpression"], {}, state)
@@ -126,7 +126,8 @@ class MatchMergeHelper:
         ):
             if not is_screenplan_image_result(obj):
                 script_logger.log(
-                    'matchMergeAction {} input "{}" is not a detectObject result'.format(label, expr)
+                    'matchMergeAction {} input "{}" is not a detectObject result'.format(label, expr),
+                    level='error'
                 )
                 raise ValueError(
                     'matchMergeAction {}InputExpression "{}" must evaluate to a detectObject result'.format(
@@ -290,9 +291,11 @@ class MatchMergeHelper:
         )
         state[output_var_name] = output_obj
 
-        out_image_relative_path = 'matchMergeAction-output.png'
-        cv2.imwrite(script_logger.get_log_path_prefix() + out_image_relative_path, matched_area)
-        script_logger.get_action_log().set_post_file('image', out_image_relative_path)
+        # post image feeds the log video (info+); skipped at error.
+        if script_logger.should_log('info'):
+            out_image_relative_path = 'matchMergeAction-output.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + out_image_relative_path, matched_area)
+            script_logger.get_action_log().set_post_file('image', out_image_relative_path)
         script_logger.get_action_log().set_summary(
             'merged {} and {} as {} into {}'.format(
                 action_data["leftInputExpression"],

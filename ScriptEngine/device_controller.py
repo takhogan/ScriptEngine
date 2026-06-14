@@ -144,14 +144,14 @@ class DeviceController:
             if device_key in devices_config:
                 params = devices_config[device_key]
             else:
-                script_logger.log('DEVICE CONTROLLER: device config for ', device_key, ' not found! ')
-        script_logger.log('DEVICE CONTROLLER: loading args', params)
+                script_logger.log('DEVICE CONTROLLER: device config for ', device_key, ' not found! ', level='error')
+        script_logger.log('DEVICE CONTROLLER: loading args', params, level='debug')
         return params
     
     def parse_inputs(self, inputs):
         device_key = inputs[1]
         device_type = self.device_id_to_device_type(device_key)
-        script_logger.log('DEVICE CONTROLLER: device type', device_type, device_key)
+        script_logger.log('DEVICE CONTROLLER: device type', device_type, device_key, level='debug')
         device_params = {
             'deviceId' : device_key
         }
@@ -231,7 +231,7 @@ async def process_input(device_controller: DeviceController, inputs: list):
             # Process the input in a thread pool (non-blocking for event loop)
             output = await asyncio.to_thread(device_controller.parse_inputs, inputs)
         except Exception as e:
-            script_logger.log('DEVICE CONTROLLER: error in parse_inputs', inputs, e)
+            script_logger.log('DEVICE CONTROLLER: error in parse_inputs', inputs, e, level='error')
             output = {
                 "data" : "device controller error"
             }
@@ -254,11 +254,11 @@ async def read_input(device_controller: DeviceController):
             break
         inputs = input_line.strip().split('###')
         if len(inputs) <= 2:
-            script_logger.log('DEVICE CONTROLLER PROCESS: received partial inputs ', inputs)
+            script_logger.log('DEVICE CONTROLLER PROCESS: received partial inputs ', inputs, level='debug')
             continue
         inputs = inputs[0:2] + inputs[2].split(' ')
         input_line = ''
-        script_logger.log('DEVICE CONTROLLER PROCESS: received inputs ', inputs)
+        script_logger.log('DEVICE CONTROLLER PROCESS: received inputs ', inputs, level='debug')
         if len(inputs) > 2:
             # Process input asynchronously (will queue per device automatically)
             asyncio.create_task(process_input(device_controller, inputs))

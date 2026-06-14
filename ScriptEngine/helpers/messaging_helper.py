@@ -342,7 +342,7 @@ class MessagingHelper:
         script_logger = ScriptLogger.get_logger()
         
         try:
-            script_logger.log('Creating log image for sendMessageAction')
+            script_logger.log('Creating log image for sendMessageAction', level='debug')
             
             # Create the log image using messaging_helper
             log_image = self.create_log_image(message_data, subject=subject)
@@ -357,10 +357,10 @@ class MessagingHelper:
             # Save the image
             post_image_relative_path = 'sendMessage-log.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + post_image_relative_path, image_bgr)
-            script_logger.log('Successfully created log image: ' + post_image_relative_path)
+            script_logger.log('Successfully created log image: ' + post_image_relative_path, level='debug')
             
             # Set as post file
             script_logger.get_action_log().set_post_file('image', post_image_relative_path)
         except Exception as e:
-            script_logger.log('Error creating sendMessage log image: ' + str(e))
+            script_logger.log('Error creating sendMessage log image: ' + str(e), level='error')
 

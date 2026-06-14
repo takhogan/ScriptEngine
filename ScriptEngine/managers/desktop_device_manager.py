@@ -91,7 +91,7 @@ class DesktopDeviceManager(DeviceManager):
                 self.props['height'] = self.height
                 script_logger.log('PythonHostController: script in dummy mode, initialized to input source')
                 return
-            script_logger.log('PythonHostController: Taking screenshot to initialize python host')
+            script_logger.log('PythonHostController: Taking screenshot to initialize python host', level='debug')
             host_dimensions = _input_module.size()
             # pydirectinput returns (width, height) tuple; pyautogui returns object with .width/.height
             if hasattr(host_dimensions, 'width'):
@@ -113,9 +113,9 @@ class DesktopDeviceManager(DeviceManager):
                     (not is_null(self.props['height']) and self.props['height'] != height):
                 script_logger.log('Warning: python host dims mismatch, expected : ', self.props['height'],
                                   self.props['width'],
-                                  'observed :', height, width)
+                                  'observed :', height, width, level='error')
             if self.width != self.click_width or self.height != self.click_height:
-                script_logger.log('Difference detected between screenshot dims and clickable dims, setting scale factor to {}'.format(self.click_width / self.width))
+                script_logger.log('Difference detected between screenshot dims and clickable dims, setting scale factor to {}'.format(self.click_width / self.width), level='debug')
                 self.scale_factor =  self.click_width / self.width
             self.props['width'] = width
             self.props['height'] = height
@@ -279,12 +279,12 @@ class DesktopDeviceManager(DeviceManager):
 
     def click_and_drag(self, source_x, source_y, target_x, target_y, mouse_down=True, mouse_up=True):
         self.ensure_device_initialized()
-        script_logger.log('input size', _input_module.size())
+        script_logger.log('input size', _input_module.size(), level='debug')
         script_logger.log(
             'moving from initial position {} to click and drag start {}'.format(
                 str(_input_module.position()), str((source_x, source_y))
             )
-        )
+        , level='debug')
 
         if mouse_down:
             self.mouse_down(source_x, source_y, button='left')
@@ -309,7 +309,7 @@ class DesktopDeviceManager(DeviceManager):
         
         # Look up the application path from the mapping
         if application_name not in self.app_mapping:
-            script_logger.log(f'Application "{application_name}" not found in app mapping')
+            script_logger.log(f'Application "{application_name}" not found in app mapping', level='error')
             return
         
         application_path = self.app_mapping[application_name]
@@ -321,20 +321,20 @@ class DesktopDeviceManager(DeviceManager):
                     cmd.extend(args)
                 cmd_str = ' '.join(cmd)
                 subprocess.run(cmd, check=True)
-                script_logger.log(f'Started application on Mac: {application_name} -> Command: {cmd_str}')
+                script_logger.log(f'Started application on Mac: {application_name} -> Command: {cmd_str}', level='debug')
             elif platform.system() == 'Windows':  # Windows
                 cmd = ['start', '', f'"{application_path}"']
                 if args:
                     cmd.extend(args)
                 cmd_str = ' '.join(cmd)
                 subprocess.run(['start', '', application_path] + (args if args else []), shell=True, check=True)
-                script_logger.log(f'Started application on Windows: {application_name} -> Command: {cmd_str}')
+                script_logger.log(f'Started application on Windows: {application_name} -> Command: {cmd_str}', level='debug')
             else:
-                script_logger.log(f'Unsupported platform for start_application: {platform.system()}')
+                script_logger.log(f'Unsupported platform for start_application: {platform.system()}', level='error')
         except subprocess.CalledProcessError as e:
-            script_logger.log(f'Failed to start application {application_name}: {e}')
+            script_logger.log(f'Failed to start application {application_name}: {e}', level='error')
         except Exception as e:
-            script_logger.log(f'Error starting application {application_name}: {e}')
+            script_logger.log(f'Error starting application {application_name}: {e}', level='error')
     
     def stop_application(self, application_name):
         """
@@ -352,7 +352,7 @@ class DesktopDeviceManager(DeviceManager):
         
         # Validate that the application exists in our mapping
         if application_name not in self.app_mapping:
-            script_logger.log(f'Application "{application_name}" not found in app mapping')
+            script_logger.log(f'Application "{application_name}" not found in app mapping', level='error')
             return
         
         try:
@@ -365,11 +365,11 @@ class DesktopDeviceManager(DeviceManager):
                 subprocess.run(['taskkill', '/f', '/im', f'{application_name}.exe'], check=True)
                 script_logger.log(f'Stopped application on Windows: {application_name}')
             else:
-                script_logger.log(f'Unsupported platform for stop_application: {platform.system()}')
+                script_logger.log(f'Unsupported platform for stop_application: {platform.system()}', level='error')
         except subprocess.CalledProcessError as e:
-            script_logger.log(f'Failed to stop application {application_name}: {e}')
+            script_logger.log(f'Failed to stop application {application_name}: {e}', level='error')
         except Exception as e:
-            script_logger.log(f'Error stopping application {application_name}: {e}')
+            script_logger.log(f'Error stopping application {application_name}: {e}', level='error')
     
     def list_applications(self) -> dict[str, str]:
         """
@@ -420,10 +420,10 @@ class DesktopDeviceManager(DeviceManager):
                 script_logger.log(f'Found {len(apps)} applications on Windows')
                 
             else:
-                script_logger.log(f'Unsupported platform for list_applications: {platform.system()}')
-                
+                script_logger.log(f'Unsupported platform for list_applications: {platform.system()}', level='error')
+
         except Exception as e:
-            script_logger.log(f'Error listing applications: {e}')
+            script_logger.log(f'Error listing applications: {e}', level='error')
         
         return apps
     
@@ -447,7 +447,7 @@ def parse_inputs(process_host, inputs):
         }
     elif device_action == "click":
         process_host.ensure_device_initialized()
-        script_logger.log('clicked location', inputs[3], inputs[4], flush=True)
+        script_logger.log('clicked location', inputs[3], inputs[4], flush=True, level='debug')
         process_host.click(int(float(inputs[3])), int(float(inputs[4])), 'left')
         return {
             "data" : "success"
@@ -480,16 +480,16 @@ async def read_input():
             break
         inputs = input_line.strip().split('###')
         inputs = inputs[0:2] + inputs[2].split(' ')
-        script_logger.log('PYTHON CONTROLLER PROCESS: received inputs ', inputs)
+        script_logger.log('PYTHON CONTROLLER PROCESS: received inputs ', inputs, level='debug')
         if device_key is None:
             device_key = inputs[1]
         elif device_key != inputs[1]:
-            script_logger.log('PYTHON CONTROLLER: device key mismatch ', device_key, inputs[1])
+            script_logger.log('PYTHON CONTROLLER: device key mismatch ', device_key, inputs[1], level='debug')
             continue
         if process_python_host is None:
             script_logger.set_log_file_path('./logs/{}-python-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
             script_logger.log('PYTHON CONTROLLER PROCESS: starting process for device {}'.format(device_key))
-            script_logger.log('PYTHON CONTROLLER PROCESS: processing inputs ', inputs)
+            script_logger.log('PYTHON CONTROLLER PROCESS: processing inputs ', inputs, level='debug')
             script_logger.set_log_header('{}-python-host-controller-{}-process'.format(formatted_today, device_key.replace(':', '-')))
             script_logger.set_action_log(ScriptActionLog(
                 {
@@ -514,7 +514,7 @@ async def read_input():
                 script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps(parse_inputs(process_python_host, inputs)) + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
                 script_logger.log('PYTHON CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
             except pyautogui.FailSafeException as e:
-                script_logger.log('PYTHON CONTROLLER PROCESS: fail safe exception triggered', e)
+                script_logger.log('PYTHON CONTROLLER PROCESS: fail safe exception triggered', e, level='error')
 
 async def python_controller_main():
     await asyncio.gather(read_input())

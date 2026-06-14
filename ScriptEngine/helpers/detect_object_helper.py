@@ -52,7 +52,7 @@ class DetectObjectHelper:
                 pre_log = 'input named {} not in state'.format(var_name)
             else:
                 pre_log = 'parsing inputExpression {} from state'.format(var_name)
-            script_logger.log(pre_log)
+            script_logger.log(pre_log, level='debug')
             input_area = state_eval(var_name, {}, state)
             has_input = (
                 isinstance(input_area, ScreenPlanImage)
@@ -65,7 +65,7 @@ class DetectObjectHelper:
                         var_name,
                         repr(input_area)
                     )
-                    script_logger.log(error_log)
+                    script_logger.log(error_log, level='error')
                     raise ValueError(
                         "detectObject inputExpression '{}' must evaluate to an object containing 'input_type'".format(
                             var_name
@@ -89,15 +89,15 @@ class DetectObjectHelper:
                     mid_log = 'parsed inputExpression, found matched area and match point {}'.format(
                         str(match_point)
                     )
-                    script_logger.log(mid_log)
+                    script_logger.log(mid_log, level='debug')
 
             else:
                 pre_log = 'input named {} was in state but it was blank'
-                script_logger.log(pre_log)
+                script_logger.log(pre_log, level='debug')
 
         else:
             pre_log = 'no input expression'
-            script_logger.log(pre_log)
+            script_logger.log(pre_log, level='debug')
 
         script_logger.get_action_log().add_supporting_file(
             'text',
@@ -117,7 +117,7 @@ class DetectObjectHelper:
 
     @staticmethod
     def update_update_queue(action, state, context, matches, update_queue):
-        script_logger.log('updating update queue')
+        script_logger.log('updating update queue', level='debug')
         if len(matches) > 0:
             update_update_queue_log = ''
             if str(action['actionData']['maxMatches']).isdigit():
@@ -381,42 +381,43 @@ class DetectObjectHelper:
     def create_detect_action_log_images(thread_script_logger, action, log_obj):
         thread_local_storage.script_logger = thread_script_logger
         script_logger = ScriptLogger.get_logger()
-        script_logger.log('Creating log images for action', action["actionGroup"])
+        script_logger.log('Creating log images for action', action["actionGroup"], level='debug')
 
         (screencap_im_bgr, floating_detect_obj, source_match_point) = log_obj['base']
 
         # Check if image is valid before writing
         if screencap_im_bgr is None or not isinstance(screencap_im_bgr, np.ndarray):
-            script_logger.log('Invalid input image format, skipping log image creation')
+            script_logger.log('Invalid input image format, skipping log image creation', level='error')
             return
-        
+
         if screencap_im_bgr.dtype not in [np.uint8, np.uint16]:
-            script_logger.log('input image corrupted')
+            script_logger.log('input image corrupted', level='error')
 
-        input_image_relative_path = 'detectObject-inputImage.png'
-        script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + input_image_relative_path)
-        cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
-        script_logger.log('Successfully wrote to file: ' + input_image_relative_path)
-        script_logger.get_action_log().set_pre_file(
-            'image',
-            input_image_relative_path
-        )
+        # The input (pre) image and the template image are debug-only detail;
+        # only the match-overlay post images below feed the log video.
+        if script_logger.should_log('debug'):
+            input_image_relative_path = 'detectObject-inputImage.png'
+            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + input_image_relative_path, level='debug')
+            cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screencap_im_bgr)
+            script_logger.log('Successfully wrote to file: ' + input_image_relative_path, level='debug')
+            script_logger.get_action_log().set_pre_file(
+                'image',
+                input_image_relative_path
+            )
 
-        script_logger.log('Writing template image')
+            script_logger.log('Writing template image', level='debug')
+            template_image_relative_path = 'templateImage.png'
+            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + template_image_relative_path, level='debug')
+            cv2.imwrite(
+                script_logger.get_log_path_prefix() + template_image_relative_path, floating_detect_obj["img"]
+            )
+            script_logger.log('Successfully wrote to file: ' + template_image_relative_path, level='debug')
+            script_logger.get_action_log().add_supporting_file_reference(
+                'image',
+                template_image_relative_path
+            )
 
-
-        template_image_relative_path = 'templateImage.png'
-        script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + template_image_relative_path)
-        cv2.imwrite(
-            script_logger.get_log_path_prefix() + template_image_relative_path, floating_detect_obj["img"]
-        )
-        script_logger.log('Successfully wrote to file: ' + template_image_relative_path)
-        script_logger.get_action_log().add_supporting_file_reference(
-            'image',
-            template_image_relative_path
-        )
-
-        script_logger.log('@ fixedObject is None?', log_obj['fixedObject'] is None)
+        script_logger.log('@ fixedObject is None?', log_obj['fixedObject'] is None, level='debug')
         if log_obj['fixedObject'] is not None:
             (matches, screencap_masked, fixed_detect_obj, needs_rescale) = log_obj['fixedObject']
             result_im_bgr = ImageMatcher.create_result_im(
@@ -429,22 +430,24 @@ class DetectObjectHelper:
             )
 
             matching_overlay_relative_path = 'detectScene-matchOverlayed.png'
-            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + matching_overlay_relative_path)
+            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + matching_overlay_relative_path, level='debug')
             cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
-            script_logger.log('Successfully wrote to file: ' + matching_overlay_relative_path)
+            script_logger.log('Successfully wrote to file: ' + matching_overlay_relative_path, level='debug')
             script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
 
-            masked_img_relative_path = 'detectScene-maskApplied.png'
-            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + masked_img_relative_path)
-            cv2.imwrite(script_logger.get_log_path_prefix() + masked_img_relative_path, screencap_masked)
-            script_logger.log('Successfully wrote to file: ' + masked_img_relative_path)
-            script_logger.get_action_log().add_supporting_file_reference('image', masked_img_relative_path)
+            # masked + comparison images are debug-only supporting detail.
+            if script_logger.should_log('debug'):
+                masked_img_relative_path = 'detectScene-maskApplied.png'
+                script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + masked_img_relative_path, level='debug')
+                cv2.imwrite(script_logger.get_log_path_prefix() + masked_img_relative_path, screencap_masked)
+                script_logger.log('Successfully wrote to file: ' + masked_img_relative_path, level='debug')
+                script_logger.get_action_log().add_supporting_file_reference('image', masked_img_relative_path)
 
-            comparison_img_relative_path = 'detectScene-comparisonImage.png'
-            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + comparison_img_relative_path)
-            cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, fixed_detect_obj["img"])
-            script_logger.log('Successfully wrote to file: ' + comparison_img_relative_path)
-            script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
+                comparison_img_relative_path = 'detectScene-comparisonImage.png'
+                script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + comparison_img_relative_path, level='debug')
+                cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, fixed_detect_obj["img"])
+                script_logger.log('Successfully wrote to file: ' + comparison_img_relative_path, level='debug')
+                script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
 
         if log_obj['floatingObject'] is not None:
             (
@@ -461,27 +464,31 @@ class DetectObjectHelper:
             )
 
             matching_overlay_relative_path = 'detectObject-matchOverlayed.png'
-            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + matching_overlay_relative_path)
+            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + matching_overlay_relative_path, level='debug')
             cv2.imwrite(script_logger.get_log_path_prefix() + matching_overlay_relative_path, result_im_bgr)
-            script_logger.log('Successfully wrote to file: ' + matching_overlay_relative_path)
+            script_logger.log('Successfully wrote to file: ' + matching_overlay_relative_path, level='debug')
             script_logger.get_action_log().set_post_file('image', matching_overlay_relative_path)
 
-            comparison_img_relative_path = 'detectObject-matchingHeatMap.png'
-            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + comparison_img_relative_path)
-            # Handle NaN and infinite values before conversion
-            match_result = np.nan_to_num(match_result, nan=-1.0, posinf=1.0, neginf=-1.0)
-            match_result_uint8 = ((match_result + 1) * 127.5).astype(np.uint8)
-            cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, match_result_uint8)
-            script_logger.log('Successfully wrote to file: ' + comparison_img_relative_path)
-            script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
+            # match heatmap is debug-only supporting detail.
+            if script_logger.should_log('debug'):
+                comparison_img_relative_path = 'detectObject-matchingHeatMap.png'
+                script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + comparison_img_relative_path, level='debug')
+                # Handle NaN and infinite values before conversion
+                match_result = np.nan_to_num(match_result, nan=-1.0, posinf=1.0, neginf=-1.0)
+                match_result_uint8 = ((match_result + 1) * 127.5).astype(np.uint8)
+                cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, match_result_uint8)
+                script_logger.log('Successfully wrote to file: ' + comparison_img_relative_path, level='debug')
+                script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
 
 
     @staticmethod
     def handle_detect_action_result(io_executor, detect_action_result, state, context, run_queue):
         (action, matches, log_obj) = detect_action_result
 
-        if script_logger.get_log_level() == 'info':
-            script_logger.log('DetectObjectHelper: starting detect object log thread')
+        # post overlay images feed the log video, so build them at info+ but
+        # skip the whole image thread at error level (no images at error).
+        if script_logger.should_log('info'):
+            script_logger.log('DetectObjectHelper: starting detect object log thread', level='debug')
             thread_script_logger = script_logger.copy()
             io_executor.submit(
                 DetectObjectHelper.create_detect_action_log_images,

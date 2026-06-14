@@ -31,7 +31,7 @@ class CustomProcessPool(ProcessPoolExecutor):
         # Handle any unfinished tasks
         if process_not_done:
             script_logger.log(
-                f"Timeout reached. Cancelling unfinished processes. {len(process_not_done)} processes are still active.")
+                f"Timeout reached. Cancelling unfinished processes. {len(process_not_done)} processes are still active.", level='error')
             for future in process_not_done:
                 future.cancel()
         script_logger.log('Completed shutting down process pool')

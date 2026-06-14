@@ -53,9 +53,9 @@ class ScriptActionExecutor:
             if not lazy_eval:
                 input_obj = DetectObjectHelper.get_detect_area(action, state)
                 if input_obj['screencap_im_bgr'] is None:
-                    script_logger.log('No cached screenshot or input expression, taking screenshot')
+                    script_logger.log('No cached screenshot or input expression, taking screenshot', level='info')
                     screencap_im_bgr = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'screenshot')()
-                    script_logger.log('Storing original image')
+                    script_logger.log('Storing original image', level='debug')
 
                     input_obj['screencap_im_bgr'] = screencap_im_bgr
                     input_obj["original_image"] = screencap_im_bgr
@@ -94,7 +94,7 @@ class ScriptActionExecutor:
                 self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'height'),
                 1
             )
-            script_logger.log('ADB CONTROLLER: starting draw click thread')
+            script_logger.log('ADB CONTROLLER: starting draw click thread', level='debug')
             thread_script_logger = script_logger.copy()
             self.io_executor.submit(
                 self.draw_click,
@@ -307,7 +307,7 @@ class ScriptActionExecutor:
                 status = ScriptExecutionState.SUCCESS
             else:
                 exception_text = 'log type unimplemented ' + action["actionData"]["logType"]
-                script_logger.log(exception_text)
+                script_logger.log(exception_text, level='error')
                 raise Exception(exception_text)
         # TODO: deprecated
         elif action["actionName"] == "timeAction":
@@ -348,11 +348,11 @@ class ScriptActionExecutor:
                     status = ScriptExecutionState.SUCCESS
                 else:
                     exception_text = 'Unsupported actionType: {}'.format(actionType)
-                    script_logger.log(exception_text)
+                    script_logger.log(exception_text, level='error')
                     raise Exception(exception_text)
             except Exception as e:
                 error_log = 'Error in interactApplicationAction: {}'.format(str(e))
-                script_logger.log(error_log)
+                script_logger.log(error_log, level='error')
                 status = ScriptExecutionState.FAILURE
                 post_log = error_log
 
@@ -604,13 +604,18 @@ class ScriptActionExecutor:
             # status = ScriptExecutionState.SUCCESS
         else:
             exception_text = "action unimplemented" + action["actionName"]
-            script_logger.log(exception_text)
+            script_logger.log(exception_text, level='error')
             raise Exception(exception_text)
         return action, status, state, context, run_queue, update_queue
     
     def draw_click(self, action,thread_script_logger, point_choice, point_list):
         thread_local_storage.script_logger = thread_script_logger
-        thread_script_logger.log('started draw click thread')
+        # The click-location post image feeds the log video, so it must be
+        # generated at both info and debug; only the error level (text-only,
+        # no images) skips it.
+        if thread_script_logger.get_log_level() == 'error':
+            return
+        thread_script_logger.log('started draw click thread', level='debug')
         ClickActionHelper.draw_click(
             self.device_controller.get_device_action(action['actionData']['targetSystem'], 'screenshot')(), point_choice, point_list
         )
@@ -621,7 +626,12 @@ class ScriptActionExecutor:
                             target_point, target_point_list,
                             delta_x, delta_y):
         thread_local_storage.script_logger = thread_script_logger
-        thread_script_logger.log('started draw click thread')
+        # The drag-path post image feeds the log video, so it must be generated
+        # at both info and debug; only the error level (text-only, no images)
+        # skips it.
+        if thread_script_logger.get_log_level() == 'error':
+            return
+        thread_script_logger.log('started draw click thread', level='debug')
         xmax = self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'xmax')
         ymax = self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'ymax')
         width = self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'width')

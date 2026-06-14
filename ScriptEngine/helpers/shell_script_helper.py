@@ -21,7 +21,7 @@ class ShellScriptHelper:
             str(action["actionData"]["awaitScript"]),
             cwd
         )
-        script_logger.log(pre_log_2)
+        script_logger.log(pre_log_2, level='debug')
         if action["actionData"]["openInNewWindow"]:
             if platform.system() == 'Windows' and ':' in cwd:
                 drive, path = cwd.split(':', 1)
@@ -31,7 +31,7 @@ class ShellScriptHelper:
                 run_command = f"start cmd /D {cwd} /K " + apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
 
             mid_log = 'Running command {} using os.system'.format(run_command)
-            script_logger.log(mid_log)
+            script_logger.log(mid_log, level='debug')
 
             return_code = os.system(run_command)
 
@@ -45,7 +45,7 @@ class ShellScriptHelper:
                 state[action["actionData"]["pipeOutputVarName"]],
                 state[action["actionData"]["returnCodeOutputVarName"]]
             )
-            script_logger.log(post_post_log)
+            script_logger.log(post_post_log, level='debug')
             post_log += '\n' + post_post_log
 
         elif action["actionData"]["awaitScript"]:
@@ -54,13 +54,13 @@ class ShellScriptHelper:
             mid_log = 'Running command {} using subprocess.run cwd="/", shell=True, capture_output=True'.format(
                 await_command
             )
-            script_logger.log(mid_log)
+            script_logger.log(mid_log, level='debug')
 
             outputs = subprocess.run(await_command, cwd=cwd, shell=True, capture_output=True)
 
             post_log = 'Command completed successfully'
             script_logger.log(post_log)
-            script_logger.log(outputs)
+            script_logger.log(outputs, level='debug')
             state[action["actionData"]["pipeOutputVarName"]] = outputs.stdout.decode('utf-8') + '\n' + outputs.stderr.decode('utf-8')
             state[action["actionData"]["returnCodeOutputVarName"]] = outputs.returncode
 
@@ -68,7 +68,7 @@ class ShellScriptHelper:
                 state[action["actionData"]["pipeOutputVarName"]],
                 state[action["actionData"]["returnCodeOutputVarName"]]
             )
-            script_logger.log(post_post_log)
+            script_logger.log(post_post_log, level='debug')
             post_log += '\n' + post_post_log
         else:
             process_command = apply_state_to_cmd_str(action["actionData"]["shellScript"], state)
@@ -76,7 +76,7 @@ class ShellScriptHelper:
             mid_log = 'Running command {} using subprocess.Popen cwd="/", shell=True'.format(
                 process_command
             )
-            script_logger.log(mid_log)
+            script_logger.log(mid_log, level='debug')
             proc = subprocess.Popen(process_command, cwd=cwd, shell=True)
 
             post_log = 'Command process started successfully'

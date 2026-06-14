@@ -15,42 +15,42 @@ class ImageToTextActionHelper:
 
         image_to_text_input = cv2.cvtColor(search_im.copy(), cv2.COLOR_BGR2GRAY)
         conversion_log = 'converted to grayscale'
-        script_logger.log(conversion_log)
+        script_logger.log(conversion_log, level='debug')
         pre_log += conversion_log + '\n'
 
         if action["actionData"]["increaseContrast"]:
             image_to_text_input = cv2.equalizeHist(image_to_text_input)
             conversion_log = 'increased contrast'
-            script_logger.log(conversion_log)
+            script_logger.log(conversion_log, level='debug')
             pre_log += conversion_log + '\n'
 
         if action["actionData"]["invertColors"]:
             image_to_text_input = cv2.bitwise_not(image_to_text_input)
             conversion_log = 'inverted colors'
-            script_logger.log(conversion_log)
+            script_logger.log(conversion_log, level='debug')
             pre_log += conversion_log + '\n'
 
         im_height = image_to_text_input.shape[0]
         if im_height < 50:
             image_to_text_input = cv2.resize(image_to_text_input, None, fx=int(100 / im_height), fy=int(100 / im_height), interpolation=cv2.INTER_CUBIC)
             conversion_log = 'input too small, boosted size by factor of {}'.format(int(100 / im_height))
-            script_logger.log(conversion_log)
+            script_logger.log(conversion_log, level='debug')
             pre_log += conversion_log + '\n'
         if 'blur' in action['actionData']:
             if action["actionData"]["blur"] == 'bilateralFilter':
                 image_to_text_input = cv2.bilateralFilter(image_to_text_input, 5, 75, 75)
                 conversion_log = 'applied bilateral filter'
-                script_logger.log(conversion_log)
+                script_logger.log(conversion_log, level='debug')
                 pre_log += conversion_log + '\n'
             elif action["actionData"]["blur"] == 'medianBlur':
                 image_to_text_input = cv2.medianBlur(image_to_text_input, 3)
                 conversion_log = 'applied median blur'
-                script_logger.log(conversion_log)
+                script_logger.log(conversion_log, level='debug')
                 pre_log += conversion_log + '\n'
             elif action["actionData"]["blur"] == 'gaussianBlur':
                 image_to_text_input = cv2.GaussianBlur(image_to_text_input, (5, 5), 0)
                 conversion_log = 'applied gaussian blur'
-                script_logger.log(conversion_log)
+                script_logger.log(conversion_log, level='debug')
                 pre_log += conversion_log + '\n'
         if 'binarize' in action['actionData']:
             if action["actionData"]["binarize"] == 'regular':
@@ -61,7 +61,7 @@ class ImageToTextActionHelper:
                     cv2.THRESH_BINARY + cv2.THRESH_OTSU
                 )[1]
                 conversion_log = 'applied regular binarization'
-                script_logger.log(conversion_log)
+                script_logger.log(conversion_log, level='debug')
                 pre_log += conversion_log + '\n'
             elif action["actionData"]["binarize"] == 'adaptive':
                 image_to_text_input = cv2.adaptiveThreshold(
@@ -73,7 +73,7 @@ class ImageToTextActionHelper:
                     2
                 )
                 conversion_log = 'applied adaptive binarization'
-                script_logger.log(conversion_log)
+                script_logger.log(conversion_log, level='debug')
                 pre_log += conversion_log + '\n'
         if 'makeBorder' in action['actionData'] and (
                 action['actionData']['makeBorder'] == True or
@@ -89,7 +89,7 @@ class ImageToTextActionHelper:
                 cv2.BORDER_CONSTANT, value=border_color
             )
             conversion_log = 'added border'
-            script_logger.log(conversion_log)
+            script_logger.log(conversion_log, level='debug')
             pre_log += conversion_log + '\n'
 
         return image_to_text_input, pre_log
@@ -141,7 +141,7 @@ class ImageToTextActionHelper:
                     PSM_TO_TARGET_TYPE[psm_value],
                     character_white_list if len(character_white_list) > 0 else 'none'
                 ) + ' and output was: {}'.format(output_text)
-                script_logger.log(input_result_log)
+                script_logger.log(input_result_log, level='debug')
                 inputs_log += input_result_log +'\n'
 
         post_log = ''
@@ -161,11 +161,11 @@ class ImageToTextActionHelper:
         inputs_log = ''
 
         if easy_ocr_reader is None:
-            script_logger.log('initializing easyOCR model...')
+            script_logger.log('initializing easyOCR model...', level='debug')
             easy_ocr_reader = easyocr.Reader(['en'], verbose=False)
-            script_logger.log('easyOCR model initialized')
+            script_logger.log('easyOCR model initialized', level='debug')
 
-        script_logger.log('parsing text from image...')
+        script_logger.log('parsing text from image...', level='debug')
         results = easy_ocr_reader.readtext(image_to_text_input)
 
         # Get character whitelist from action data
@@ -176,9 +176,9 @@ class ImageToTextActionHelper:
         for bbox, text, confidence in results:
             if confidence < 0.75:
                 continue
-            script_logger.log(f"Detected word: {text}")
-            script_logger.log(f"Bounding box: {bbox}")
-            script_logger.log(f"Confidence: {confidence}\n")
+            script_logger.log(f"Detected word: {text}", level='debug')
+            script_logger.log(f"Bounding box: {bbox}", level='debug')
+            script_logger.log(f"Confidence: {confidence}\n", level='debug')
             outputs[0].append(text)
 
         # Join all detected text first
@@ -188,7 +188,7 @@ class ImageToTextActionHelper:
         if len(character_white_list) > 0:
             original_output = outputs[0]
             outputs[0] = ''.join(char for char in outputs[0] if char in character_white_list)
-            script_logger.log(f"Applied character whitelist '{character_white_list}' to output: '{original_output}' -> '{outputs[0]}'")
+            script_logger.log(f"Applied character whitelist '{character_white_list}' to output: '{original_output}' -> '{outputs[0]}'", level='debug')
 
         input_results_log = 'Running easyOCR model with characterWhiteList {} and output was '.format(
             character_white_list if len(character_white_list) > 0 else 'none'
@@ -200,9 +200,11 @@ class ImageToTextActionHelper:
     @staticmethod
     def handle_image_to_text(action, input_obj, state, io_executor, easy_ocr_reader):
         search_im = input_obj['screencap_im_bgr']
-        pre_image_relative_path = 'imageToTextAction-raw-input.png'
-        cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, search_im)
-        script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
+        # raw input (pre) image is debug-only detail.
+        if script_logger.should_log('debug'):
+            pre_image_relative_path = 'imageToTextAction-raw-input.png'
+            cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, search_im)
+            script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
 
         image_to_text_input, pre_log = ImageToTextActionHelper.preprocess_image(
             action, search_im
@@ -240,15 +242,17 @@ class ImageToTextActionHelper:
             summary_text = extracted_text
         script_logger.get_action_log().set_summary("extracted text: '{}'".format(summary_text))
 
-        parsed_input_relative_path = 'imageToTextAction-parsed-input.png'
-        parsed_input_script_logger = script_logger.copy()
-        io_executor.submit(
-            ImageToTextActionHelper.create_parsed_input_post_image,
-            parsed_input_script_logger,
-            image_to_text_input.copy(),
-            extracted_text,
-            parsed_input_relative_path
-        )
+        # parsed-input post image feeds the log video (info+); skipped at error.
+        if script_logger.should_log('info'):
+            parsed_input_relative_path = 'imageToTextAction-parsed-input.png'
+            parsed_input_script_logger = script_logger.copy()
+            io_executor.submit(
+                ImageToTextActionHelper.create_parsed_input_post_image,
+                parsed_input_script_logger,
+                image_to_text_input.copy(),
+                extracted_text,
+                parsed_input_relative_path
+            )
 
         return easy_ocr_reader
 
@@ -297,4 +301,4 @@ class ImageToTextActionHelper:
             cv2.imwrite(thread_logger.get_log_path_prefix() + parsed_input_relative_path, overlay_im)
             thread_logger.get_action_log().set_post_file('image', parsed_input_relative_path)
         except Exception as e:
-            thread_logger.log('Error creating imageToTextAction parsed input image: ' + str(e))
+            thread_logger.log('Error creating imageToTextAction parsed input image: ' + str(e), level='error')

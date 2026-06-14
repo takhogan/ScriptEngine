@@ -45,7 +45,7 @@ class IOSDeviceManager(DeviceManager):
             raise RuntimeError("No iOS devices found")
             
         device = rsds[0]
-        script_logger.log("Device info:", device.product_version, type(device))
+        script_logger.log("Device info:", device.product_version, type(device), level='debug')
         self.lockdown = device
         # self.connection = device.start_lockdown_developer_service('com.apple.mobile.screenshotr')
         # for entry in OsTraceService(device).syslog():

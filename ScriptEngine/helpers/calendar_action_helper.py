@@ -43,7 +43,7 @@ class CalendarActionHelper:
             return formatted.replace('+00:00', 'Z')
         else:
             # If it's not a datetime object, log a warning and return None
-            script_logger.log(f'Warning: Expected datetime object, got {type(date_input)}')
+            script_logger.log(f'Warning: Expected datetime object, got {type(date_input)}', level='error')
             return None
 
     def handle_action(self, action: Dict, state: Dict) -> Tuple[ScriptExecutionState, Dict]:
@@ -65,7 +65,7 @@ class CalendarActionHelper:
         elif calendar_action_type == "list":
             return self._handle_list_action(action_data, state)
         else:
-            script_logger.log(f'Unknown calendarActionType: {calendar_action_type}')
+            script_logger.log(f'Unknown calendarActionType: {calendar_action_type}', level='error')
             script_logger.get_action_log().add_post_file(
                 'text',
                 'calendarAction-error.txt',

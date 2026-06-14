@@ -131,7 +131,7 @@ script_logger = ScriptLogger()
 
 class ADBDeviceManager(DeviceManager):
     def __init__(self, props, adb_args, input_source=None):
-        script_logger.log('Configuring ADB with adb_args', adb_args)
+        script_logger.log('Configuring ADB with adb_args', adb_args, level='info')
         self.stop_command_gather = False
         self.search_pattern_helper = SearchPatternHelper()
         self.status = 'uninitialized'
@@ -192,10 +192,10 @@ class ADBDeviceManager(DeviceManager):
                     }
                 }, {}, {})
             except Exception as e:
-                script_logger.log('ADB HOST CONTROLLER: exception', e)
+                script_logger.log('ADB HOST CONTROLLER: exception', e, level='error')
                 status = ScriptExecutionState.FAILURE
             if status == ScriptExecutionState.FAILURE:
-                script_logger.log('ADB HOST CONTROLLER: adb configuration failed')
+                script_logger.log('ADB HOST CONTROLLER: adb configuration failed', level='error')
                 raise Exception('ADB configuration failed')
     
     def configure_adb(self, configurationAction, state, context):
@@ -207,7 +207,7 @@ class ADBDeviceManager(DeviceManager):
         # Extract IP from actionData if type is adb
         if self.emulator_type == 'adb' and configurationAction['actionData'].get('adbIp') is not None:
             self.adb_ip = configurationAction['actionData']['adbIp']
-            script_logger.log('ADB CONTROLLER: using IP from adb_args:', self.adb_ip)
+            script_logger.log('ADB CONTROLLER: using IP from adb_args:', self.adb_ip, level='debug')
 
         if configurationAction['actionData']["emulatorPath"] is not None:
             emulator_path = state_eval(configurationAction['actionData']["emulatorPath"], {}, state)
@@ -238,7 +238,7 @@ class ADBDeviceManager(DeviceManager):
 
         if configurationAction['actionData']["adbPath"] is not None:
             adb_path = state_eval(configurationAction['actionData']["adbPath"], {}, state)
-            script_logger.log(f"loading adb path from adb args {adb_path}")
+            script_logger.log(f"loading adb path from adb args {adb_path}", level='debug')
             self.adb_path = adb_path
         else:
             adb_path = None
@@ -251,11 +251,11 @@ class ADBDeviceManager(DeviceManager):
 
                 if result.returncode == 0:
                     adb_path = result.stdout.decode().strip()
-                    script_logger.log(f"adb found in path at location: {adb_path}")
+                    script_logger.log(f"adb found in path at location: {adb_path}", level='debug')
                 else:
-                    script_logger.log("adb not found in PATH")
+                    script_logger.log("adb not found in PATH", level='error')
             except Exception as e:
-                script_logger.log("adb not found in PATH", e)
+                script_logger.log("adb not found in PATH", e, level='error')
                 pass
             if adb_path is not None:
                 self.adb_path = adb_path
@@ -279,7 +279,7 @@ class ADBDeviceManager(DeviceManager):
                 else:
                     raise Exception(f"Unsupported OS: {os_name}")
                 if os.path.exists(adb_path):
-                    script_logger.log(f'configuring adb path, found adb at location {adb_path}')
+                    script_logger.log(f'configuring adb path, found adb at location {adb_path}', level='debug')
                 else:
                     raise Exception('Failed to find adb command path')
                 self.adb_path = adb_path
@@ -345,7 +345,7 @@ class ADBDeviceManager(DeviceManager):
         full_args = [self.adb_path, '-s', self.full_ip] + args
         
         try:
-            script_logger.log(f'ADBDeviceManager: running command: {" ".join(full_args)}')
+            script_logger.log(f'ADBDeviceManager: running command: {" ".join(full_args)}', level='debug')
             
             result = subprocess.run(
                 full_args,
@@ -356,21 +356,21 @@ class ADBDeviceManager(DeviceManager):
             )
             
             if result.returncode == 0:
-                script_logger.log(f'ADBDeviceManager: command succeeded')
+                script_logger.log(f'ADBDeviceManager: command succeeded', level='debug')
             else:
-                script_logger.log(f'ADBDeviceManager: command failed with return code {result.returncode}')
+                script_logger.log(f'ADBDeviceManager: command failed with return code {result.returncode}', level='error')
                 if capture_output and result.stderr:
-                    script_logger.log(f'ADBDeviceManager: stderr: {result.stderr.decode()}')
+                    script_logger.log(f'ADBDeviceManager: stderr: {result.stderr.decode()}', level='debug')
             
             return result
             
         except subprocess.TimeoutExpired as e:
-            script_logger.log(f'ADBDeviceManager: command timed out after {timeout}s: {" ".join(full_args)}')
+            script_logger.log(f'ADBDeviceManager: command timed out after {timeout}s: {" ".join(full_args)}', level='error')
             if retry_on_timeout:
                 self.adb_run(args, timeout=timeout, capture_output=capture_output, cwd=cwd, retry_on_timeout=False, **kwargs)
             raise UnidentifiedImageError()
         except Exception as e:
-            script_logger.log(f'ADBDeviceManager: error running command {" ".join(full_args)}: {e}')
+            script_logger.log(f'ADBDeviceManager: error running command {" ".join(full_args)}: {e}', level='error')
             return None
 
     def adb_popen(self, args, timeout=15, cwd="/", retry_on_timeout=True, **kwargs):
@@ -402,39 +402,39 @@ class ADBDeviceManager(DeviceManager):
         }
         
         try:
-            script_logger.log(f'ADBDeviceManager: running popen command: {" ".join(full_args)}')
+            script_logger.log(f'ADBDeviceManager: running popen command: {" ".join(full_args)}', level='debug')
             
             process = subprocess.Popen(full_args, **popen_kwargs)
             stdout, stderr = process.communicate(timeout=timeout)
             
             if process.returncode != 0:
-                script_logger.log(f"Command failed with return code {process.returncode}")
-                script_logger.log(f"Error output: {stderr.decode('utf-8')}")
+                script_logger.log(f"Command failed with return code {process.returncode}", level='error')
+                script_logger.log(f"Error output: {stderr.decode('utf-8')}", level='debug')
                 raise UnidentifiedImageError()
             else:
-                script_logger.log("Command executed successfully.")
+                script_logger.log("Command executed successfully.", level='debug')
             
             return stdout, stderr, process.returncode
             
         except subprocess.TimeoutExpired:
-            script_logger.log(f'ADBDeviceManager: command timed out after {timeout}s: {" ".join(full_args)}')
+            script_logger.log(f'ADBDeviceManager: command timed out after {timeout}s: {" ".join(full_args)}', level='error')
             try:
                 stdout, stderr = process.communicate(timeout=10)
                 process.kill()
-                script_logger.log(stdout.decode('utf-8', errors='ignore'))
+                script_logger.log(stdout.decode('utf-8', errors='ignore'), level='debug')
             except:
                 pass
             if retry_on_timeout:
                 self.adb_popen(args, timeout=timeout, cwd=cwd, retry_on_timeout=False, **kwargs)
             raise UnidentifiedImageError()
         except Exception as e:
-            script_logger.log(f'ADBDeviceManager: error running popen command {" ".join(full_args)}: {e}')
+            script_logger.log(f'ADBDeviceManager: error running popen command {" ".join(full_args)}: {e}', level='error')
             raise UnidentifiedImageError()
 
     def get_device_name_to_emulator_name_mapping(self):
         script_logger = ScriptLogger.get_logger()
         device_list = self.get_device_list_output()
-        script_logger.log('device_list', device_list)
+        script_logger.log('device_list', device_list, level='debug')
         devices = {}
 
         for line in device_list:  # Skip the first line (header)
@@ -451,7 +451,7 @@ class ADBDeviceManager(DeviceManager):
                         script_logger.log('device name matched', result)
                         devices[result] = device_id
                     else:
-                        script_logger.log('device name fetch failed: ', result)
+                        script_logger.log('device name fetch failed: ', result, level='error')
         return devices
 
     def _test_adb_port(self, device_ip, port):
@@ -477,7 +477,7 @@ class ADBDeviceManager(DeviceManager):
             devices_output = self.get_device_list_output()
             for device_line in devices_output:
                 if test_ip in device_line and 'device' in device_line and 'offline' not in device_line:
-                    script_logger.log(f'ADB CONTROLLER: found active device on port {port_str}')
+                    script_logger.log(f'ADB CONTROLLER: found active device on port {port_str}', level='debug')
                     return port_str
             # Disconnect if connection was made but device is not active
             safe_subprocess_run(
@@ -486,7 +486,7 @@ class ADBDeviceManager(DeviceManager):
                 capture_output=True
             )
         except Exception as e:
-            script_logger.log(f'ADB CONTROLLER: error testing port {port_str}: {e}')
+            script_logger.log(f'ADB CONTROLLER: error testing port {port_str}: {e}', level='error')
         return None
 
     def detect_adb_port(self):
@@ -513,7 +513,7 @@ class ADBDeviceManager(DeviceManager):
         elif self.emulator_type == 'adb':
             # Use adb_ip which should be set from adb_args if type is adb
             device_ip = self.adb_ip
-            script_logger.log('ADB CONTROLLER: scanning ports on device IP:', device_ip)
+            script_logger.log('ADB CONTROLLER: scanning ports on device IP:', device_ip, level='debug')
             
             # For real Android devices:
             # - Android 10 and earlier: typically use port 5555
@@ -524,17 +524,17 @@ class ADBDeviceManager(DeviceManager):
             
             # First, try the specified port if it's not "auto"
             if og_port and og_port != 'auto':
-                script_logger.log(f'ADB CONTROLLER: checking specified port {og_port} first')
+                script_logger.log(f'ADB CONTROLLER: checking specified port {og_port} first', level='debug')
                 found_port = self._test_adb_port(device_ip, og_port)
             
             # If specified port didn't work, try port 5555 for older Android devices (quick check)
             if not found_port:
-                script_logger.log('ADB CONTROLLER: checking port 5555 for older Android devices')
+                script_logger.log('ADB CONTROLLER: checking port 5555 for older Android devices', level='debug')
                 found_port = self._test_adb_port(device_ip, '5555')
             
             # If port 5555 didn't work, use nmap to scan for open ports in Wireless Debugging range
             if not found_port:
-                script_logger.log('ADB CONTROLLER: port 5555 not found, scanning Wireless Debugging range (30000-45000) with nmap')
+                script_logger.log('ADB CONTROLLER: port 5555 not found, scanning Wireless Debugging range (30000-45000) with nmap', level='debug')
                 
                 # Check if nmap is available
                 nmap_available = False
@@ -542,16 +542,16 @@ class ADBDeviceManager(DeviceManager):
                     nmap_check = safe_subprocess_run(['nmap', '--version'], timeout=5, capture_output=True)
                     if nmap_check.returncode == 0:
                         nmap_available = True
-                        script_logger.log('ADB CONTROLLER: nmap is available')
+                        script_logger.log('ADB CONTROLLER: nmap is available', level='debug')
                     else:
-                        script_logger.log('ADB CONTROLLER: nmap check failed')
+                        script_logger.log('ADB CONTROLLER: nmap check failed', level='debug')
                 except Exception as e:
-                    script_logger.log(f'ADB CONTROLLER: nmap not found: {e}')
+                    script_logger.log(f'ADB CONTROLLER: nmap not found: {e}', level='error')
                 
                 if nmap_available:
                     # Use nmap to scan for open ports in the Wireless Debugging range
                     try:
-                        script_logger.log(f'ADB CONTROLLER: running nmap scan on {device_ip} ports 30000-45000')
+                        script_logger.log(f'ADB CONTROLLER: running nmap scan on {device_ip} ports 30000-45000', level='debug')
                         nmap_result = safe_subprocess_run(
                             ['nmap', '-p', '30000-45000', '--open', device_ip],
                             timeout=60,  # nmap scan can take a while
@@ -574,12 +574,12 @@ class ADBDeviceManager(DeviceManager):
                                     if 30000 <= port <= 45000:
                                         open_ports.append(port)
                             
-                            script_logger.log(f'ADB CONTROLLER: nmap found {len(open_ports)} open ports: {open_ports}')
+                            script_logger.log(f'ADB CONTROLLER: nmap found {len(open_ports)} open ports: {open_ports}', level='debug')
                             
                             # Try adb connect on each open port found by nmap
                             for port in open_ports:
                                 test_ip = f'{device_ip}:{port}'
-                                script_logger.log(f'ADB CONTROLLER: trying adb connect on port {port}')
+                                script_logger.log(f'ADB CONTROLLER: trying adb connect on port {port}', level='debug')
                                 try:
                                     connect_result = safe_subprocess_run(
                                         [self.adb_path, 'connect', test_ip],
@@ -595,7 +595,7 @@ class ADBDeviceManager(DeviceManager):
                                             # Update port and full_ip immediately when found
                                             self.adb_port = found_port
                                             self.full_ip = f'{device_ip}:{found_port}'
-                                            script_logger.log(f'ADB CONTROLLER: found active ADB device on port {port}, updated adb_port to {found_port} and full_ip to {self.full_ip}')
+                                            script_logger.log(f'ADB CONTROLLER: found active ADB device on port {port}, updated adb_port to {found_port} and full_ip to {self.full_ip}', level='debug')
                                             break
                                     
                                     if found_port:
@@ -608,28 +608,28 @@ class ADBDeviceManager(DeviceManager):
                                             capture_output=True
                                         )
                                 except Exception as e:
-                                    script_logger.log(f'ADB CONTROLLER: error testing port {port}: {e}')
+                                    script_logger.log(f'ADB CONTROLLER: error testing port {port}: {e}', level='error')
                                     continue
                         else:
-                            script_logger.log(f'ADB CONTROLLER: nmap scan failed with return code {nmap_result.returncode}')
+                            script_logger.log(f'ADB CONTROLLER: nmap scan failed with return code {nmap_result.returncode}', level='error')
                     except Exception as e:
-                        script_logger.log(f'ADB CONTROLLER: error running nmap scan: {e}')
+                        script_logger.log(f'ADB CONTROLLER: error running nmap scan: {e}', level='error')
                 else:
-                    script_logger.log('ADB CONTROLLER: nmap not available, cannot scan Wireless Debugging port range')
-                    script_logger.log('ADB CONTROLLER: please install nmap or manually specify the ADB port')
+                    script_logger.log('ADB CONTROLLER: nmap not available, cannot scan Wireless Debugging port range', level='error')
+                    script_logger.log('ADB CONTROLLER: please install nmap or manually specify the ADB port', level='error')
                     raise Exception('ADB CONTROLLER: nmap not available and adb port unavailable, please install nmap or manually specify the ADB port')
             
             if found_port:
                 self.adb_port = found_port
                 self.full_ip = f'{device_ip}:{found_port}'
-                script_logger.log(f'ADB CONTROLLER: successfully detected ADB port {found_port} on {device_ip}')
+                script_logger.log(f'ADB CONTROLLER: successfully detected ADB port {found_port} on {device_ip}', level='error')
             else:
                 ports_tried = []
                 if og_port and og_port != 'auto':
                     ports_tried.append(f'specified port {og_port}')
                 ports_tried.append('port 5555')
                 ports_tried.append('Wireless Debugging range (30000-49999)')
-                script_logger.log(f'ADB CONTROLLER: unable to find ADB port on {device_ip} after trying {", ".join(ports_tried)}')
+                script_logger.log(f'ADB CONTROLLER: unable to find ADB port on {device_ip} after trying {", ".join(ports_tried)}', level='error')
         else:
             raise Exception('Unsupported emulator type: ' + self.emulator_type)
         if self.adb_port != 'auto':
@@ -639,7 +639,7 @@ class ADBDeviceManager(DeviceManager):
                 self.full_ip
             ))
         else:
-            script_logger.log('ADB CONTROLLER: unable to detect adb port for ' + self.device_name)
+            script_logger.log('ADB CONTROLLER: unable to detect adb port for ' + self.device_name, level='error')
 
 
 
@@ -686,30 +686,31 @@ class ADBDeviceManager(DeviceManager):
             while True:
                 output = start_device_process.stdout.readline().decode().strip().lower()  # Read the output line-by-line
                 if output:
-                    script_logger.log(output)  # Optionally print each line for logging purposes
+                    script_logger.log(output, level='debug')  # Optionally print each line for logging purposes
 
                 if "boot completed" in output or "successfully loaded snapshot" in output:
-                    script_logger.log("Emulator started successfully!")
+                    script_logger.log("Emulator started successfully!", level='error')
                     break
 
                 if time.time() - start_time > timeout:
-                    script_logger.log("Emulator start timed out.")
+                    script_logger.log("Emulator start timed out.", level='error')
                     break
 
                 # Check if the process has exited (i.e., poll() returns a non-None value)
                 if start_device_process.poll() is not None:
-                    script_logger.log("Emulator process exited prematurely.")
+                    script_logger.log("Emulator process exited prematurely.", level='error')
                     break
         elif self.emulator_type == 'adb':
             script_logger.log('ADB CONTROLLER: start device for adb emulator type not supported, please manually start the device')
         else:
-            script_logger.log('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported')
+            script_logger.log('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported', level='error')
             return
         script_logger.log(
             'ADB CONTROLLER: started device',
             self.device_name, 'with command',
             start_device_command,
-            'PID:', start_device_process.pid
+            'PID:', start_device_process.pid,
+            level='error'
         )
 
     def stop_device(self):
@@ -727,7 +728,7 @@ class ADBDeviceManager(DeviceManager):
                 ))
                 self.window_name = instance_window_name
                 stop_device_command = ['taskkill', '/fi', f'WINDOWTITLE eq {self.window_name}', '/IM', 'HD-Player.exe', '/F']
-                script_logger.log('ADB CONTROLLER: stopping device', self.device_name, 'with command', stop_device_command)
+                script_logger.log('ADB CONTROLLER: stopping device', self.device_name, 'with command', stop_device_command, level='error')
                 stop_device_process = safe_subprocess_run(
                     stop_device_command,
                     cwd="/",
@@ -743,7 +744,8 @@ class ADBDeviceManager(DeviceManager):
                     stop_device_process.returncode,
                     'stderr:',
                     stop_device_process.stderr.decode() if stop_device_process.stderr else None,
-                    stop_device_process
+                    stop_device_process,
+                    level='error'
                 )
 
                 stop_device_process = self.adb_run(['emu', 'kill'], timeout=15)
@@ -756,13 +758,14 @@ class ADBDeviceManager(DeviceManager):
                     stop_device_process.returncode if stop_device_process else None,
                     'stderr:',
                     stop_device_process.stderr.decode() if stop_device_process and stop_device_process.stderr else None,
-                    stop_device_process
+                    stop_device_process,
+                    level='error'
                 )
 
                 device_list = self.get_device_list_output()
-                script_logger.log('ADB CONTROLLER: device list', device_list)
+                script_logger.log('ADB CONTROLLER: device list', device_list, level='debug')
 
-                script_logger.log('ADB CONTROLLER: stopping adb instance', self.device_name)
+                script_logger.log('ADB CONTROLLER: stopping adb instance', self.device_name, level='error')
     
             else:
                 raise Exception('OS and emulator type combination not supported ' + platform.system() + '-' + self.emulator_type)
@@ -780,10 +783,11 @@ class ADBDeviceManager(DeviceManager):
                     stop_device_process.returncode if stop_device_process else None,
                     'stderr:',
                     stop_device_process.stderr.decode() if stop_device_process and stop_device_process.stderr else None,
-                    stop_device_process
+                    stop_device_process,
+                    level='error'
                 )
             else:
-                script_logger.log('ADB CONTROLLER: unable to run command emu kill, device not active' + self.device_name)
+                script_logger.log('ADB CONTROLLER: unable to run command emu kill, device not active' + self.device_name, level='error')
         elif self.emulator_type == 'adb':
             script_logger.log('ADB CONTROLLER: stop device for adb emulator type not supported, please manually stop the device')
         else:
@@ -824,10 +828,10 @@ class ADBDeviceManager(DeviceManager):
 
         if surface_orientation_match:
             surface_orientation = int(surface_orientation_match.group(0))
-            script_logger.log('screen_orientation', surface_orientation)
+            script_logger.log('screen_orientation', surface_orientation, level='debug')
         else:
             surface_orientation = 0
-            script_logger.log('Error: surface orientation not found, setting to 0')
+            script_logger.log('Error: surface orientation not found, setting to 0', level='error')
 
         self.screen_orientation = surface_orientation
         return self.screen_orientation
@@ -883,18 +887,18 @@ class ADBDeviceManager(DeviceManager):
 
 
                     while not check_for_window(instance_window_name):
-                        script_logger.log('ADB CONTROLLER: window {} not found, sleeping for 5 seconds'.format(instance_window_name))
+                        script_logger.log('ADB CONTROLLER: window {} not found, sleeping for 5 seconds'.format(instance_window_name), level='debug')
                         time.sleep(5)
                         window_attempts += 1
                         if window_attempts > max_window_attempts:
-                            script_logger.log('ADB CONTROLLER: window {} not found and exceeded max attempts'.format(instance_window_name))
+                            script_logger.log('ADB CONTROLLER: window {} not found and exceeded max attempts'.format(instance_window_name), level='error')
                             raise Exception('ADB connection failed')
 
                     self.detect_adb_port()
 
                     # state['ADB_PORT'] = self.adb_port
-            script_logger.log('ADB CONTROLLER: initializing/reinitializing adb')
-            script_logger.log('ADB PATH : ', self.adb_path)
+            script_logger.log('ADB CONTROLLER: initializing/reinitializing adb', level='info')
+            script_logger.log('ADB PATH : ', self.adb_path, level='debug')
 
 
             devices_output = self.get_device_list_output()
@@ -911,7 +915,7 @@ class ADBDeviceManager(DeviceManager):
             ) for devices_output_line in devices_output)
 
             if not emulator_active:
-                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds')
+                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 30 seconds', level='error')
                 self.restart_adb()
                 devices_output = self.get_device_list_output()
                 emulator_active = any((
@@ -920,11 +924,11 @@ class ADBDeviceManager(DeviceManager):
 
             while not emulator_active:
                 if adb_attempts > max_adb_attempts:
-                    script_logger.log('ADB CONTROLLER: adb connection timed out ')
+                    script_logger.log('ADB CONTROLLER: adb connection timed out ', level='error')
                     raise Exception('ADB connection failed')
                 else:
                     adb_attempts += 1
-                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 15 seconds')
+                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 15 seconds', level='error')
                 self.restart_adb()
                 time.sleep(5)
                 devices_output = self.get_device_list_output()
@@ -939,7 +943,7 @@ class ADBDeviceManager(DeviceManager):
                 emulator_active = True
                 screencap_succesful = True
             except UnidentifiedImageError:
-                script_logger.log('ADB CONTROLLER: Scrrencap Failed, trying again in 15 seconds')
+                script_logger.log('ADB CONTROLLER: Scrrencap Failed, trying again in 15 seconds', level='error')
                 self.restart_adb()
                 devices_output = self.get_device_list_output()
                 emulator_active = any((
@@ -947,7 +951,7 @@ class ADBDeviceManager(DeviceManager):
                 ) for devices_output_line in devices_output)
 
             if not emulator_active:
-                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output)
+                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, level='error')
                 self.restart_adb()
                 devices_output = self.get_device_list_output()
                 emulator_active = any((
@@ -956,11 +960,11 @@ class ADBDeviceManager(DeviceManager):
 
             while not emulator_active:
                 if adb_attempts > max_adb_attempts:
-                    script_logger.log('ADB CONTROLLER: adb connection timed out ')
+                    script_logger.log('ADB CONTROLLER: adb connection timed out ', level='error')
                     raise Exception('ADB connection failed')
                 else:
                     adb_attempts += 1
-                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 15 seconds')
+                script_logger.log('ADB CONTROLLER: problem found in devices output : ', devices_output, 'waiting 15 seconds', level='error')
                 self.restart_adb()
                 devices_output = self.get_device_list_output()
                 emulator_active = any((
@@ -972,7 +976,7 @@ class ADBDeviceManager(DeviceManager):
                 try:
                     source_im = self.get_screencap(compressed=True)
                 except UnidentifiedImageError:
-                    script_logger.log('ADB CONTROLLER: Screencap failed, unable to resolve issue')
+                    script_logger.log('ADB CONTROLLER: Screencap failed, unable to resolve issue', level='error')
                     raise Exception('ADB connection failed')
             self.width = source_im.shape[1]
             self.height = source_im.shape[0]
@@ -980,7 +984,7 @@ class ADBDeviceManager(DeviceManager):
             self.set_commands()
             self.get_screen_orientation()
 
-            script_logger.log('ADB CONTROLLER: adb configuration successful ', self.full_ip, devices_output)
+            script_logger.log('ADB CONTROLLER: adb configuration successful ', self.full_ip, devices_output, level='error')
         if is_null(self.props['width']):
             self.props['width'] = self.width
         if is_null(self.props['height']):
@@ -1016,7 +1020,7 @@ class ADBDeviceManager(DeviceManager):
             else:
                 devices_output = []
         except Exception as e:
-            script_logger.log('ADB CONTROLLER: get devices failed ', e)
+            script_logger.log('ADB CONTROLLER: get devices failed ', e, level='error')
             devices_output = []
         return devices_output
 
@@ -1102,7 +1106,7 @@ class ADBDeviceManager(DeviceManager):
         script_logger = ScriptLogger.get_logger()
         if compressed:
             screenshot_command = self.adb_path + ' -s {} exec-out screencap -p'.format(self.full_ip)
-            script_logger.log('ADB CONTROLLER', 'taking screenshot', 'with command', screenshot_command)
+            script_logger.log('ADB CONTROLLER', 'taking screenshot', 'with command', screenshot_command, level='debug')
 
             stdout, stderr, returncode = self.adb_popen(['exec-out', 'screencap', '-p'], timeout=15)
             bytes_im = BytesIO(stdout)
@@ -1110,14 +1114,14 @@ class ADBDeviceManager(DeviceManager):
             img = cv2.cvtColor(np.array(source_im), cv2.COLOR_RGB2BGR)
         else:
             screenshot_command = self.adb_path + ' -s {} exec-out screencap'.format(self.full_ip)
-            script_logger.log('ADB CONTROLLER', 'taking screenshot', 'with command', screenshot_command)
+            script_logger.log('ADB CONTROLLER', 'taking screenshot', 'with command', screenshot_command, level='debug')
             stdout, stderr, returncode = self.adb_popen(['exec-out', 'screencap'], timeout=15)
             raw_data = stdout
             header_size = 16
             header_format = '<4I'  # Little-endian, 4 unsigned integers
             w, h, f, c = struct.unpack(header_format, raw_data[:header_size])
 
-            script_logger.log(f"Width: {w}, Height: {h}, Format: {f}, Colorspace: {c}, Image Size: {len(raw_data) - header_size}")
+            script_logger.log(f"Width: {w}, Height: {h}, Format: {f}, Colorspace: {c}, Image Size: {len(raw_data) - header_size}", level='debug')
 
             # Map the pixel format to bytes per pixel (Bpp)
             if f == 1:  # PIXEL_FORMAT_RGBA_8888
@@ -1158,12 +1162,12 @@ class ADBDeviceManager(DeviceManager):
         try:
             source_im = self.get_screencap(compressed=compress_png)
         except (UnidentifiedImageError, struct.error, ValueError) as e:
-            script_logger.log('ADB CONTROLLER: screencap failed', e)
+            script_logger.log('ADB CONTROLLER: screencap failed', e, level='error')
             try:
                 source_im = self.get_screencap(compressed=compress_png)
                 return source_im
             except Exception as e:
-                script_logger.log('ADB CONTROLLER: screencap retry failed', e)
+                script_logger.log('ADB CONTROLLER: screencap retry failed', e, level='error')
             source_im = self.ensure_device_initialized(reinitialize=True)
             if source_im is None:
                 raise Exception('ADB connection failed')
@@ -1180,7 +1184,7 @@ class ADBDeviceManager(DeviceManager):
     def key_press(self, key):
         self.ensure_device_initialized()
         if key not in KEY_TO_KEYCODE:
-            script_logger.log('key not found!', key)
+            script_logger.log('key not found!', key, level='error')
             return
         keycode = KEY_TO_KEYCODE[key]
         script_logger.log('ADB CONTROLLER: sending key event', keycode)
@@ -1304,7 +1308,8 @@ class ADBDeviceManager(DeviceManager):
               'shell'
             ],
             ''.join(click_command),
-            shell_process.communicate((''.join(click_command)).encode('utf-8'), timeout=15)
+            shell_process.communicate((''.join(click_command)).encode('utf-8'), timeout=15),
+            level='debug'
         )
         # script_logger.log((''.join(click_command)).encode('utf-8'))
         self.event_counter += 1
@@ -1322,7 +1327,7 @@ class ADBDeviceManager(DeviceManager):
         return super().smooth_move()
 
     def delta_sequence_to_commands(self, x_pos, y_pos, delta_xs, delta_ys, unmap=False, split=True):
-        script_logger.log('sequence len', len(delta_xs))
+        script_logger.log('sequence len', len(delta_xs), level='debug')
         commands = []
 
         # TODO below may or may not be neccesary
@@ -1461,7 +1466,8 @@ class ADBDeviceManager(DeviceManager):
                 'shell'
             ],
             ''.join(command_strings),
-            shell_process.communicate((''.join(command_strings)).encode('utf-8'))
+            shell_process.communicate((''.join(command_strings)).encode('utf-8')),
+            level='debug'
         )
         self.event_counter += 1
         return delta_x, delta_y
@@ -1490,10 +1496,10 @@ class ADBDeviceManager(DeviceManager):
                 script_logger.log(f'ADBDeviceManager: successfully started application {application_path}')
             else:
                 error_msg = result.stderr.decode() if result and result.stderr else "Unknown error"
-                script_logger.log(f'ADBDeviceManager: failed to start application {application_path}, error: {error_msg}')
-                
+                script_logger.log(f'ADBDeviceManager: failed to start application {application_path}, error: {error_msg}', level='error')
+
         except Exception as e:
-            script_logger.log(f'ADBDeviceManager: error starting application {application_path}: {e}')
+            script_logger.log(f'ADBDeviceManager: error starting application {application_path}: {e}', level='error')
     
     def stop_application(self, application_name):
         """Stop an application on Android device using adb am force-stop"""
@@ -1515,10 +1521,10 @@ class ADBDeviceManager(DeviceManager):
                 script_logger.log(f'ADBDeviceManager: successfully stopped application {package_name}')
             else:
                 error_msg = result.stderr.decode() if result and result.stderr else "Unknown error"
-                script_logger.log(f'ADBDeviceManager: failed to stop application {package_name}, error: {error_msg}')
-                
+                script_logger.log(f'ADBDeviceManager: failed to stop application {package_name}, error: {error_msg}', level='error')
+
         except Exception as e:
-            script_logger.log(f'ADBDeviceManager: error stopping application {application_name}: {e}')
+            script_logger.log(f'ADBDeviceManager: error stopping application {application_name}: {e}', level='error')
     
     def _get_application_label(self, package_name: str) -> str:
         """Get the user-friendly application label for a package name using adb shell dumpsys package"""
@@ -1550,7 +1556,7 @@ class ADBDeviceManager(DeviceManager):
                             if label and not label.isdigit():  # Skip resource IDs
                                 return label
         except Exception as e:
-            script_logger.log(f'ADBDeviceManager: error getting label for {package_name}: {e}')
+            script_logger.log(f'ADBDeviceManager: error getting label for {package_name}: {e}', level='error')
         
         # Fallback to package name if label cannot be retrieved
         return package_name
@@ -1597,9 +1603,9 @@ class ADBDeviceManager(DeviceManager):
                 return applications
             else:
                 error_msg = result.stderr.decode() if result and result.stderr else "Unknown error"
-                script_logger.log(f'ADBDeviceManager: failed to list applications, error: {error_msg}')
+                script_logger.log(f'ADBDeviceManager: failed to list applications, error: {error_msg}', level='error')
                 return {}
-                
+
         except Exception as e:
-            script_logger.log(f'ADBDeviceManager: error listing applications: {e}')
+            script_logger.log(f'ADBDeviceManager: error listing applications: {e}', level='error')
             return {}

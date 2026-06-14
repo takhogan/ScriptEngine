@@ -83,7 +83,7 @@ class SystemScriptActionExecutor:
             condition = action["actionData"]["condition"].replace("\n", " ").strip()
             statement_strip = sanitize_statement_input(condition, state)
             pre_log = 'condition: {} {}'.format(condition, statement_strip)
-            script_logger.log(pre_log)
+            script_logger.log(pre_log, level='debug')
             
             if state_eval('(' + condition + ')',{}, state):
                 post_log = 'condition successful'
@@ -120,7 +120,7 @@ class SystemScriptActionExecutor:
             )
             if isSetIfNull and outputVarNameInState and state[outputVarName] is not None:
                 pre_log += ' and output variable {} was not null'.format(outputVarName)
-                script_logger.log(pre_log)
+                script_logger.log(pre_log, level='debug')
                 status = ScriptExecutionState.SUCCESS
                 script_logger.get_action_log().set_summary('skipped ({} already set)'.format(outputVarName))
                 script_logger.get_action_log().append_post_file(
@@ -134,8 +134,8 @@ class SystemScriptActionExecutor:
 
                 mid_log = ('inputExpression : ' + action["actionData"]["inputExpression"])
                 mid_log_2 = ('inputs: ' + str(statement_strip))
-                script_logger.log(mid_log)
-                script_logger.log(mid_log_2)
+                script_logger.log(mid_log, level='debug')
+                script_logger.log(mid_log_2, level='debug')
                 script_logger.get_action_log().append_post_file(
                     'text',
                     post_file_name,
@@ -150,10 +150,10 @@ class SystemScriptActionExecutor:
                 elif action["actionData"]["inputParser"] == "jsonload":
                     expression = json.loads(expression)
                 late_mid_log = 'parse result: ' + str(expression)
-                script_logger.log('parse result: ', expression)
+                script_logger.log('parse result: ', expression, level='debug')
 
                 late_mid_log_2 = 'state variables :' + str(list(state))
-                script_logger.log(late_mid_log_2)
+                script_logger.log(late_mid_log_2, level='debug')
 
                 if '[' in outputVarName and ']' in outputVarName:
                     keys = outputVarName.split('[')  # Split the key string by '][' to get individual keys
@@ -208,7 +208,7 @@ class SystemScriptActionExecutor:
                 'threshold params {}'.format(threhold_stripped) +\
                 'and incrementBy params {}'.format(incrementby_stripped) +\
                 'threshold type {}'.format(thresholdType)
-            script_logger.log(pre_log)
+            script_logger.log(pre_log, level='debug')
 
             if thresholdType == "timer":
                 # Timer mode: check if thresholdSeconds has been breached
@@ -220,7 +220,7 @@ class SystemScriptActionExecutor:
                     # Start the timer
                     state[timerVarName] = time.time()
                     initial_timer_logs = 'Starting timer for {} at {}'.format(counterVarName, state[timerVarName])
-                    script_logger.log(initial_timer_logs)
+                    script_logger.log(initial_timer_logs, level='debug')
                     pre_log += '\n' + initial_timer_logs
 
                 elapsed_time = time.time() - state[timerVarName]
@@ -261,11 +261,11 @@ class SystemScriptActionExecutor:
                     initial_value_stripped = sanitize_statement_input(initialValue, state)
 
                     initial_value_logs = 'Setting initial value with initialValue params {}'.format(initial_value_stripped)
-                    script_logger.log(initial_value_logs)
+                    script_logger.log(initial_value_logs, level='debug')
                     state[counterVarName] = initial_value
 
                     initial_value_post_logs = 'Evaluated initial value to {}'.format(initial_value)
-                    script_logger.log(initial_value_post_logs)
+                    script_logger.log(initial_value_post_logs, level='debug')
                     pre_log += '\n' + initial_value_logs + '\n' + initial_value_post_logs
 
                 counter_value = state_eval(counterVarName, {}, state)
@@ -285,7 +285,8 @@ class SystemScriptActionExecutor:
                     status = ScriptExecutionState.FAILURE
                     post_post_log = 'new counter value is {}'.format(new_counter_value)
                     script_logger.log(
-                        post_post_log
+                        post_post_log,
+                        level='debug'
                     )
                 else:
                     post_log = 'For counter {}'.format(counterVarName) + \
@@ -316,7 +317,7 @@ class SystemScriptActionExecutor:
         elif action["actionName"] == "sleepStatement":
             input_expression = str(action["actionData"]["inputExpression"]).strip()
             pre_log = 'inputExpression: ' + input_expression
-            script_logger.log(pre_log)
+            script_logger.log(pre_log, level='debug')
             sleep_length = 0
             if input_expression != '':
                 sleep_length = float(state_eval(input_expression, {}, state))
@@ -370,7 +371,7 @@ class SystemScriptActionExecutor:
                     state[action["actionData"]["varName"]] = {}
                 status = ScriptExecutionState.SUCCESS
             elif action["actionData"]["mode"] == "write":
-                script_logger.log('writing file: ', state[action["actionData"]["varName"]])
+                script_logger.log('writing file: ', state[action["actionData"]["varName"]], level='debug')
                 tmp_dir = os.path.join(self.props['dir_path'], 'tmp')
                 os.makedirs(tmp_dir, exist_ok=True)
                 with open(os.path.join(tmp_dir, action["actionData"]["fileName"]),
@@ -378,18 +379,20 @@ class SystemScriptActionExecutor:
                     json.dump(state[action["actionData"]["varName"]], write_file)
                 status = ScriptExecutionState.SUCCESS
             else:
-                script_logger.log('invalid mode: ', action)
+                script_logger.log('invalid mode: ', action, level='error')
                 raise Exception('invalid mode: ' + action)
         elif action["actionName"] == "imageTransformationAction":
             # transformationType : 'blur' | 'binarize' | 'antialias' | 'resize' | 'erode' | 'dilate'
             if len(action['actionData']['inputExpression']) == 0:
-                script_logger.log('Error: input expression was blank')
+                script_logger.log('Error: input expression was blank', level='error')
                 raise Exception(action["actionName"] + ' input expression was blank')
 
             transform_im = state[action['actionData']['inputExpression']]['matched_area']
-            pre_image_relative_path = 'imageTransformationAction-input.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, transform_im)
-            script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
+            # input (pre) image is debug-only detail.
+            if script_logger.should_log('debug'):
+                pre_image_relative_path = 'imageTransformationAction-input.png'
+                cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, transform_im)
+                script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
 
             if action["actionData"]["transformationType"] == "blur":
                 if action["actionData"]["blurType"] == 'bilateralFilter':
@@ -401,10 +404,10 @@ class SystemScriptActionExecutor:
             elif action["actionData"]["transformationType"] == "binarize":
                 is_color = len(transform_im.shape) != 2
                 if is_color:
-                    script_logger.log('converting to grayscale for binarize operation')
+                    script_logger.log('converting to grayscale for binarize operation', level='debug')
                     transform_im = cv2.cvtColor(transform_im, cv2.COLOR_BGR2GRAY)
                 if action["actionData"]["binarizeType"] == 'regular':
-                    script_logger.log('shape', transform_im.shape)
+                    script_logger.log('shape', transform_im.shape, level='debug')
                     transform_im = cv2.threshold(
                         transform_im,
                         0,
@@ -421,7 +424,7 @@ class SystemScriptActionExecutor:
                         2
                     )
                 if is_color:
-                    script_logger.log('converting grayscale back to color')
+                    script_logger.log('converting grayscale back to color', level='debug')
                     transform_im = cv2.cvtColor(transform_im, cv2.COLOR_GRAY2BGR)
             elif action["actionData"]["transformationType"] == "antialias":
                 transform_im = cv2.resize(
@@ -465,9 +468,11 @@ class SystemScriptActionExecutor:
                     transform_im = cv2.bitwise_not(transform_im)
                     transform_im = cv2.cvtColor(transform_im, cv2.COLOR_GRAY2BGR)
 
-            post_image_relative_path = 'imageTransformationAction-output.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + post_image_relative_path, transform_im)
-            script_logger.get_action_log().set_post_file('image', post_image_relative_path)
+            # output (post) image feeds the log video (info+); skipped at error.
+            if script_logger.should_log('info'):
+                post_image_relative_path = 'imageTransformationAction-output.png'
+                cv2.imwrite(script_logger.get_log_path_prefix() + post_image_relative_path, transform_im)
+                script_logger.get_action_log().set_post_file('image', post_image_relative_path)
 
             if len(action['actionData']['outputVarName']) > 0:
                 state[action['actionData']['outputVarName']] = state[action['actionData']['inputExpression']].copy()
@@ -499,7 +504,7 @@ class SystemScriptActionExecutor:
                     str(list(action["actionData"]["update_dict"]["state"]))
                 )
                 post_log += input_state_log + '\n'
-                script_logger.log(input_state_log)
+                script_logger.log(input_state_log, level='debug')
 
             if 'context' in action["actionData"]["update_dict"]:
                 for key, value in action["actionData"]["update_dict"]["context"].items():
@@ -508,7 +513,7 @@ class SystemScriptActionExecutor:
                     str(list(action["actionData"]["update_dict"]["context"]))
                 )
                 post_log += input_context_log + '\n'
-                script_logger.log(input_context_log)
+                script_logger.log(input_context_log, level='debug')
             if success_states is not None:
                 context["success_states"] = success_states
             context["script_counter"] = script_counter
@@ -519,7 +524,7 @@ class SystemScriptActionExecutor:
             ) + '\n' + 'Script Timer: {}'.format(
                 str(context["script_timer"])
             )
-            script_logger.log(iteration_log)
+            script_logger.log(iteration_log, level='debug')
             post_log += iteration_log + '\n'
             script_logger.get_action_log().add_post_file(
                 'text',
@@ -529,7 +534,7 @@ class SystemScriptActionExecutor:
 
         elif action["actionName"] == "sendMessageAction":
             if not self.screen_plan_server_attached:
-                script_logger.log('unable to send message, screen plan server not active')
+                script_logger.log('unable to send message, screen plan server not active', level='error')
                 status = ScriptExecutionState.FAILURE
                 script_logger.get_action_log().set_summary('message send failed')
             else:
@@ -539,7 +544,7 @@ class SystemScriptActionExecutor:
                 script_logger.log(pre_log)
 
                 mid_log = 'Message Contents: ' + str(message_data)
-                script_logger.log(mid_log)
+                script_logger.log(mid_log, level='debug')
 
                 
                 messaging_successful = self.messaging_helper.send_message({
@@ -570,20 +575,22 @@ class SystemScriptActionExecutor:
                 channel_str = str(action["actionData"]["messagingChannelName"])
                 script_logger.get_action_log().set_summary("sent message with subject '{}' to channel {} with contents '{}'".format(subject_str, channel_str, message_str))
                 
-                thread_script_logger = script_logger.copy()
-                self.io_executor.submit(
-                    self.messaging_helper.create_and_save_log_image,
-                    message_data,
-                    thread_script_logger,
-                    subject
-                )
+                # sendMessage post image feeds the log video (info+); skipped at error.
+                if script_logger.should_log('info'):
+                    thread_script_logger = script_logger.copy()
+                    self.io_executor.submit(
+                        self.messaging_helper.create_and_save_log_image,
+                        message_data,
+                        thread_script_logger,
+                        subject
+                    )
                 
         elif action["actionName"] == "returnStatement":
             pre_log = 'Return Statement Type: {}'.format(action["actionData"]["returnStatementType"])
-            script_logger.log(pre_log)
+            script_logger.log(pre_log, level='debug')
 
             mid_log = 'Desired Return Status: {}'.format(action["actionData"]["returnStatus"])
-            script_logger.log(mid_log)
+            script_logger.log(mid_log, level='debug')
             status_name = 'undefined'
             if action["actionData"]["returnStatementType"] == 'exitIteration':
                 if action["actionData"]["returnStatus"] == 'failure':
@@ -605,7 +612,7 @@ class SystemScriptActionExecutor:
                     raise Exception('invalid return status' + action["actionData"]["returnStatus"])
             elif action["actionData"]["returnStatementType"] == 'exitProgram':
                 post_log = 'Exiting Program'
-                script_logger.log(post_log)
+                script_logger.log(post_log, level='error')
                 script_logger.get_action_log().add_post_file(
                     'text',
                     'returnStatement-{}.txt'.format('exit-0'),
@@ -613,7 +620,7 @@ class SystemScriptActionExecutor:
                 )
                 sys.exit(0)
             else:
-                script_logger.log('return statement type not implemented', action["actionData"]["returnStatementType"])
+                script_logger.log('return statement type not implemented', action["actionData"]["returnStatementType"], level='error')
                 raise Exception('return statement type not implemented')
             post_log = 'Setting Status: {}'.format(status_name)
             script_logger.log(post_log)
@@ -624,11 +631,11 @@ class SystemScriptActionExecutor:
             )
         #TODO: will be removed, use returnStatement instead
         elif action["actionName"] == "exceptionAction":
-            script_logger.log('exceptionAction-' + str(action["actionGroup"]), ' message: ', action["actionData"]["exceptionMessage"])
+            script_logger.log('exceptionAction-' + str(action["actionGroup"]), ' message: ', action["actionData"]["exceptionMessage"], level='error')
             if action["actionData"]["takeScreenshot"]:
                 pass
             if action["actionData"]["exitProgram"]:
-                script_logger.log('exiting program')
+                script_logger.log('exiting program', level='error')
                 sys.exit(0)
             status = ScriptExecutionState.FINISHED_FAILURE
             with open(script_logger.get_log_path_prefix() + '-return-failure.txt', 'w') as log_file:
@@ -646,7 +653,7 @@ class SystemScriptActionExecutor:
                     "result that was produced with maxMatches = 1. Set maxMatches > 1 or wrap the result in a list "
                     "before iterating."
                 )
-                script_logger.log(error_msg)
+                script_logger.log(error_msg, level='error')
                 raise ValueError(error_msg)
 
             mid_log_1 = 'inVariable: {} evaluated to: {}'.format(
@@ -658,7 +665,8 @@ class SystemScriptActionExecutor:
                 'inVariable:',
                 action["actionData"]["inVariables"],
                 'evaluated to:',
-                in_variable
+                in_variable,
+                level='debug'
             )
             for_variable_list = action["actionData"]["forVariables"].split(',')
 
@@ -671,7 +679,8 @@ class SystemScriptActionExecutor:
                 'forVariables:',
                 action["actionData"]["forVariables"],
                 'evaluated to:',
-                for_variable_list
+                for_variable_list,
+                level='debug'
             )
             post_log = ''
             switch_actions = []
@@ -684,7 +693,8 @@ class SystemScriptActionExecutor:
                 }
                 script_logger.log(
                     'for variables for iteration {}'.format(for_iteration),
-                    for_variables
+                    for_variables,
+                    level='debug'
                 )
                 post_log += 'for variables for iteration {}: {}'.format(
                     for_iteration,
@@ -746,7 +756,7 @@ class SystemScriptActionExecutor:
             pre_log += 'Input expression: ' + action["actionData"]["inputExpression"] + '\n'
             pre_log += 'Writing inputs to variable: ' + action["actionData"]["outputVarName"]
             script_logger.get_action_log().add_pre_file('text', 'inputs.txt', pre_log)
-            script_logger.log(pre_log)
+            script_logger.log(pre_log, level='debug')
 
             file_path = state_eval(action["actionData"]["filePath"], {}, state)
             output_var_name = action["actionData"]["outputVarName"]
@@ -819,7 +829,7 @@ class SystemScriptActionExecutor:
                     mongo_credentials["password"]
                 )
                 client = MongoClient(connection_string)
-                script_logger.log(client)
+                script_logger.log(client, level='debug')
                 if len(action["actionData"]["collectionName"]) > 0:
                     collection_name = action["actionData"]["collectionName"]
                 else:
@@ -848,7 +858,7 @@ class SystemScriptActionExecutor:
                     result = collection.delete_one(query)
                 else:
                     result = 'action type not implemented'
-                script_logger.log('db action result: ', result)
+                script_logger.log('db action result: ', result, level='debug')
             elif action["actionData"]["databaseType"] == "oracle" or\
                 action["actionData"]["databaseType"] == "mysql":
                 pass
@@ -856,26 +866,26 @@ class SystemScriptActionExecutor:
                 # have the user input a SQL string to execute
                 # to insert variables user SQL variable substitution
             else:
-                script_logger.log("DB provider unimplemented")
+                script_logger.log("DB provider unimplemented", level='error')
                 raise Exception(action["actionName"] + ' DB provider unimplemented')
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "matchMergeAction":
             status, state = self.match_merge_helper.handle_action(action, state)
         elif action["actionName"] == "userSecretManagementAction":
             if not self.screen_plan_server_attached:
-                script_logger.log('unable to send message, screen plan server not active')
+                script_logger.log('unable to send message, screen plan server not active', level='error')
                 status = ScriptExecutionState.FAILURE
             else:
                 status, state = self.user_secrets_helper.handle_action(action, state)
         elif action["actionName"] == "calendarAction":
             if not self.screen_plan_server_attached:
-                script_logger.log('unable to perform calendar action, screen plan server not active')
+                script_logger.log('unable to perform calendar action, screen plan server not active', level='error')
                 status = ScriptExecutionState.FAILURE
             else:
                 status, state = self.calendar_action_helper.handle_action(action, state)
         else:
             # If action name doesn't match any handler, log error and set status to FAILURE
-            script_logger.log('ERROR: Unknown action name "{}" for action group {}'.format(action["actionName"], action.get("actionGroup", "unknown")))
+            script_logger.log('ERROR: Unknown action name "{}" for action group {}'.format(action["actionName"], action.get("actionGroup", "unknown")), level='error')
             raise Exception('unknown action name: ' + action["actionName"])
         assert status != ScriptExecutionState.ERROR, 'action returned error status'
 

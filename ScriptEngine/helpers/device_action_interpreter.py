@@ -22,8 +22,8 @@ class DeviceActionInterpreter:
         keyboard_expression = keyboard_action["actionData"]["keyboardExpression"]
         
         # Log action information
-        script_logger.log(f'KeyboardActionType: {action_type}')
-        script_logger.log(f'KeyboardExpression: {keyboard_expression}')
+        script_logger.log(f'KeyboardActionType: {action_type}', level='debug')
+        script_logger.log(f'KeyboardExpression: {keyboard_expression}', level='debug')
         
         typed_chars_log = 'Typed Characters: '
         script_logger.get_action_log().add_post_file(
@@ -52,7 +52,7 @@ class DeviceActionInterpreter:
                 if clean_key:  # Only add non-empty keys
                     hot_key_keys.append(clean_key)
             
-            script_logger.log(f'HotKeyKeys {hot_key_keys}')
+            script_logger.log(f'HotKeyKeys {hot_key_keys}', level='debug')
             
             hot_key_func = device_controller.get_device_action(target_system, 'hotkey', device_params)
             hot_key_func(hot_key_keys)
@@ -81,7 +81,7 @@ class DeviceActionInterpreter:
                 press_func(key)
                 typed_chars_log += ('* ' if is_secret else key + ' ')
         
-        script_logger.log(typed_chars_log)
+        script_logger.log(typed_chars_log, level='debug')
         script_logger.get_action_log().append_post_file(
             'text',
             'keyboardAction-log.txt',

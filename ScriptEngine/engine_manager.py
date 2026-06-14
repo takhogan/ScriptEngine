@@ -117,7 +117,7 @@ class EngineManager:
                             }
                 
         except Exception as e:
-            script_logger.log(f"Error reading engine interrupts file: {e}")
+            script_logger.log(f"Error reading engine interrupts file: {e}", level='error')
             traceback.print_exc()
 
     def pause(self):
@@ -159,7 +159,7 @@ class EngineManager:
             with open(self.engine_state_file_path, 'r') as f:
                 return json.load(f)
         except Exception as e:
-            script_logger.log(f"Error reading engine state file: {e}")
+            script_logger.log(f"Error reading engine state file: {e}", level='error')
             traceback.print_exc()
             return {}
             
@@ -169,7 +169,7 @@ class EngineManager:
             with open(self.engine_state_file_path, 'w') as f:
                 json.dump(state, f, indent=4)
         except Exception as e:
-            script_logger.log(f"Error writing engine state file: {e}")
+            script_logger.log(f"Error writing engine state file: {e}", level='error')
             traceback.print_exc()
         
         

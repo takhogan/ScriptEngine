@@ -78,19 +78,19 @@ def _walk_action_assets(action, dir_path, script_zip, script_path_in_zip):
         attribute_path = entry.get("attributePath")
         if not file_path or not attribute_path:
             msg = f"actionAssets: malformed entry on {action_name} (missing filePath or attributePath): {entry!r}"
-            script_logger.log(msg)
+            script_logger.log(msg, level='error')
             raise ValueError(msg)
         asset_type = entry.get("assetType", "image")
         value = _read_asset_payload(file_path, asset_type, dir_path, script_zip, script_path_in_zip)
         if value is None:
             msg = f"actionAssets: missing payload for {file_path} (action {action_name}, attribute {attribute_path})"
-            script_logger.log(msg)
+            script_logger.log(msg, level='error')
             raise FileNotFoundError(msg)
         try:
             _set_by_path(action, attribute_path, value)
         except (KeyError, IndexError, TypeError) as e:
             msg = f"actionAssets: could not set {attribute_path} on {action_name}: {e}"
-            script_logger.log(msg)
+            script_logger.log(msg, level='error')
             raise RuntimeError(msg) from e
 
 
@@ -164,7 +164,7 @@ def parse_script_file(
     script_logger.log('SCRIPT LOAD: loading script ', script_name)
     with action_rows_file_obj as action_rows_file:
         action_rows = json.load(action_rows_file)
-    script_logger.log(script_to_string(script_name, action_rows))
+    script_logger.log(script_to_string(script_name, action_rows), level='info')
     for action_row in action_rows:
         for action in action_row["actions"]:
             _walk_action_assets(action, dir_path, script_zip, script_path_in_zip)
@@ -257,7 +257,7 @@ def parse_script(script_name, system_script=False, workspace="Default"):
             )
             use_library_scripts = script_obj['props']['deploymentToLibrary'] == 'true'
             if use_library_scripts:
-                script_logger.log('mode use_library_scripts not supported for zip file, extract zip file to a directory')
+                script_logger.log('mode use_library_scripts not supported for zip file, extract zip file to a directory', level='error')
                 sys.exit(1)
             script_obj['props']["script_path"] = script_file_path
             script_obj['props']["script_name"] = script_name
