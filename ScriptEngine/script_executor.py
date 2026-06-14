@@ -199,7 +199,9 @@ class ScriptExecutor:
         self.log_folder += '/'
         if self.parent_action_log is not None:
             script_logger.log('adding supporting file reference for', self.props['script_name'], script_logger.get_action_log().get_action_log_path(), level='debug')
-            self.parent_action_log.add_supporting_absolute_file_reference('text', self.log_folder + 'stdout.txt')
+            # force keeps the script's run log as a supporting file even at error
+            # level, where supporting artifacts are otherwise dropped.
+            self.parent_action_log.add_supporting_absolute_file_reference('text', self.log_folder + 'stdout.txt', force=True)
         return self.log_folder
 
     def set_log_paths(self):

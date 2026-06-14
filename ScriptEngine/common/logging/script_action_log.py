@@ -208,8 +208,10 @@ class ScriptActionLog:
         else:
             raise Exception('Unsupported File Type')
 
-    def add_supporting_file_reference(self, file_type, relative_path, log_header=True):
-        if not self._capture_file('supporting'):
+    def add_supporting_file_reference(self, file_type, relative_path, log_header=True, force=False):
+        # force keeps a supporting file even at error level. Used for the run log
+        # (global-stdout.txt), which stays relevant when no other artifacts exist.
+        if not force and not self._capture_file('supporting'):
             return
         new_supporting_file_path = (
            self.default_path_header if log_header else self.base_path
@@ -220,8 +222,10 @@ class ScriptActionLog:
         self.supporting_files.append((file_type, new_supporting_file_path))
         self.to_dict()
 
-    def add_supporting_absolute_file_reference(self, file_type, absolute_path):
-        if not self._capture_file('supporting'):
+    def add_supporting_absolute_file_reference(self, file_type, absolute_path, force=False):
+        # force keeps a supporting file even at error level. Used for the run log
+        # (stdout.txt), which stays relevant when no other artifacts exist.
+        if not force and not self._capture_file('supporting'):
             return
         for supporting_file_type,supporting_file_path in self.supporting_files:
             if supporting_file_path == absolute_path:
