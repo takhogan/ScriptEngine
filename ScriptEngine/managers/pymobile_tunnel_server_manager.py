@@ -21,7 +21,7 @@ class PyMobileTunnelServer:
         script_logger.set_log_folder('./logs/')
 
     def start(self):
-        script_logger.log("Starting PyMobile tunnel server...")
+        script_logger.log("Starting PyMobile tunnel server...", level='error')
         try:
             # Initialize the Tunneld server
             self.tunneld_server = Tunneld()
@@ -40,21 +40,21 @@ class PyMobileTunnelServer:
                 stderr_line = self.process.stderr.readline()
                 
                 if stdout_line:
-                    script_logger.log(f"TUNNEL SERVER STDOUT: {stdout_line.strip()}")
+                    script_logger.log(f"TUNNEL SERVER STDOUT: {stdout_line.strip()}", level='debug')
                 if stderr_line:
-                    script_logger.log(f"TUNNEL SERVER STDERR: {stderr_line.strip()}")
+                    script_logger.log(f"TUNNEL SERVER STDERR: {stderr_line.strip()}", level='debug')
                     
                 # Check if process has finished
                 if self.process.poll() is not None:
                     break
 
         except Exception as e:
-            script_logger.log(f"Error starting tunnel server: {str(e)}")
+            script_logger.log(f"Error starting tunnel server: {str(e)}", level='error')
             raise
 
     def shutdown(self):
         if self.process:
-            script_logger.log("Shutting down PyMobile tunnel server...")
+            script_logger.log("Shutting down PyMobile tunnel server...", level='error')
             try:
                 self.process.terminate()  # Send SIGTERM
                 try:
@@ -62,13 +62,13 @@ class PyMobileTunnelServer:
                     self.process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     # If process doesn't terminate within 5 seconds, force kill it
-                    script_logger.log("Force killing tunnel server process...")
+                    script_logger.log("Force killing tunnel server process...", level='error')
                     self.process.kill()
                     self.process.wait()
                 
-                script_logger.log("PyMobile tunnel server shutdown complete")
+                script_logger.log("PyMobile tunnel server shutdown complete", level='error')
             except Exception as e:
-                script_logger.log(f"Error during shutdown: {str(e)}")
+                script_logger.log(f"Error during shutdown: {str(e)}", level='error')
                 raise
             finally:
                 self.process = None

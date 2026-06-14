@@ -198,7 +198,7 @@ class ScriptExecutor:
         os.makedirs(self.log_folder + '/search_patterns', exist_ok=True)
         self.log_folder += '/'
         if self.parent_action_log is not None:
-            script_logger.log('adding supporting file reference for', self.props['script_name'], script_logger.get_action_log().get_action_log_path())
+            script_logger.log('adding supporting file reference for', self.props['script_name'], script_logger.get_action_log().get_action_log_path(), level='debug')
             self.parent_action_log.add_supporting_absolute_file_reference('text', self.log_folder + 'stdout.txt')
         return self.log_folder
 
@@ -211,7 +211,7 @@ class ScriptExecutor:
 
     def parse_inputs(self, input_state):
         with open(self.log_folder + 'inputs.txt', 'w') as input_log_file:
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing_inputs ', self.inputs)
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing_inputs ', self.inputs, level='info')
             for [var_name, input_expression, default_value] in self.inputs:
                 var_name = var_name.strip()
                 if len(input_expression.strip()) == 0:
@@ -219,26 +219,26 @@ class ScriptExecutor:
                 if (default_value or default_value == "true") and (var_name in input_state and input_state[var_name] is not None):
                     script_logger.log(self.props['script_name'],' CONTROL FLOW: Parsing Input: ', var_name,
                           " Default Parameter? ", default_value,
-                          " Overwriting Default? True" if default_value else "Reading from input state")
+                          " Overwriting Default? True" if default_value else "Reading from input state", level='debug')
                     try:
                         self.state[var_name] = input_state[var_name]
                     except KeyError as k:
-                        script_logger.log('ERROR: key error while parsing output, keys present in input state: ' + ', '.join(list(input_state)))
+                        script_logger.log('ERROR: key error while parsing output, keys present in input state: ' + ', '.join(list(input_state)), level='error')
                         raise
                     script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Input: ', var_name,
                                       " Value: ", input_state[var_name] if var_name in input_state else 'None'
-                    )
+                    , level='debug')
                     input_log_file.write(str(type(self.state[var_name])) + ' ' + str(var_name) + ': ' + str(self.state[var_name]) + '\n')
                     continue
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Input: ', var_name,
                                   " Default Parameter? ", default_value,
-                                  " Overwriting Default? False" if default_value else "")
+                                  " Overwriting Default? False" if default_value else "", level='debug')
                 state_copy = self.state.copy()
                 state_copy.update(input_state)
                 eval_result = state_eval(input_expression, {}, state_copy)
                 self.state[var_name] = eval_result
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Input: ', var_name,
-                                    " Value: ", eval_result)
+                                    " Value: ", eval_result, level='info')
                 input_log_file.write(str(type(self.state[var_name])) + ' ' + str(var_name) + ': ' + str(self.state[var_name]) + '\n')
         script_logger.get_action_log().set_pre_file(
             'text',
@@ -249,7 +249,7 @@ class ScriptExecutor:
 
     def parse_outputs(self, outputState, outputs_log_file_path):
         with open(outputs_log_file_path, 'w') as outputs_log_file:
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing outputs ', self.outputs)
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing outputs ', self.outputs, level='info')
             for [var_name, input_expression, default_value] in self.outputs:
                 var_name = var_name.strip()
                 if len(input_expression.strip()) == 0:
@@ -258,28 +258,28 @@ class ScriptExecutor:
                                 var_name in self.state and self.state[var_name] is not None)):
                     script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Output: ', var_name,
                                       " Default Parameter? ", default_value,
-                                      " Overwriting Default? True" if default_value else "reading from child state")
+                                      " Overwriting Default? True" if default_value else "reading from child state", level='debug')
                     try:
                         outputState[var_name] = self.state[var_name]
                     except KeyError as k:
-                        script_logger.log('ERROR: key error while parsing output, keys present in input state: ' + ', '.join(list(self.state)))
+                        script_logger.log('ERROR: key error while parsing output, keys present in input state: ' + ', '.join(list(self.state)), level='error')
                         if self.status == ScriptExecutionState.FINISHED_FAILURE:
-                            script_logger.log(self.props['script_name'], 'script finished with failure, ignoring key error')
+                            script_logger.log(self.props['script_name'], 'script finished with failure, ignoring key error', level='error')
                             continue
                         raise
                     script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Output: ', var_name,
                                       " Value: ", outputState[var_name] if var_name in outputState else 'None'
-                    )
+                    , level='info')
                     outputs_log_file.write(str(type(outputState[var_name])) + ' ' + str(var_name) + ': ' + str(outputState[var_name]) + '\n')
                     continue
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Output: ', var_name,
                                   " Default Parameter? ", default_value,
-                                  " Overwriting Default? False" if default_value else "")
+                                  " Overwriting Default? False" if default_value else "", level='debug')
                 state_copy = self.state.copy()
                 eval_result = state_eval(input_expression, {}, state_copy, crashonerror=self.status !=ScriptExecutionState.FINISHED_FAILURE)
                 outputState[var_name] = eval_result
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsed Output: ', var_name,
-                                  " Value: ", eval_result)
+                                  " Value: ", eval_result, level='info')
                 outputs_log_file.write(
                     str(type(outputState[var_name])) + ' ' + str(var_name) + ': ' + str(outputState[var_name]) + '\n'
                 )
@@ -303,7 +303,7 @@ class ScriptExecutor:
             ', attempts: ,' + str(self.context["action_attempts"]) + \
             ', outOfAttempts: ,' + str(self.context["out_of_attempts"]) +\
             ', elapsed: ,' + str(elapsed)
-        )
+        , level='info')
 
     def handle_action(self, action, lazy_eval=False) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
         if lazy_eval:
@@ -471,7 +471,7 @@ class ScriptExecutor:
                 status = ScriptExecutionState.ERROR
             context["status_detail"] = self.status_detail
             script_logger.log(action["actionData"][
-                      "scriptName"] + " returning with status " + ref_script_executor.status.name + "/" + status.name)
+                      "scriptName"] + " returning with status " + ref_script_executor.status.name + "/" + status.name, level='error')
             return action, status, state, context, run_queue, []
 
     def get_out_of_attempts_handler(self, action):
@@ -519,9 +519,9 @@ class ScriptExecutor:
 
     def check_if_done(self):
         end_branch = False
-        script_logger.log('-----' + self.props['script_name'] + ' CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches" + '-----')
+        script_logger.log('-----' + self.props['script_name'] + ' CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches" + '-----', level='info')
         if datetime.datetime.now().astimezone(tz=tz.tzutc()) > self.timeout:
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script has timed out - script timeout - ', datetime.datetime.now())
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script has timed out - script timeout - ', datetime.datetime.now(), level='error')
             self.status_detail = ScriptExecutionStatusDetail.TIMED_OUT
             return end_branch,True
 
@@ -530,7 +530,7 @@ class ScriptExecutor:
             running_scripts = get_running_scripts()
 
             if len(running_scripts) == 0:
-                script_logger.log('CONTROL FLOW: running scripts file empty')
+                script_logger.log('CONTROL FLOW: running scripts file empty', level='error')
                 terminate_request = True
             else:
                 current_running_script = running_scripts[0]
@@ -545,7 +545,7 @@ class ScriptExecutor:
                 if terminate_request:
                     script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script_id_mismatch?', script_id_mismatch,
                           'start_time_mismatch?', start_time_mismatch,
-                          'script_name_mismatch?', script_name_mismatch)
+                          'script_name_mismatch?', script_name_mismatch, level='debug')
                 if terminate_request and current_running_script['parallel']:
                     for running_script in running_scripts:
                         if running_script['parallel']:
@@ -560,7 +560,7 @@ class ScriptExecutor:
                             break
 
         if terminate_request:
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: received terminate request')
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: received terminate request', level='error')
             self.status_detail = ScriptExecutionStatusDetail.CANCELLED
             return end_branch,True
 
@@ -569,11 +569,11 @@ class ScriptExecutor:
                 len(self.context["action_attempts"]) > 0 and\
                 max(self.context["action_attempts"]) > int(self.context["scriptMaxActionAttempts"]):
             self.status = ScriptExecutionState.FAILURE
-            script_logger.log(self.props['script_name'] + " CONTROL FLOW: Action attempts", self.context["action_attempts"], "exceeded scriptMaxActionAttempts of", self.context["scriptMaxActionAttempts"])
+            script_logger.log(self.props['script_name'] + " CONTROL FLOW: Action attempts", self.context["action_attempts"], "exceeded scriptMaxActionAttempts of", self.context["scriptMaxActionAttempts"], level='info')
             self.status_detail = ScriptExecutionStatusDetail.MAX_ATTEMPTS
             return end_branch,True
         if len(self.actions) == 0 and len(self.run_queue) == 0:
-            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Reached end of script with status', self.status)
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: Reached end of script with status', self.status, level='error')
             if self.status == ScriptExecutionState.FINISHED_FAILURE or self.status == ScriptExecutionState.FINISHED_FAILURE_BRANCH:
                 pass
             else:
@@ -786,7 +786,7 @@ class ScriptExecutor:
 
     def execute_action(self, action, parallel_groups):
         if action["actionGroup"] in parallel_groups:
-            script_logger.log('parallel group found in ' + str(action['actionGroup']))
+            script_logger.log('parallel group found in ' + str(action['actionGroup']), level='debug')
             parallel_group = parallel_groups[action['actionGroup']]
             for parallel_action in parallel_group:
                 del parallel_groups[parallel_action["actionGroup"]]
@@ -806,7 +806,7 @@ class ScriptExecutor:
             # action['actionGroup'])
         else:
             self.context["script_counter"] += 1
-            script_logger.log('Creating action log for action', action["actionGroup"])
+            script_logger.log('Creating action log for action', action["actionGroup"], level='debug')
             script_logger.configure_action_logger(action, self.context["script_counter"], self.parent_action_log)
             _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
             # post_handle_action((self.action, self.status, self.state, self.context, self.run_queue, update_queue))
@@ -837,10 +837,10 @@ class ScriptExecutor:
         is_return = False
         action_indices = list(range(0, len(self.actions)))
         if self.context["actionOrder"] == "random":
-            script_logger.log("shuffling")
+            script_logger.log("shuffling", level='debug')
             random.shuffle(action_indices)
 
-        script_logger.log('All actions: ', list(map(lambda action: action["actionGroup"], self.actions)))
+        script_logger.log('All actions: ', list(map(lambda action: action["actionGroup"], self.actions)), level='info')
         parallel_groups = {}
         parallel_group = []
 
@@ -855,12 +855,12 @@ class ScriptExecutor:
                 else:
                     if len(parallel_group) > 1:
                         for parallel_action in parallel_group:
-                            script_logger.log('adding parallel group to ' + str(parallel_action['actionGroup']))
+                            script_logger.log('adding parallel group to ' + str(parallel_action['actionGroup']), level='debug')
                             parallel_groups[parallel_action["actionGroup"]] = parallel_group
                     parallel_group = []
             if len(parallel_group) > 1:
                 for parallel_action in parallel_group:
-                    script_logger.log('adding parallel group to ' + str(parallel_action['actionGroup']))
+                    script_logger.log('adding parallel group to ' + str(parallel_action['actionGroup']), level='debug')
                     parallel_groups[parallel_action["actionGroup"]] = parallel_group
         elif self.context["branching_behavior"] == "attemptAllBranches" and n_actions > 1:
             state_copy = self.state.copy()
@@ -941,7 +941,7 @@ class ScriptExecutor:
                 self.actions = []
                 break
             else:
-                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: encountered error in script and returning ', self.status)
+                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: encountered error in script and returning ', self.status, level='error')
                 self.context['child_actions'] = None
                 self.status = ScriptExecutionState.ERROR
                 break
@@ -976,7 +976,7 @@ class ScriptExecutor:
                 self.context["branching_behavior"],
                 self.context["scriptMaxActionAttempts"]
             )
-        )
+        , level='error')
         self.status = ScriptExecutionState.STARTING
         overall_status = ScriptExecutionState.FAILURE
         while self.status != ScriptExecutionState.FINISHED and\
@@ -1024,7 +1024,7 @@ class ScriptExecutor:
                 self.context["branching_behavior"],
                 self.context["scriptMaxActionAttempts"]
             )
-        )
+        , level='error')
         self.status = ScriptExecutionState.STARTING
         branches = []
         if self.context["actionOrder"] == "random":
@@ -1101,7 +1101,7 @@ class ScriptExecutor:
             self.status = ScriptExecutionState.FINISHED
         elif overall_status == ScriptExecutionState.FAILURE:
             self.status = ScriptExecutionState.FINISHED_FAILURE
-        script_logger.log(self.props['script_name'] + ' CONTROL FLOW: runOne overall status was ', overall_status)
+        script_logger.log(self.props['script_name'] + ' CONTROL FLOW: runOne overall status was ', overall_status, level='error')
         self.on_script_completion()
         #TODO In theory you should load in the state and context of the successful branch
 
@@ -1112,7 +1112,7 @@ class ScriptExecutor:
                 self.context["branching_behavior"],
                 self.context["scriptMaxActionAttempts"]
             )
-        )
+        , level='error')
         self.status = ScriptExecutionState.STARTING
         overall_status = ScriptExecutionState.FAILURE
         while self.status != ScriptExecutionState.FINISHED and\
@@ -1145,7 +1145,7 @@ class ScriptExecutor:
             self.state = self.context["success_states"][-1]
 
     def start_new_branch(self):
-        script_logger.log(self.props['script_name'] + " CONTROL FLOW: finished branch with status ", self.status, " and starting new branch")
+        script_logger.log(self.props['script_name'] + " CONTROL FLOW: finished branch with status ", self.status, " and starting new branch", level='error')
         if self.status == ScriptExecutionState.FINISHED_BRANCH:
             script_logger.log(self.props['script_name'] + " CONTROL FLOW: adding script state to success states")
             if self.context["success_states"] is None:

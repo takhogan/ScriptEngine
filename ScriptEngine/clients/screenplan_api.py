@@ -71,8 +71,8 @@ class ScreenPlanAPI:
                 self.server_token = new_token
                 return True
         except Exception as e:
-            script_logger.log('Warning: error while getting server token')
-            script_logger.log(e)
+            script_logger.log('Warning: error while getting server token', level='error')
+            script_logger.log(e, level='error')
             return False
 
     def send_request(self, request: ScreenPlanAPIRequest, retry: bool = True) -> Optional[Dict]:
@@ -86,7 +86,7 @@ class ScreenPlanAPI:
                 if request.files:
                     # Use multipart/form-data when files are present
                     # Send JSON payload as a form field
-                    script_logger.log(f'sending files:', len(request.files), request.payload)
+                    script_logger.log(f'sending files:', len(request.files), request.payload, level='debug')
                     
                     form_data = {'payload': json.dumps(request.payload)}
                     response = requests.post(
@@ -121,9 +121,9 @@ class ScreenPlanAPI:
                 except:
                     return {'data': response.text}
             else:
-                script_logger.log(f'Request failed with status code {response.status_code}: {response.text}')
+                script_logger.log(f'Request failed with status code {response.status_code}: {response.text}', level='error')
                 return None
             
         except Exception as e:
-            script_logger.log(f'Request failed: {e}')
+            script_logger.log(f'Request failed: {e}', level='error')
             return None

@@ -47,5 +47,5 @@ class RandomVariableHelper:
             return rv_vals
         else:
             exception_message = 'random variable unimplemented: ' + delayTypeData["distributionType"]
-            script_logger.log(exception_message)
+            script_logger.log(exception_message, level='error')
             raise Exception(exception_message)

@@ -65,6 +65,16 @@ class ScriptActionLog:
         with open(path, mode, encoding='utf-8', errors='replace') as f:
             f.write(contents + end)
 
+    @staticmethod
+    def _capture_file(role):
+        # Gate artifact capture by log level. post files feed the log video, so
+        # they survive at info and debug but are dropped at error; pre and
+        # supporting files are debug-only detail. Lazy import avoids the
+        # script_logger <-> script_action_log import cycle.
+        from ScriptEngine.common.logging.script_logger import ScriptLogger
+        min_level = 'info' if role == 'post' else 'debug'
+        return ScriptLogger.get_logger().should_log(min_level)
+
     def _flush(self):
         payload = {
                 'base_path' : self.base_path,
@@ -123,6 +133,8 @@ class ScriptActionLog:
         _log_executor.submit(self._flush)
 
     def set_pre_file(self, file_type, relative_path : str, log_header : bool =True, absolute_path : bool =False):
+        if not self._capture_file('pre'):
+            return
         self.pre_file = (
             file_type,
             (
@@ -132,6 +144,8 @@ class ScriptActionLog:
         self.to_dict()
 
     def add_pre_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
+        if not self._capture_file('pre'):
+            return
         self.pre_file = (
             file_type,
             (self.default_path_header if log_header else self.base_path) + relative_path
@@ -143,6 +157,8 @@ class ScriptActionLog:
             raise Exception('Unsupported File Type')
 
     def append_pre_file(self, file_type, file_contents, end='\n'):
+        if not self._capture_file('pre'):
+            return
         if self.pre_file[0] != file_type:
             raise Exception(
                 'Attempting to append contents of type ' + file_type +
@@ -155,6 +171,8 @@ class ScriptActionLog:
             raise Exception('Unsupported File Type')
 
     def set_post_file(self, file_type, relative_path, log_header=True, absolute_path=False):
+        if not self._capture_file('post'):
+            return
         self.post_file = (
             file_type,
             (
@@ -164,6 +182,8 @@ class ScriptActionLog:
         self.to_dict()
 
     def add_post_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
+        if not self._capture_file('post'):
+            return
         self.post_file = (
             file_type,
             (self.default_path_header if log_header else self.base_path) + relative_path
@@ -175,6 +195,8 @@ class ScriptActionLog:
             raise Exception('Unsupported File Type')
 
     def append_post_file(self, file_type, file_contents, end='\n'):
+        if not self._capture_file('post'):
+            return
         if self.post_file[0] != file_type:
             raise Exception(
                 'Attempting to append contents of type ' + file_type +
@@ -187,6 +209,8 @@ class ScriptActionLog:
             raise Exception('Unsupported File Type')
 
     def add_supporting_file_reference(self, file_type, relative_path, log_header=True):
+        if not self._capture_file('supporting'):
+            return
         new_supporting_file_path = (
            self.default_path_header if log_header else self.base_path
         ) + relative_path
@@ -197,6 +221,8 @@ class ScriptActionLog:
         self.to_dict()
 
     def add_supporting_absolute_file_reference(self, file_type, absolute_path):
+        if not self._capture_file('supporting'):
+            return
         for supporting_file_type,supporting_file_path in self.supporting_files:
             if supporting_file_path == absolute_path:
                 raise Exception('Attempting to add supporting file reference with absolute path ' + absolute_path + ' but file already exists with path ' + supporting_file_path)
@@ -204,6 +230,8 @@ class ScriptActionLog:
         self.to_dict()
 
     def add_supporting_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
+        if not self._capture_file('supporting'):
+            return
         new_supporting_file_path = (
             self.default_path_header if log_header else self.base_path
         ) + relative_path
@@ -218,6 +246,8 @@ class ScriptActionLog:
             raise Exception('Unsupported File Type')
 
     def append_supporting_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
+        if not self._capture_file('supporting'):
+            return
         existing_supporting_file_path = (
             self.default_path_header if log_header else self.base_path
         ) + relative_path

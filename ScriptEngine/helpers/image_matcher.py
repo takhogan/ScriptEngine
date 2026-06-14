@@ -50,10 +50,10 @@ class ImageMatcher:
         elif detector_name == "scaledPixelDifference":
             pass
         elif detector_name == "logisticClassifier":
-            script_logger.log("logistic detector unimplemented ")
+            script_logger.log("logistic detector unimplemented ", level='error')
             exit(0)
         else:
-            script_logger.log("detector unimplemented! ")
+            script_logger.log("detector unimplemented! ", level='error')
             exit(0)
 
         h, w = floating_detect_obj["outputMask_single_channel"].shape[0:2]
@@ -118,7 +118,7 @@ class ImageMatcher:
             str(screencap_search_bgr.shape),
             str(screencap_mask_gray.shape)
         )
-        script_logger.log(pre_log)
+        script_logger.log(pre_log, level='debug')
         script_logger.get_action_log().append_supporting_file(
             'text',
             'detect_result.txt',
@@ -127,14 +127,14 @@ class ImageMatcher:
         resized_im_log = ''
         if not use_resized_im_only:
             try:
-                script_logger.log('Starting match template')
+                script_logger.log('Starting match template', level='debug')
                 match_result = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr,
                     cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
                     cv2.TM_CCOEFF_NORMED,result=None,
                     mask=screencap_mask_gray if use_mask else None
                 )
-                script_logger.log('Finished match template')
+                script_logger.log('Finished match template', level='debug')
             except cv2.error as e:
                 is_match_error = True
 
@@ -164,13 +164,13 @@ class ImageMatcher:
                     str(screencap_mask_gray.shape)
                 )
                 mid_log += f'Resized image to fit original dimensions width {source_screen_width} and height {source_screen_height}'
-                script_logger.log(mid_log)
+                script_logger.log(mid_log, level='debug')
                 script_logger.get_action_log().append_supporting_file(
                     'text',
                     'detect_result.txt',
                     '\n' + mid_log
                 )
-                script_logger.log('Starting match template')
+                script_logger.log('Starting match template', level='debug')
                 match_result_resized = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr_resized.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr_resized,
                     cv2.cvtColor(screencap_search_bgr.copy(),
@@ -178,13 +178,13 @@ class ImageMatcher:
                     cv2.TM_CCOEFF_NORMED, result=None,
                     mask=screencap_mask_gray if use_mask else None
                 )
-                script_logger.log('Finished match template')
+                script_logger.log('Finished match template', level='debug')
 
                 # script_logger.log('match_result_resize ', threshold_match_results(match_result_resized))
                 # exit(0)
             except cv2.error as e:
                 if is_match_error:
-                    script_logger.log('error in resized match template : ', e)
+                    script_logger.log('error in resized match template : ', e, level='error')
                     exit(1)
                 else:
                     parse_resized_img = False
@@ -226,7 +226,7 @@ class ImageMatcher:
         matches: list[TemplateMatch] = []
         match_img_index = 1
         if thresholded_match_results is None:
-            script_logger.log('image matching failed as thresholded_match_results is None, check inputExpression of action')
+            script_logger.log('image matching failed as thresholded_match_results is None, check inputExpression of action', level='error')
             exit(1)
         if output_cropping is not None:
             output_cropping = (
@@ -312,7 +312,7 @@ class ImageMatcher:
         result_im_bgr = screencap_im_bgr.copy()
         h, w = screencap_search_bgr.shape[0:2]
         if len(screencap_search_bgr.shape) < 3:
-            script_logger.log('converting search image to BGR for logging')
+            script_logger.log('converting search image to BGR for logging', level='debug')
             screencap_search_bgr = cv2.cvtColor(screencap_search_bgr, cv2.COLOR_GRAY2BGR)
         threshold = float(detectObject['actionData']['threshold'])
         # draw red box around best match
@@ -374,7 +374,7 @@ class ImageMatcher:
             str(best_point_score)
         )
 
-        script_logger.log(result_log)
+        script_logger.log(result_log, level='debug')
         script_logger.get_action_log().append_supporting_file(
             'text',
             'detect_result.txt',

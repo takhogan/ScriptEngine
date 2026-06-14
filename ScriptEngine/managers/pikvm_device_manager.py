@@ -63,7 +63,7 @@ class PiKVMDeviceManager(DeviceManager):
             screenshot = self.screenshot()
             return "online"
         except Exception as e:
-            script_logger.log('PiKVMDeviceManager: get_status', e)
+            script_logger.log('PiKVMDeviceManager: get_status', e, level='error')
             return "offline"
 
     def start_device(self):
@@ -117,7 +117,7 @@ class PiKVMDeviceManager(DeviceManager):
             self.instance.send_mouse_move_event(traverse_x + delta_pair[0], traverse_y + delta_pair[1])
             traverse_x += delta_pair[0]
             traverse_y += delta_pair[1]
-        script_logger.log(f'PiKVM CONTROLLER: smooth move ${str(frac_source_x)}, ${str(frac_source_y)}, ${str(frac_target_x)}, ${str(frac_target_y)}=', )
+        script_logger.log(f'PiKVM CONTROLLER: smooth move ${str(frac_source_x)}, ${str(frac_source_y)}, ${str(frac_target_x)}, ${str(frac_target_y)}=', level='debug')
         return delta_x, delta_y
     
     def click(self, x, y, button="left"):

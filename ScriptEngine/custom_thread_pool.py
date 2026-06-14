@@ -46,7 +46,7 @@ class CustomThreadPool(ThreadPoolExecutor):
         # Handle any unfinished tasks
         if threads_not_done:
             script_logger.log(
-                f"Timeout reached. Cancelling unfinished threads. {len(threads_not_done)} threads are still active.")
+                f"Timeout reached. Cancelling unfinished threads. {len(threads_not_done)} threads are still active.", level='error')
             for future in threads_not_done:
                 future.cancel()
         script_logger.log('Completed shutting down thread pool')

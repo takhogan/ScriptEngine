@@ -101,7 +101,8 @@ class ColorCompareHelper:
     def handle_color_compare(action, io_executor):
 
         screencap_im_bgr = action['input_obj']['screencap_im_bgr'].copy()
-        if script_logger.get_log_level() == 'info':
+        # input (pre) image is debug-only detail.
+        if script_logger.should_log('debug'):
             input_image_relative_path = 'colorCompareAction-inputImage.png'
             thread_script_logger = script_logger.copy()
             io_executor.submit(
@@ -114,12 +115,12 @@ class ColorCompareHelper:
         pre_log_1 = 'Compare Mode: {}'.format(
             action["actionData"]["compareMode"]
         )
-        script_logger.log(pre_log_1)
+        script_logger.log(pre_log_1, level='debug')
 
         pre_log_2 = 'Reference Color: {}'.format(
             str(action['actionData']['referenceColor'])
         )
-        script_logger.log(pre_log_2)
+        script_logger.log(pre_log_2, level='debug')
 
         # Get the mask if available, otherwise use the entire image
         screencap_mask = action['input_obj'].get('screencap_mask')
@@ -163,7 +164,7 @@ class ColorCompareHelper:
             else:
                 img_colors = [0, 0, 0]  # Default/fallback values in case there's no mode color key
             pre_log_3 = 'Mode Color: {}'.format(img_colors)
-        script_logger.log(pre_log_3)
+        script_logger.log(pre_log_3, level='debug')
 
         ref_color_ints = list(map(int, action['actionData']['referenceColor']))
         color_score = (100 - ColorCompareHelper.compare_colors(img_colors, ref_color_ints)) / 100
@@ -176,28 +177,33 @@ class ColorCompareHelper:
             pre_log_1 + '\n' + pre_log_2 + '\n' + pre_log_3 + '\n' + post_log
         )
 
-        input_color_relative_path = 'input_color.png'
-        post_image_script_logger = script_logger.copy()
-        io_executor.submit(
-            ColorCompareHelper.create_color_compare_post_image,
-            post_image_script_logger,
-            screencap_im_bgr,
-            action['input_obj'].get('original_image'),
-            action['input_obj'].get('original_image_blurred'),
-            action['input_obj'].get('match_point', (0, 0)),
-            img_colors,
-            input_color_relative_path
-        )
+        # post image feeds the log video, so it is captured at info+ but skipped
+        # at error (no images at error level).
+        if script_logger.should_log('info'):
+            input_color_relative_path = 'input_color.png'
+            post_image_script_logger = script_logger.copy()
+            io_executor.submit(
+                ColorCompareHelper.create_color_compare_post_image,
+                post_image_script_logger,
+                screencap_im_bgr,
+                action['input_obj'].get('original_image'),
+                action['input_obj'].get('original_image_blurred'),
+                action['input_obj'].get('match_point', (0, 0)),
+                img_colors,
+                input_color_relative_path
+            )
 
-        compare_logs_script_logger = script_logger.copy()
-        io_executor.submit(
-            ColorCompareHelper.create_color_compare_logs,
-            compare_logs_script_logger,
-            img_colors,
-            ref_color_ints,
-            action["actionData"]["compareMode"],
-            color_score
-        )
+        # reference swatch + results.txt are debug-only supporting files.
+        if script_logger.should_log('debug'):
+            compare_logs_script_logger = script_logger.copy()
+            io_executor.submit(
+                ColorCompareHelper.create_color_compare_logs,
+                compare_logs_script_logger,
+                img_colors,
+                ref_color_ints,
+                action["actionData"]["compareMode"],
+                color_score
+            )
 
         return color_score
 

@@ -218,7 +218,7 @@ def safe_subprocess_run(args, timeout=5, capture_output=True, cwd="/", retry_on_
         """        
         import subprocess
         try:
-            script_logger.log(f'safe_subprocess_run: running command: {" ".join(args)}')
+            script_logger.log(f'safe_subprocess_run: running command: {" ".join(args)}', level='debug')
             
             result = subprocess.run(
                 args,
@@ -231,20 +231,20 @@ def safe_subprocess_run(args, timeout=5, capture_output=True, cwd="/", retry_on_
             if result.returncode == 0:
                 script_logger.log(f'safe_subprocess_run: command succeeded')
             else:
-                script_logger.log(f'safe_subprocess_run: command failed with return code {result.returncode}')
+                script_logger.log(f'safe_subprocess_run: command failed with return code {result.returncode}', level='error')
                 if capture_output and result.stderr:
-                    script_logger.log(f'safe_subprocess_run: stderr: {result.stderr.decode()}')
+                    script_logger.log(f'safe_subprocess_run: stderr: {result.stderr.decode()}', level='debug')
             
             return result
             
         except subprocess.TimeoutExpired as e:
-            script_logger.log(f'safe_subprocess_run: command timed out after {timeout}s: {" ".join(args)}')
+            script_logger.log(f'safe_subprocess_run: command timed out after {timeout}s: {" ".join(args)}', level='error')
             if retry_on_timeout:
                 safe_subprocess_run(args, timeout=timeout, capture_output=capture_output, cwd=cwd, retry_on_timeout=False, **kwargs)
             else:
                 raise e
         except Exception as e:
-            script_logger.log(f'safe_subprocess_run: error running command {" ".join(args)}: {e}')
+            script_logger.log(f'safe_subprocess_run: error running command {" ".join(args)}: {e}', level='error')
             raise e
 
 
@@ -310,10 +310,10 @@ class StateEvaluator:
             return builtins.eval(statement, env_globals, local_scope)
         except KeyError:
             script_logger.log(
-                'ERROR: key error while parsing eval, keys present in state: ' + ', '.join(list(env_globals))
+                'ERROR: key error while parsing eval, keys present in state: ' + ', '.join(list(env_globals)), level='error'
             )
             if not crashonerror:
-                script_logger.log('script finished with failure, ignoring key error')
+                script_logger.log('script finished with failure, ignoring key error', level='error')
                 return None
             raise
 
@@ -336,10 +336,10 @@ class StateEvaluator:
             builtins.exec(code, env, env)
         except KeyError:
             script_logger.log(
-                'ERROR: key error while parsing exec, keys present in state: ' + ', '.join(list(env))
+                'ERROR: key error while parsing exec, keys present in state: ' + ', '.join(list(env)), level='error'
             )
             if not crashonerror:
-                script_logger.log('script finished with failure, ignoring key error')
+                script_logger.log('script finished with failure, ignoring key error', level='error')
                 return None
             raise
 
@@ -397,5 +397,5 @@ def sanitize_statement_input(statement_input, state):
     try:
         return state_eval(expr, {}, state)
     except (TypeError, KeyError, SyntaxError) as p_err:
-        script_logger.log(p_err)
+        script_logger.log(p_err, level='error')
         return [f'{term}: None: {type(None)}' for term in terms]

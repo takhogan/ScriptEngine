@@ -127,7 +127,7 @@ class ClickActionHelper:
                                 str(screen_height)
                             )
             remap_log += '\n' + rescaling_log
-            script_logger.log(rescaling_log)
+            script_logger.log(rescaling_log, level='debug')
             remapping_function = ClickActionHelper.get_remapping_function(
                 source_screen_width,
                 source_screen_height,
@@ -137,11 +137,11 @@ class ClickActionHelper:
             point_choice = remapping_function(point_choice)
             new_point_choice_log = 'New point chosen: {}'.format(str(point_choice))
             remap_log += '\n' + new_point_choice_log
-            script_logger.log(new_point_choice_log)
+            script_logger.log(new_point_choice_log, level='debug')
             point_list = point_list.copy()
             remapping_log = 'Remapping {} point list points'.format(len(point_list))
             remap_log += '\n' + remapping_log
-            script_logger.log(remapping_log)
+            script_logger.log(remapping_log, level='debug')
             point_list = list(map(remapping_function, point_list))
 
         return point_list, point_choice, remap_log
@@ -157,7 +157,7 @@ class ClickActionHelper:
                 var_name
             )
             pre_log += '\n' + input_expression_log
-            script_logger.log(input_expression_log)
+            script_logger.log(input_expression_log, level='debug')
             input_point = state_eval(var_name, {}, state)
 
             input_expression_type = 'unknown'
@@ -198,7 +198,7 @@ class ClickActionHelper:
                 str(point_choice)
             )
             pre_log += '\n' + input_expression_point_choice_log
-            script_logger.log(input_expression_point_choice_log)
+            script_logger.log(input_expression_point_choice_log, level='debug')
             log_point_list = point_list = input_point
         elif len(point_list) > 0:
             pre_log = 'pointList in actionData, choosing point from pointlist'
@@ -219,10 +219,10 @@ class ClickActionHelper:
                 int(source_screen_width) > 0 and\
                 len(str(source_screen_height)) > 0 and\
                 int(source_screen_height) > 0
-            script_logger.log(pre_log)
+            script_logger.log(pre_log, level='debug')
             point_choice_log = 'Point chosen ({}): {}'.format(selection_strategy, str(point_choice))
             pre_log += '\n' + point_choice_log
-            script_logger.log(point_choice_log)
+            script_logger.log(point_choice_log, level='debug')
             log_point_list = {
                 'input_type': 'point_list',
                 'point_list': point_list
@@ -241,7 +241,7 @@ class ClickActionHelper:
         else:
             log_point_list = []
             pre_log = 'pointList not in actionData and inputExpression is None'
-            script_logger.log(pre_log)
+            script_logger.log(pre_log, level='debug')
         script_logger.get_action_log().add_supporting_file(
             'text',
             'clickActionPointChoice-{}-log.txt'.format(str(point_index)),
@@ -252,7 +252,7 @@ class ClickActionHelper:
     @staticmethod
     def draw_point_choice(screenshot_bgr, point_choice, point_list):
         script_logger = ScriptLogger.get_logger()
-        script_logger.log('draw point choice', point_choice)
+        script_logger.log('draw point choice', point_choice, level='debug')
         overlay = screenshot_bgr.copy()
         if point_list['input_type'] == 'point_list':
             for point in point_list['point_list']:
@@ -289,7 +289,13 @@ class ClickActionHelper:
     def draw_click(screenshot_bgr, point_choice, point_list):
         script_logger = ScriptLogger.get_logger()
 
-        if script_logger.get_log_level() == 'info':
+        # The clickLocation post image feeds the log video, so it must be
+        # generated at both info and debug; only the error level (text-only,
+        # no images) skips it. The pre image below is debug-only.
+        if script_logger.get_log_level() == 'error':
+            return
+
+        if script_logger.should_log('debug'):
             input_image_relative_path = 'drawClick-inputImage.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screenshot_bgr)
             script_logger.get_action_log().set_pre_file(
@@ -313,7 +319,13 @@ class ClickActionHelper:
                             deltas):
         script_logger = ScriptLogger.get_logger()
 
-        if script_logger.get_log_level() == 'info':
+        # The dragPath post image feeds the log video, so it must be generated
+        # at both info and debug; only the error level (text-only, no images)
+        # skips it. The pre image below is debug-only.
+        if script_logger.get_log_level() == 'error':
+            return
+
+        if script_logger.should_log('debug'):
             input_image_relative_path = 'drawClick-inputImage.png'
             cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screenshot_bgr)
             script_logger.get_action_log().set_pre_file(
@@ -339,7 +351,7 @@ class ClickActionHelper:
 
         output_image_relative_path = 'dragPath.png'
         cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
-        script_logger.log('Saving dragPath.png')
+        script_logger.log('Saving dragPath.png', level='debug')
         script_logger.get_action_log().set_post_file(
             'image',
             output_image_relative_path

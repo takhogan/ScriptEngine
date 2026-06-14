@@ -11,6 +11,7 @@ from ScriptEngine.common.enums import ScriptExecutionState
 import ScriptEngine.script_action_executor as sae_mod
 import ScriptEngine.system_script_action_executor as ssae_mod
 import ScriptEngine.helpers.image_to_text_action_helper as image_to_text_action_helper_mod
+import ScriptEngine.helpers.match_merge_helper as match_merge_helper_mod
 
 
 class FakeActionLog:
@@ -46,11 +47,25 @@ class FakeActionLog:
 
 
 class FakeLogger:
+    LOG_LEVELS = {'error': 0, 'info': 1, 'debug': 2}
+
     def __init__(self):
         self.action_log = FakeActionLog()
+        # Default to the most permissive level so all artifact paths execute
+        # under test (mirrors the pre-log-level unconditional behavior).
+        self.log_level = 'debug'
 
     def log(self, *args, **kwargs):
         return None
+
+    def should_log(self, level='info'):
+        return self.LOG_LEVELS.get(level, 1) <= self.LOG_LEVELS.get(self.log_level, 1)
+
+    def get_log_level(self):
+        return self.log_level
+
+    def set_log_level(self, level):
+        self.log_level = level
 
     def copy(self):
         return self
@@ -105,6 +120,7 @@ def system_executor(monkeypatch):
     logger = FakeLogger()
     monkeypatch.setattr(ssae_mod, "script_logger", logger)
     monkeypatch.setattr(image_to_text_action_helper_mod, "script_logger", logger)
+    monkeypatch.setattr(match_merge_helper_mod, "script_logger", logger)
     io = FakeIOExecutor()
     executor = SystemScriptActionExecutor(
         base_script_name="script",

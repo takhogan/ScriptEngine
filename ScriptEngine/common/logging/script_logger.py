@@ -8,6 +8,12 @@ class ScriptLogger:
     import queue
     _instance = None
     log_path = 'stdout.txt'
+    # error < info < debug. A message/artifact is kept when its own level is at
+    # least as important as the configured one, i.e. rank(level) <= rank(log_level):
+    #   error -> only error logs, no files, no video
+    #   info  -> error + info logs, post files only (enough to render the video)
+    #   debug -> everything: all logs, pre/post/supporting files
+    LOG_LEVELS = {'error': 0, 'info': 1, 'debug': 2}
     _write_queue = queue.Queue()
     _writer_thread = None
     _writer_running = False
@@ -156,8 +162,22 @@ class ScriptLogger:
         # when this class is deseralized is overwrites the current instance
         raise TypeError(f"Instances of {self.__class__.__name__} cannot be serialized.")
 
-    def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True):
+    def _level_rank(self, level):
+        # Unknown levels are treated as 'info' so a typo never silently drops a log.
+        return self.LOG_LEVELS.get(level, self.LOG_LEVELS['info'])
+
+    def should_log(self, level='info'):
+        """Whether a message or artifact of the given level is kept at the
+        currently configured log level. Used both to gate text logs and to
+        decide which action-log files (pre/post/supporting) get captured."""
+        return self._level_rank(level) <= self._level_rank(self.log_level)
+
+    def log(self, *args, sep=' ', end='\n', file=None, flush=True, log_header=True, level='info'):
         import datetime
+        # Drop messages below the configured verbosity (applies to the write
+        # queue and explicit-file writes alike).
+        if not self.should_log(level):
+            return
         header_str = str(self.log_header) if (log_header and self.log_header is not None) else ''
         text = f"{datetime.datetime.now()}: {header_str} {sep.join(map(str, args))}{end}"
 
@@ -196,6 +216,9 @@ class ScriptLogger:
         return self.action_log
 
     def set_log_level(self, log_level : str):
+        # argparse already restricts choices; this guards programmatic callers.
+        if log_level not in self.LOG_LEVELS:
+            log_level = 'info'
         self.log_level = log_level
 
     def get_log_level(self) -> str:

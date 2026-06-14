@@ -94,35 +94,6 @@ def format_env_outputs(env_dict):
     
     return '\n'.join(lines)
 
-def update_running_scripts_file(scriptname, action):
-    import os
-    import json
-    if action == 'push':
-        running_scripts = []
-        if not os.path.exists(RUNNING_SCRIPTS_PATH):
-            with open(RUNNING_SCRIPTS_PATH, 'w') as running_scripts_file:
-                json.dump(running_scripts, running_scripts_file)
-        with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
-            running_scripts = json.load(running_script_file)
-            if len(running_scripts) == 0 or running_scripts[0] != scriptname:
-                running_scripts.append(scriptname)
-        with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
-            json.dump(running_scripts, running_script_file)
-    elif action == 'pop':
-        if not os.path.exists(RUNNING_SCRIPTS_PATH):
-            return
-        else:
-            running_scripts = []
-            with open(RUNNING_SCRIPTS_PATH, 'r') as running_script_file:
-                running_scripts = json.load(running_script_file)
-                running_scripts.pop(0)
-            script_logger.log('running_scripts ', running_scripts)
-            if len(running_scripts) == 0:
-                os.remove(RUNNING_SCRIPTS_PATH)
-            else:
-                with open(RUNNING_SCRIPTS_PATH, 'w') as running_script_file:
-                    json.dump(running_scripts, running_script_file)
-
 async def close_threads_and_processes(io_executor, process_executor, timeout=30):
     import asyncio
     await asyncio.gather(io_executor.soft_shutdown(script_logger, timeout), process_executor.soft_shutdown(script_logger, timeout))
@@ -137,10 +108,10 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
     script_logger.log('SCRIPT_MANAGER: ', ' script trigger time: ',
           datetime_to_local_str(str_timeout_to_datetime_timeout(start_time_str, src='deployment_server')),
           'actual script start time: ', datetime.datetime.now(), ' scheduled end time: ',
-          datetime_to_local_str(timeout))
+          datetime_to_local_str(timeout), level='info')
     import numpy as np
     np.set_printoptions(threshold=3, edgeitems=0, linewidth=80, precision=2, suppress=True)
-    script_logger.log('constants : ', constants)
+    script_logger.log('constants : ', constants, level='info')
     from ScriptEngine.script_loader import parse_script
     script_object = parse_script(script_name, system_script, workspace)
     device_params = {}
@@ -148,7 +119,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         if device_details.startswith('file'):
             file_path = ''.join(device_details.split(':')[1:])
             file_type = os.path.splitext(file_path)[1]
-            script_logger.log('SCRIPT MANAGER: loading input source', file_path, 'file exists', os.path.exists(file_path))
+            script_logger.log('SCRIPT MANAGER: loading input source', file_path, 'file exists', os.path.exists(file_path), level='info')
             import cv2
             if file_type[1:] in imageFileExtensions:
                 input_img = cv2.imread(file_path)
@@ -168,8 +139,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
                     device_params = devices_config[device_details]
                     device_params['script-engine-device-type'] = 'bluestacks'
                 else:
-                    script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ')
-    script_logger.log('SCRIPT MANAGER: loading adb_args', device_params)
+                    script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ', level='error')
+    script_logger.log('SCRIPT MANAGER: loading adb_args', device_params, level='info')
     errored = False
     from ScriptEngine.device_controller import DeviceController
     from ScriptEngine.script_executor import ScriptExecutor
@@ -239,13 +210,13 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
                     script_object['props']['scriptReference']
                 )
         except:
-            script_logger.log('Script Execution interrupted by exception')
+            script_logger.log('Script Execution interrupted by exception', level='error')
             asyncio.run(close_threads_and_processes(io_executor, process_executor))
 
             traceback.print_exc()
             errored = True
         else:
-            script_logger.log('Script Execution completed')
+            script_logger.log('Script Execution completed', level='error')
             asyncio.run(close_threads_and_processes(io_executor, process_executor))
             
             if write_env:
@@ -256,7 +227,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
                 print(env_output, flush=True)
                 sys.exit(0)
     
-    script_logger.log('Script Manager process completed')
+    script_logger.log('Script Manager process completed', level='error')
     if errored:
         sys.exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())
@@ -283,7 +254,10 @@ def main():
         # Optional arguments
         parser.add_argument('--start-time', '-st', help='Script start time (format: YYYY-MM-DD HH:MM:SS)')
         parser.add_argument('--end-time', '-et', help='Script end time (format: YYYY-MM-DD HH:MM:SS)')
-        parser.add_argument('--log-level', '-l', default='info', help='Logging level')
+        parser.add_argument('--log-level', '-l', default='info', choices=['debug', 'info', 'error'],
+                            help='Logging level: debug = all logs + all files (pre/post/supporting); '
+                                 'info = info/error logs + post files only (enough to render the log video); '
+                                 'error = high-level logs only, no files, no video')
         parser.add_argument('--script-id', '-id', help='Script ID (UUID)')
         parser.add_argument('--device', '-d', help='Device details')
         parser.add_argument('--system-script', '-sys', action='store_true', help='Whether this is a system script')
@@ -333,12 +307,12 @@ def main():
 
     script_logger.set_log_level(log_level)
     script_logger.set_log_to_stdout(args.log_stdout)
-    script_logger.log(f'SCRIPT MANAGER: Process ID: {os.getpid()}')
-    script_logger.log('SCRIPT MANAGER: parsed args ', sys.argv)
-    script_logger.log('SCRIPT MANAGER: log_folder', log_folder, start_time)
+    script_logger.log(f'SCRIPT MANAGER: Process ID: {os.getpid()}', level='info')
+    script_logger.log('SCRIPT MANAGER: parsed args ', sys.argv, level='debug')
+    script_logger.log('SCRIPT MANAGER: log_folder', log_folder, start_time, level='info')
 
     script_logger.log('SCRIPT MANAGER: loading script {} and running with log level {}'.format(
-        script_name, script_logger.get_log_level())
+        script_name, script_logger.get_log_level()), level='error'
     )
     script_timeout = (start_time + datetime.timedelta(minutes=30)).astimezone(tz=tz.tzutc()) if end_time is None else end_time
 
