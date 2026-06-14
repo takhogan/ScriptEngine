@@ -36,6 +36,7 @@ class ScriptLogPreviewGenerator:
                 # Update last_image to the newly added one (with new action_name)
                 last_image = image_list[-1]
         elif log_tree['name'].startswith('detectObject') or\
+            log_tree['name'].startswith('colorCompareAction') or\
             log_tree['name'].startswith('mouseInteractionAction') or\
             log_tree['name'].startswith('mouseMoveAction') or\
             log_tree['name'].startswith('sendMessageAction'):
@@ -188,7 +189,18 @@ class ScriptLogPreviewGenerator:
             raise RuntimeError(f"Failed to open VideoWriter for {output_path}")
 
         if realtime:
-            # Real-time mode: calculate frame durations based on start_time
+            # Real-time mode: calculate frame durations based on start_time.
+            # We model the actions as a real-time timeline and sample it at the
+            # fixed frame interval (1/fps). For each frame sample point k/fps we
+            # render whichever action's window [elapsed, elapsed + duration)
+            # contains that point. Because sampling starts at k=0 (the very start
+            # of an action's window), when a burst of actions each completes in
+            # less than 1/fps the FIRST action of the burst is the one rendered,
+            # and it is held until 1/fps has passed (the next sample point), at
+            # which point whichever action is then active is rendered. This keeps
+            # the video in sync with real time instead of playing slower.
+            elapsed = 0.0          # cumulative real time at the start of this action
+            frames_written = 0     # also the index of the next frame sample point
             for i, image_path in enumerate(image_paths):
                 img = cv2.imread(image_path['post_file'])
 
@@ -211,8 +223,6 @@ class ScriptLogPreviewGenerator:
                     next_start_time = ScriptLogPreviewGenerator.parse_start_time(image_paths[i + 1].get('start_time', ''))
                     if current_start_time and next_start_time:
                         duration_seconds = (next_start_time - current_start_time).total_seconds()
-                        # Ensure minimum duration of 1 frame
-                        duration_seconds = max(duration_seconds, 1.0 / fps)
                     else:
                         # Fallback: use default duration if parsing fails
                         duration_seconds = 1.0
@@ -220,12 +230,16 @@ class ScriptLogPreviewGenerator:
                     # Last frame: display for a default duration
                     duration_seconds = 2.0
                 
-                # Calculate number of frames to write
-                num_frames = int(duration_seconds * fps)
-                
-                # Write the frame multiple times to achieve the duration
-                for _ in range(num_frames):
+                # Advance the timeline and write one frame for every sample point
+                # k/fps that falls inside this action's window. Sub-1/fps actions
+                # whose window contains no sample point are dropped; their time is
+                # still accounted for via `elapsed`, so the buffering is quantized
+                # by 1/fps and the frame count never outpaces real time.
+                action_end = elapsed + duration_seconds
+                while frames_written < action_end * fps:
                     video.write(img)
+                    frames_written += 1
+                elapsed = action_end
         else:
             # Regular mode: each image appears once
             for image_path in image_paths:
@@ -256,23 +270,18 @@ class ScriptLogPreviewGenerator:
         image_list = []
         ScriptLogPreviewGenerator.log_tree_to_image_list(log_tree, image_list)
         if len(image_list) > 0:
-            # Always generate the regular video
-            ScriptLogPreviewGenerator.images_to_video(image_list, output_path, fps=2)
-            
-            # If realtime is specified, also generate the realtime video
             if realtime:
-                # Generate realtime video with modified filename
-                base_name, ext = os.path.splitext(output_path)
-                realtime_output_path = f"{base_name}_realtime{ext}"
                 # For real-time mode, use higher FPS for smoother playback
-                ScriptLogPreviewGenerator.images_to_video(image_list, realtime_output_path, fps=30, realtime=True)
+                ScriptLogPreviewGenerator.images_to_video(image_list, output_path, fps=30, realtime=True)
+            else:
+                ScriptLogPreviewGenerator.images_to_video(image_list, output_path, fps=2)
 
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='Script Log Preview Generator')
     parser.add_argument('action_log_path', help='Path to action log file')
     parser.add_argument('output_file_name', help='Output file name')
-    parser.add_argument('--realtime', action='store_true', default=True, help='Additionally generate real-time video based on start_time')
+    parser.add_argument('--realtime', action='store_true', default=True, help='Generate a real-time video based on start_time instead of a fixed-rate video')
     args = parser.parse_args()
     
     # print('Running ScriptLogPreviewGenerator with args', args.action_log_path, args.output_file_name, '--realtime' if args.realtime else '')

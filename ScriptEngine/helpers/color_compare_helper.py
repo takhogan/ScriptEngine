@@ -20,6 +20,65 @@ class ColorCompareHelper:
         )
 
     @staticmethod
+    def create_color_compare_post_image(
+        thread_script_logger, matched_area_bgr, original_image, original_image_blurred,
+        match_point, img_colors, input_color_relative_path
+    ):
+        thread_local_storage.script_logger = thread_script_logger
+        thread_logger = ScriptLogger.get_logger()
+
+        # Use the precomputed blurred full original image as the backdrop so the
+        # matched area is tied back to the original image (matches detectObject's
+        # post-image format). Fall back to the unblurred original, then to the
+        # matched area itself, if the blurred original is unavailable.
+        base_image = original_image_blurred
+        if base_image is None:
+            base_image = original_image
+        if base_image is None:
+            base_image = matched_area_bgr
+        post_image = base_image.copy()
+
+        # Place the sharp matched area back into the blurred original at its
+        # original location, clamped to the backdrop bounds.
+        match_x = int(match_point[0])
+        match_y = int(match_point[1])
+        match_height, match_width = matched_area_bgr.shape[:2]
+        end_y = min(match_y + match_height, post_image.shape[0])
+        end_x = min(match_x + match_width, post_image.shape[1])
+        slice_h = end_y - match_y
+        slice_w = end_x - match_x
+        post_image[match_y:end_y, match_x:end_x] = matched_area_bgr[:slice_h, :slice_w]
+
+        # Border around the matched area (blue, matching detectObject).
+        cv2.rectangle(
+            post_image,
+            (match_x, match_y),
+            (match_x + match_width, match_y + match_height),
+            (255, 0, 0),
+            1
+        )
+
+        # Overlay the input color as a small square in the top left corner of
+        # the matched area, clamped so it never overflows the matched region.
+        square_size = max(12, min(match_height, match_width) // 3)
+        square_size = min(square_size, slice_h, slice_w)
+        color_bgr = np.array([img_colors[2], img_colors[1], img_colors[0]], dtype=np.uint8)
+        post_image[match_y:match_y + square_size, match_x:match_x + square_size] = color_bgr
+
+        # Outline around the input color swatch (green, distinct from the
+        # blue match-area border).
+        cv2.rectangle(
+            post_image,
+            (match_x, match_y),
+            (match_x + square_size, match_y + square_size),
+            (0, 255, 0),
+            1
+        )
+
+        cv2.imwrite(thread_logger.get_log_path_prefix() + input_color_relative_path, post_image)
+        thread_logger.get_action_log().set_post_file('image', input_color_relative_path)
+
+    @staticmethod
     def create_color_compare_logs(thread_script_logger, img_colors, ref_color_ints, compare_mode, color_score):
         thread_local_storage.script_logger = thread_script_logger
         thread_logger = ScriptLogger.get_logger()
@@ -118,10 +177,17 @@ class ColorCompareHelper:
         )
 
         input_color_relative_path = 'input_color.png'
-        ColorCompareHelper.create_color_image(
-            img_colors, script_logger.get_log_path_prefix() + input_color_relative_path
+        post_image_script_logger = script_logger.copy()
+        io_executor.submit(
+            ColorCompareHelper.create_color_compare_post_image,
+            post_image_script_logger,
+            screencap_im_bgr,
+            action['input_obj'].get('original_image'),
+            action['input_obj'].get('original_image_blurred'),
+            action['input_obj'].get('match_point', (0, 0)),
+            img_colors,
+            input_color_relative_path
         )
-        script_logger.get_action_log().set_post_file('image', input_color_relative_path)
 
         compare_logs_script_logger = script_logger.copy()
         io_executor.submit(

@@ -425,8 +425,7 @@ class DetectObjectHelper:
                 source_match_point,
                 floating_detect_obj["mask_single_channel"],
                 matches,
-                None,
-                needs_rescale
+                None
             )
 
             matching_overlay_relative_path = 'detectScene-matchOverlayed.png'
@@ -458,8 +457,7 @@ class DetectObjectHelper:
                 source_match_point,
                 floating_detect_obj["img"],
                 matches,
-                match_result,
-                False
+                match_result
             )
 
             matching_overlay_relative_path = 'detectObject-matchOverlayed.png'

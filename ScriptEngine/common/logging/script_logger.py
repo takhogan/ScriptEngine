@@ -33,13 +33,33 @@ class ScriptLogger:
             self._writer_running = True
             self._writer_thread = threading.Thread(target=self._writer_loop, daemon=True)
             self._writer_thread.start()
+            # Stop the writer before interpreter finalization: a daemon thread
+            # holding the stdout buffer lock at shutdown aborts the process
+            # with "Fatal Python error: _enter_buffered_busy".
+            import atexit
+            atexit.register(self._stop_writer_thread)
+
+    def _stop_writer_thread(self):
+        self._writer_running = False
+        # Sentinel queues behind any pending messages, so the queue drains
+        # before the loop exits.
+        self._write_queue.put(None)
+        if self._writer_thread and self._writer_thread.is_alive():
+            self._writer_thread.join(timeout=2)
 
     def _writer_loop(self):
         import queue
-        while self._writer_running:
+        while True:
             try:
-                # Get message from queue with a timeout to allow for clean shutdown
-                message = self._write_queue.get(timeout=1)
+                # Get message from queue with a timeout to allow for clean shutdown.
+                # Keep draining after _writer_running flips off — the None sentinel
+                # marks the true end of the queue.
+                try:
+                    message = self._write_queue.get(timeout=1)
+                except queue.Empty:
+                    if not self._writer_running:
+                        break
+                    continue
                 if message is None:
                     break
 
@@ -69,9 +89,7 @@ class ScriptLogger:
                 raise e
 
     def __del__(self):
-        self._writer_running = False
-        if self._writer_thread:
-            self._writer_thread.join(timeout=1)
+        self._stop_writer_thread()
 
     @classmethod
     def get_instance(cls):

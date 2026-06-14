@@ -305,7 +305,7 @@ class ImageMatcher:
         )
 
     @staticmethod
-    def create_result_im(detectObject, screencap_im_bgr, input_expression_match_point_xy_absolute, screencap_search_bgr, matches, match_result, input_rescaled):
+    def create_result_im(detectObject, screencap_im_bgr, input_expression_match_point_xy_absolute, screencap_search_bgr, matches, match_result):
         script_logger = ScriptLogger.get_logger()
         best_point_xy_absolute = 'None'
         best_point_score = 0
@@ -443,8 +443,12 @@ class ImageMatcher:
                 2
             )
 
-        # place subimage inside original image if input expression is an image
-        if detectObject['input_obj']['fixed_scale'] and not input_rescaled:
+        # place subimage inside original image if input expression is an image.
+        # result_im_bgr is always built at the input area's native footprint
+        # (the match-time rescale in get_match is internal to the SSIM compare and
+        # does not affect this image), so it can always be composited back into the
+        # full original image at the input's match point.
+        if detectObject['input_obj']['fixed_scale']:
             rescaled_base = detectObject['input_obj'].get('original_image_blurred')
             if rescaled_base is None:
                 rescaled_base = detectObject['input_obj']['original_image']
