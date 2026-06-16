@@ -234,6 +234,9 @@ class DesktopDeviceManager(DeviceManager):
         x = int(x * self.scale_factor)
         y = int(y * self.scale_factor)
         
+        current_position = _input_module.position()
+        if current_position != (x, y):
+            self.smooth_move(*current_position, x, y)
         _input_module.click(x=x, y=y, button=button)
 
     def smooth_move(self, source_x, source_y, target_x, target_y, drag=False, button='left'):
