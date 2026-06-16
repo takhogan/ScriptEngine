@@ -233,8 +233,10 @@ class ScriptActionLog:
         self.supporting_files.append((file_type, absolute_path))
         self.to_dict()
 
-    def add_supporting_file(self, file_type, relative_path, file_contents, end='\n', log_header=True):
-        if not self._capture_file('supporting'):
+    def add_supporting_file(self, file_type, relative_path, file_contents, end='\n', log_header=True, force=False):
+        # force keeps a supporting file even at error level. Used for run-outcome
+        # logs (errors.txt / completed.txt), which stay relevant at any log level.
+        if not force and not self._capture_file('supporting'):
             return
         new_supporting_file_path = (
             self.default_path_header if log_header else self.base_path

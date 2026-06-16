@@ -216,10 +216,16 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
             asyncio.run(close_threads_and_processes(io_executor, process_executor))
 
             traceback.print_exc()
+            # force keeps the error log as a supporting file even at error level,
+            # where supporting artifacts are otherwise dropped.
+            script_logger.get_action_log().add_supporting_file('text', 'errors.txt', traceback.format_exc(), log_header=False, force=True)
             errored = True
         else:
             script_logger.log('Script Execution completed', level='error')
             asyncio.run(close_threads_and_processes(io_executor, process_executor))
+            # force keeps the completion log as a supporting file even at error
+            # level, where supporting artifacts are otherwise dropped.
+            script_logger.get_action_log().add_supporting_file('text', 'completed.txt', 'Script Execution completed', log_header=False, force=True)
             
             if write_env:
                 output_state = {}
