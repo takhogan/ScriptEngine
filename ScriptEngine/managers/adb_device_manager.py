@@ -39,6 +39,7 @@ from .device_manager import DeviceManager
 from ..helpers.device_action_interpreter import DeviceActionInterpreter
 from ..helpers.click_path_generator import ClickPathGenerator
 from ..helpers.search_pattern_helper import SearchPatternHelper
+from ..helpers.windows_device_helper import WindowsDeviceHelper
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.logging.script_action_log import ScriptActionLog
 
@@ -880,10 +881,9 @@ class ADBDeviceManager(DeviceManager):
                     ))
                     self.window_name = instance_window_name
 
-                    check_for_window = lambda window_name: "HD-Player" in bytes.decode(safe_subprocess_run(
-                        ['tasklist', '/FI', f'WINDOWTITLE eq {window_name}'],
-                        capture_output=True,
-                    ).stdout, 'utf-8')
+                    check_for_window = lambda window_name: WindowsDeviceHelper.window_belongs_to_process(
+                        window_name, 'HD-Player'
+                    )
 
 
                     while not check_for_window(instance_window_name):
