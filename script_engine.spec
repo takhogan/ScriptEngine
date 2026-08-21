@@ -1,18 +1,31 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
-import platform
+import sysconfig
 sys.path.append(os.path.join(os.getcwd(), 'ScriptEngine'))
 
 block_cipher = None
 
-# Platform-specific path adjustments
-if platform.system() == 'Darwin':  # Mac OS
-    torch_lib_path = os.path.join("venv", "lib", "python3.x", "site-packages", "torch", "lib")
-    torch_path = os.path.join("venv", "lib", "python3.x", "site-packages", "torch")
-else:  # Windows
-    torch_lib_path = os.path.join("venv", "Lib", "site-packages", "torch", "lib")
-    torch_path = os.path.join("venv", "Lib", "site-packages", "torch")
+# site-packages of the interpreter running this build, which is the venv, because
+# runBuild.sh/.cmd activate it before invoking pyinstaller.
+#
+# Asking sysconfig rather than spelling the layout out per platform. The previous
+# Darwin branch carried a literal "venv/lib/python3.x/site-packages" that was never
+# substituted, so it resolved to nothing and the build failed on a missing datas
+# path; the Windows branch hardcoded "venv/Lib", which breaks whenever the venv is
+# named or located differently. One derived path is correct on both, and follows a
+# Python upgrade automatically.
+site_packages = sysconfig.get_paths()["purelib"]
+torch_path = os.path.join(site_packages, "torch")
+torch_lib_path = os.path.join(torch_path, "lib")
+
+for _required in (torch_path, torch_lib_path):
+    if not os.path.isdir(_required):
+        raise SystemExit(
+            "script_engine.spec: expected to find %s.\n"
+            "Run this through runBuild.sh (macOS/Linux) or runBuild.cmd (Windows) so the "
+            "venv is active, and make sure dependencies are installed." % _required
+        )
 
 # Analyses for all executables
 device_secrets_manager_a = Analysis(
