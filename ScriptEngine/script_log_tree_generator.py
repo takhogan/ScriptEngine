@@ -2,6 +2,8 @@ import sys
 import json
 import os
 
+from ScriptEngine.common.constants.script_engine_constants import LOG_TREE_PATH
+
 bin_path = os.path.abspath("bin")
 os.environ["PATH"] += os.pathsep + bin_path
 
@@ -24,5 +26,5 @@ if __name__ == '__main__':
         'action_log_path' : sys.argv[1]
     }
     ScriptLogTreeGenerator.assemble_script_log_tree(log_tree)
-    with open('./log_tree.json', 'w') as log_tree_file:
+    with open(LOG_TREE_PATH, 'w') as log_tree_file:
         json.dump(log_tree, log_tree_file)

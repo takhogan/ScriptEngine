@@ -2,6 +2,8 @@ import json
 import os
 import sys
 import glob
+
+from ScriptEngine.common.constants.script_engine_constants import SCRIPT_LIBRARY_FOLDER, SYSTEM_SCRIPTS_FOLDER
 import cv2
 import numpy as np
 
@@ -220,16 +222,16 @@ def _resolve_library_script_path(script_name, system_script, workspace):
     `.zip` script_name).
     """
     if not system_script:
-        return './scripts/scriptLibrary/' + workspace + '/' + script_name
+        return SCRIPT_LIBRARY_FOLDER + '/' + workspace + '/' + script_name
     candidates = [
-        './scripts/scriptLibrary/.system/' + script_name,
-        './scripts/scriptLibrary/' + workspace + '/' + script_name,
-        './scripts/systemScripts/' + script_name,
+        SCRIPT_LIBRARY_FOLDER + '/.system/' + script_name,
+        SCRIPT_LIBRARY_FOLDER + '/' + workspace + '/' + script_name,
+        SYSTEM_SCRIPTS_FOLDER + '/' + script_name,
     ]
     for candidate in candidates:
         if os.path.isdir(candidate):
             return candidate
-    return './scripts/systemScripts/' + script_name
+    return SYSTEM_SCRIPTS_FOLDER + '/' + script_name
 
 
 def parse_script(script_name, system_script=False, workspace="Default"):

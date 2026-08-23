@@ -4,7 +4,7 @@ import types
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
-RUNNING_SCRIPTS_PATH = './tmp/running_scripts.json'
+from ScriptEngine.common.constants.script_engine_constants import RUNNING_SCRIPTS_PATH
 
 
 class DummyFile:

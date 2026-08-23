@@ -36,7 +36,7 @@ from ScriptEngine.common.script_engine_utils import DummyFile
 from ScriptEngine.helpers.device_action_interpreter import DeviceActionInterpreter
 
 
-DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
+from ScriptEngine.common.constants.script_engine_constants import DATA_ROOT, DEVICES_CONFIG_PATH, LOGS_FOLDER
 formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-')
 
 # Global lock for response writing to prevent interleaving
@@ -273,6 +273,12 @@ def parse_args():
                         help='Logging level, mirroring the Script-Engine-Controller that spawned '
                              'this process: debug = every log including the per-request input and '
                              'device-type traces; info = info/error only; error = errors only')
+    # Declared so it shows in --help and is not reported as unrecognized. The
+    # value itself is read from sys.argv by script_engine_constants at import
+    # time, before this parser runs.
+    parser.add_argument('--data-root',
+                        help="Root of the controller's data folder (tmp/, logs/, certs/, scripts/). "
+                             'Defaults to $SCREENPLAN_DATA_ROOT, then the per-user app data folder.')
     # parse_known_args, not parse_args: runStartDeviceController.bat/.sh forward
     # their arguments after `-m ScriptEngine.device_controller`, so a Python flag
     # meant for the interpreter (`-u`) arrives here as a script argument instead.
@@ -282,11 +288,11 @@ def parse_args():
 
 if __name__ == '__main__':
     cli_args, unknown_args = parse_args()
-    os.makedirs('./logs', exist_ok=True)
+    os.makedirs(LOGS_FOLDER, exist_ok=True)
     script_logger.set_log_level(cli_args.log_level)
-    script_logger.set_log_file_path('./logs/{}-device-controller-main.txt'.format(formatted_today))
+    script_logger.set_log_file_path(os.path.join(LOGS_FOLDER, '{}-device-controller-main.txt'.format(formatted_today)))
     script_logger.set_log_header('{}-device-controller-main-'.format(formatted_today))
-    script_logger.set_log_folder('./logs/')
+    script_logger.set_log_folder(LOGS_FOLDER + '/')
     script_logger.set_action_log(ScriptActionLog(
         {
             'actionName' : 'configurationAction',
@@ -304,7 +310,11 @@ if __name__ == '__main__':
         script_logger.log('DEVICE CONTROLLER: ignoring unrecognized arguments', unknown_args, level='debug')
     with CustomThreadPool(max_workers=50) as io_executor:
         asyncio.run(device_controller_main(DeviceController({
-            "dir_path": "./",
+            # No script folder of its own, so actions that resolve per-script
+            # files (jsonFileAction's tmp/) land under the controller's data
+            # root. This used to be "./", which meant the same thing only
+            # because the data root was the working directory.
+            "dir_path": DATA_ROOT,
             "width" : None,
             "height" : None,
             "scriptMode" : 'train'
