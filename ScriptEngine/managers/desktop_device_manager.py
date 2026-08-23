@@ -31,6 +31,7 @@ from typing import List
 import numpy as np
 import pyautogui
 import cv2
+from ScriptEngine.common.constants.script_engine_constants import DATA_ROOT, LOGS_FOLDER
 from ScriptEngine.common.script_engine_utils import is_null, DummyFile
 
 # On Windows use pydirectinput_rgx for input (better DirectX/game compatibility); use pyautogui only for screenshot.
@@ -490,7 +491,7 @@ async def read_input():
             script_logger.log('PYTHON CONTROLLER: device key mismatch ', device_key, inputs[1], level='debug')
             continue
         if process_python_host is None:
-            script_logger.set_log_file_path('./logs/{}-python-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-')))
+            script_logger.set_log_file_path(os.path.join(LOGS_FOLDER, '{}-python-host-controller-{}-process.txt'.format(formatted_today, device_key.replace(':', '-'))))
             script_logger.log('PYTHON CONTROLLER PROCESS: starting process for device {}'.format(device_key))
             script_logger.log('PYTHON CONTROLLER PROCESS: processing inputs ', inputs, level='debug')
             script_logger.set_log_header('{}-python-host-controller-{}-process'.format(formatted_today, device_key.replace(':', '-')))
@@ -507,7 +508,9 @@ async def read_input():
                 0
             ))
             process_python_host = DesktopDeviceManager({
-                "dir_path": "./",
+                # See the note in device_controller.py: no script folder, so
+                # per-script files resolve under the controller's data root.
+                "dir_path": DATA_ROOT,
                 "width" : None,
                 "height" : None,
                 "scriptMode" : 'train'
@@ -523,8 +526,8 @@ async def python_controller_main():
     await asyncio.gather(read_input())
 
 if __name__ == '__main__':
-    script_logger.set_log_file_path('./logs/{}-python-host-main.txt'.format(formatted_today))
+    script_logger.set_log_file_path(os.path.join(LOGS_FOLDER, '{}-python-host-main.txt'.format(formatted_today)))
     script_logger.set_log_header('{}-python-host-main-'.format(formatted_today))
-    script_logger.set_log_folder('./logs/')
-    os.makedirs('./logs', exist_ok=True)
+    script_logger.set_log_folder(LOGS_FOLDER + '/')
+    os.makedirs(LOGS_FOLDER, exist_ok=True)
     asyncio.run(python_controller_main())

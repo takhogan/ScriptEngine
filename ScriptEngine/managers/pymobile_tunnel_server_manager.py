@@ -3,6 +3,7 @@ import datetime
 import os
 import subprocess
 from pymobiledevice3.remote.tunneld import Tunneld
+from ScriptEngine.common.constants.script_engine_constants import LOGS_FOLDER
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 
 script_logger = ScriptLogger()
@@ -15,10 +16,10 @@ class PyMobileTunnelServer:
         self.setup_logging()
         
     def setup_logging(self):
-        os.makedirs('./logs', exist_ok=True)
-        script_logger.set_log_file_path('./logs/{}-pymobile-tunnel-server-main.txt'.format(formatted_today))
+        os.makedirs(LOGS_FOLDER, exist_ok=True)
+        script_logger.set_log_file_path(os.path.join(LOGS_FOLDER, '{}-pymobile-tunnel-server-main.txt'.format(formatted_today)))
         script_logger.set_log_header('{}-pymobile-tunnel-server-main-'.format(formatted_today))
-        script_logger.set_log_folder('./logs/')
+        script_logger.set_log_folder(LOGS_FOLDER + '/')
 
     def start(self):
         script_logger.log("Starting PyMobile tunnel server...", level='error')

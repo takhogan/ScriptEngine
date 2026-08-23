@@ -191,7 +191,7 @@ class ScriptExecutor:
     def create_log_folders(self, parent_folder='', refresh_start_time=False):
         if refresh_start_time:
             self.refresh_start_time()
-        self.log_folder = ('./logs/' if parent_folder == '' else parent_folder) +\
+        self.log_folder = ((LOGS_FOLDER + '/') if parent_folder == '' else parent_folder) +\
               str(self.context['script_counter']).zfill(5) + '-' +\
               self.props['script_name'] + '-' + datetime_to_local_str(self.props['script_start_time'], delim='-')
 

@@ -39,7 +39,7 @@ from ScriptEngine.common.logging.script_run_summary import log_run_summary
 from ScriptEngine.common.host_statistics import describe_host_capabilities
 script_logger = ScriptLogger()
 
-DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
+# DEVICES_CONFIG_PATH comes from script_engine_constants (data root).
 # print(f"script logger initialization completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 
@@ -287,7 +287,14 @@ def main():
         parser.add_argument('--read-env', action='store_true', help='Read environment variables and pass them to parse_inputs')
         # parser.add_argument('--write-env', action='store_true', help='Output script outputs as environment variable exports (cross-platform)')
         parser.add_argument('--log-stdout', action='store_true', default=True, help='Enable logging to stdout (default: False)')
-        
+        # Declared so --data-root is a documented argument and this strict
+        # parser does not reject it. Its value is read straight from sys.argv by
+        # script_engine_constants at import time, because the path constants
+        # there are resolved long before this parser runs.
+        parser.add_argument('--data-root',
+                            help="Root of the controller's data folder (tmp/, logs/, certs/, scripts/). "
+                                 'Defaults to $SCREENPLAN_DATA_ROOT, then the per-user app data folder.')
+
         args = parser.parse_args()
         
         script_name = args.script_name
@@ -313,7 +320,7 @@ def main():
                 if len(key_value) == 2:
                     constants.append([key_value[0], key_value[1], False])
         
-        log_folder = './logs/' + str(0).zfill(5) + '-' +\
+        log_folder = LOGS_FOLDER + '/' + str(0).zfill(5) + '-' +\
                     script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/'
         os.makedirs(log_folder, exist_ok=True)
     except Exception as e:
