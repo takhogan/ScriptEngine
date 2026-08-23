@@ -69,6 +69,14 @@ class ScriptLogger:
                 if message is None:
                     break
 
+                # Queue entries are (text, write_to_log_file). Bare strings are
+                # accepted so anything that queued before this shape existed still
+                # behaves as it did.
+                if isinstance(message, tuple):
+                    message, write_to_log_file = message
+                else:
+                    write_to_log_file = True
+
                 if self.log_to_stdout:
                     try:
                         sys.stdout.write(message)
@@ -83,9 +91,10 @@ class ScriptLogger:
                         # stdout may be closed or finalized during interpreter shutdown
                         pass
 
-                with open(self.log_file_path, 'a', encoding='utf-8', errors='replace') as log_file:
-                    log_file.write(message)
-                    log_file.flush()
+                if write_to_log_file:
+                    with open(self.log_file_path, 'a', encoding='utf-8', errors='replace') as log_file:
+                        log_file.write(message)
+                        log_file.flush()
             except queue.Empty:
                 continue
             except Exception as e:
@@ -182,11 +191,27 @@ class ScriptLogger:
         text = f"{datetime.datetime.now()}: {header_str} {sep.join(map(str, args))}{end}"
 
         if file is None:
-            self._write_queue.put(text)
+            self._write_queue.put((text, True))
         else:
+            # An explicit `file` selects where the *persistent* copy goes, not
+            # whether the message reaches stdout. Callers pass DummyFile() to keep
+            # a line out of the log file while still emitting it on stdout -- the
+            # device controller's `<--id-->...<--id-->` response frames, which the
+            # host parses out of the child's stdout, are written this way. Sending
+            # those to the log file instead (file=None) would work, but a
+            # screen_capture response is a base64 JPEG of the whole screen.
+            #
+            # stdout used to be written unconditionally at the end of this method,
+            # outside this branch. Moving it into _writer_loop made it reachable
+            # only by messages that go through _write_queue, i.e. only file is
+            # None, which silently dropped every explicit-file line. Queue it with
+            # the log-file write suppressed instead of writing stdout from here:
+            # the writer thread is the only thing touching stdout, so a large frame
+            # cannot be split by a log line landing mid-write.
             file.write(text)
             if flush:
                 file.flush()
+            self._write_queue.put((text, False))
 
     def set_log_file_path(self, log_file_path):
         self.log_file_path = log_file_path

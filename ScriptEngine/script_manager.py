@@ -35,10 +35,13 @@ from ScriptEngine.system_script_handler import SystemScriptHandler
 # print(f"non builtin initialization 3 completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.logging.script_run_summary import log_run_summary
+from ScriptEngine.common.host_statistics import describe_host_capabilities
 script_logger = ScriptLogger()
 
 DEVICES_CONFIG_PATH = './assets/host_devices_config.json'
 # print(f"script logger initialization completed at {time.time() - start_time:.2f} seconds", flush=True)
+
 
 
 
@@ -149,6 +152,10 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
     from ScriptEngine.parallelized_script_executor import ParallelizedScriptExecutor
     from ScriptEngine.managers.device_secrets_manager import DeviceSecretsManager
     with CustomThreadPool(max_workers=50) as io_executor, CustomProcessPool(max_workers=os.cpu_count()) as process_executor:
+        # Samples the write queues while the run happens; see backpressure_monitor
+        # for why the after-the-fact async_elapsed gap is not enough.
+        from ScriptEngine.common.logging import backpressure_monitor
+        backpressure_stop = backpressure_monitor.start(io_executor, process_executor)
         secrets_manager = DeviceSecretsManager()
         device_controller = DeviceController(script_object['props'], device_params, io_executor, secrets_manager)
         engine_manager = EngineManager(script_id, script_logger.get_log_folder())
@@ -235,6 +242,11 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
                 print(env_output, flush=True)
                 sys.exit(0)
     
+    try:
+        backpressure_stop.set()
+    except Exception:
+        pass
+    log_run_summary(locals().get('process_executor'))
     script_logger.log('Script Manager process completed', level='error')
     if errored:
         sys.exit(1)
@@ -316,6 +328,7 @@ def main():
     script_logger.set_log_level(log_level)
     script_logger.set_log_to_stdout(args.log_stdout)
     script_logger.log(f'SCRIPT MANAGER: Process ID: {os.getpid()}', level='info')
+    script_logger.log('SCRIPT MANAGER: host capabilities', describe_host_capabilities(), level='info')
     script_logger.log('SCRIPT MANAGER: parsed args ', sys.argv, level='debug')
     script_logger.log('SCRIPT MANAGER: log_folder', log_folder, start_time, level='info')
 
