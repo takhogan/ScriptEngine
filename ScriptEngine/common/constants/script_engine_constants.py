@@ -64,7 +64,7 @@ VERIFY_PATH = data_path('certs', 'ScriptController-CACert.pem')
 # where it pins it.
 SERVER_AUTH_HASH_PATH = (
     os.environ.get('SCREENPLAN_AUTH_HASH_PATH')
-    or os.path.join(default_user_data_folder(), 'server_auth_hash.json')
+    or os.path.join(default_user_data_folder(), 'assets', 'server_auth_hash.json')
 )
 DEVICES_CONFIG_PATH = data_path('assets', 'host_devices_config.json')
 LOGS_FOLDER = data_path('logs')
