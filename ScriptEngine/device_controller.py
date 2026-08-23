@@ -15,6 +15,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+import argparse
 import asyncio
 import base64
 import json
@@ -266,8 +267,23 @@ async def read_input(device_controller: DeviceController):
 async def device_controller_main(device_controller: DeviceController):
     await asyncio.gather(read_input(device_controller))
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='ScreenPlan device controller')
+    parser.add_argument('--log-level', '-l', default='info', choices=['debug', 'info', 'error'],
+                        help='Logging level, mirroring the Script-Engine-Controller that spawned '
+                             'this process: debug = every log including the per-request input and '
+                             'device-type traces; info = info/error only; error = errors only')
+    # parse_known_args, not parse_args: runStartDeviceController.bat/.sh forward
+    # their arguments after `-m ScriptEngine.device_controller`, so a Python flag
+    # meant for the interpreter (`-u`) arrives here as a script argument instead.
+    # Refusing to start over a stray argument would be worse than ignoring it.
+    return parser.parse_known_args()
+
+
 if __name__ == '__main__':
+    cli_args, unknown_args = parse_args()
     os.makedirs('./logs', exist_ok=True)
+    script_logger.set_log_level(cli_args.log_level)
     script_logger.set_log_file_path('./logs/{}-device-controller-main.txt'.format(formatted_today))
     script_logger.set_log_header('{}-device-controller-main-'.format(formatted_today))
     script_logger.set_log_folder('./logs/')
@@ -283,6 +299,9 @@ if __name__ == '__main__':
         script_logger.get_log_header(),
         0
     ))
+    script_logger.log('DEVICE CONTROLLER: starting at log level', cli_args.log_level)
+    if unknown_args:
+        script_logger.log('DEVICE CONTROLLER: ignoring unrecognized arguments', unknown_args, level='debug')
     with CustomThreadPool(max_workers=50) as io_executor:
         asyncio.run(device_controller_main(DeviceController({
             "dir_path": "./",

@@ -42,6 +42,7 @@ from ..helpers.search_pattern_helper import SearchPatternHelper
 from ..helpers.windows_device_helper import WindowsDeviceHelper
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.logging.script_action_log import ScriptActionLog
+from .adb_command_stats import ADB_SLOW_COMMAND_SECONDS, AdbCommandStats
 
 
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
@@ -128,6 +129,7 @@ KEY_TO_KEYCODE = {
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_storage
 script_logger = ScriptLogger()
+
 
 
 class ADBDeviceManager(DeviceManager):
@@ -402,11 +404,19 @@ class ADBDeviceManager(DeviceManager):
             **kwargs
         }
         
+        # Timing every adb call is the only way to answer "is the device slow, or
+        # are we?" from a run log. Without it the sole device timing available at
+        # info level is an accident of the bring-up messages, which is not enough
+        # to tell an unresponsive emulator apart from a saturated host.
+        command_label = args[0] if args else 'adb'
+        started = time.perf_counter()
         try:
             script_logger.log(f'ADBDeviceManager: running popen command: {" ".join(full_args)}', level='debug')
             
             process = subprocess.Popen(full_args, **popen_kwargs)
             stdout, stderr = process.communicate(timeout=timeout)
+            elapsed = time.perf_counter() - started
+            AdbCommandStats.record(command_label, elapsed, failed=process.returncode != 0)
             
             if process.returncode != 0:
                 script_logger.log(f"Command failed with return code {process.returncode}", level='error')
@@ -414,10 +424,22 @@ class ADBDeviceManager(DeviceManager):
                 raise UnidentifiedImageError()
             else:
                 script_logger.log("Command executed successfully.", level='debug')
+
+            # Per-command timing is far too high-volume for info — thousands per
+            # run — so it lands at debug, and only outliers are promoted.
+            script_logger.log(
+                f'ADB TIMING: {command_label} took {elapsed * 1000:.0f} ms', level='debug'
+            )
+            if elapsed >= ADB_SLOW_COMMAND_SECONDS:
+                script_logger.log(
+                    f'ADB SLOW: {command_label} took {elapsed:.2f}s ({" ".join(full_args)})',
+                    level='info'
+                )
             
             return stdout, stderr, process.returncode
             
         except subprocess.TimeoutExpired:
+            AdbCommandStats.record(command_label, time.perf_counter() - started, failed=True, timed_out=True)
             script_logger.log(f'ADBDeviceManager: command timed out after {timeout}s: {" ".join(full_args)}', level='error')
             try:
                 stdout, stderr = process.communicate(timeout=10)
@@ -429,6 +451,7 @@ class ADBDeviceManager(DeviceManager):
                 self.adb_popen(args, timeout=timeout, cwd=cwd, retry_on_timeout=False, **kwargs)
             raise UnidentifiedImageError()
         except Exception as e:
+            AdbCommandStats.record(command_label, time.perf_counter() - started, failed=True)
             script_logger.log(f'ADBDeviceManager: error running popen command {" ".join(full_args)}: {e}', level='error')
             raise UnidentifiedImageError()
 

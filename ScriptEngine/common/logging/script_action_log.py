@@ -22,6 +22,7 @@ _CONTRACTS_ENABLED = os.environ.get('SHARED_CONTRACTS_VALIDATE') == '1'
 _log_executor = ThreadPoolExecutor(max_workers=1)
 
 
+
 class ScriptActionLog:
     def __init__(self, action, log_folder, log_header, script_counter):
         self.default_path_header = log_folder + log_header + '-'
