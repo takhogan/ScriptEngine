@@ -50,6 +50,48 @@ def data_path(*parts):
     return os.path.join(DATA_ROOT, *parts)
 
 
+def relative_data_path(path_value):
+    """The form a path is *recorded* in: relative to the data root, forward slashes.
+
+    Action logs are read by the controller and by the browser, and they outlive
+    the host they were written on — a run folder can be looked at after the data
+    root has moved, or on another machine entirely. Recording an absolute path
+    bakes in one machine's layout; recording 'logs/<run>/...' does not.
+
+    Forward slashes because the value crosses to the browser, which concatenates
+    and compares these strings. A path that is already relative, or that lies
+    outside the data root, is returned normalised but otherwise untouched.
+    """
+    if not path_value:
+        return path_value
+    normalized = str(path_value).replace('\\', '/')
+    root = DATA_ROOT.replace('\\', '/').rstrip('/')
+    if not root:
+        return normalized
+    # Windows filesystems are case-insensitive, so a recorded path can differ in
+    # case from DATA_ROOT and still be the same location.
+    comparable = normalized.lower() if sys.platform == 'win32' else normalized
+    comparable_root = root.lower() if sys.platform == 'win32' else root
+    if comparable == comparable_root:
+        return ''
+    if comparable.startswith(comparable_root + '/'):
+        return normalized[len(root) + 1:]
+    return normalized
+
+
+def resolve_data_path(stored_path, *parts):
+    """Absolute path for a value recorded by relative_data_path.
+
+    Absolute input passes through, because logs written before this rule — and
+    any path pointing outside the data root — are still absolute.
+    """
+    if not stored_path:
+        return stored_path
+    if os.path.isabs(stored_path):
+        return os.path.join(stored_path, *parts)
+    return os.path.join(DATA_ROOT, stored_path, *parts)
+
+
 VIBER_CREDENTIALS_FILEPATH = 'assets\\viber_credentials.json'
 RUNNING_SCRIPTS_PATH = data_path('tmp', 'running_scripts.json')
 SERVICE_CREDENTIALS_FILE_PATH = '..\\assets\\service_credentials.json'

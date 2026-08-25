@@ -4,6 +4,8 @@ import uuid
 import json
 from concurrent.futures import ThreadPoolExecutor
 
+from ScriptEngine.common.constants.script_engine_constants import relative_data_path
+
 # Shared cross-project contract. The on-disk shape of action-log.json is
 # defined by `ScriptActionLog` in screenplan_contracts (packages/screenplan-contracts).
 # We validate every flush against that schema when SHARED_CONTRACTS_VALIDATE=1
@@ -77,14 +79,17 @@ class ScriptActionLog:
         return ScriptLogger.get_logger().should_log(min_level)
 
     def _flush(self):
+        # Paths are recorded relative to the data root (see relative_data_path).
+        # Only the serialised payload is converted — every in-memory value stays
+        # absolute, because this process writes to them directly.
         payload = {
-                'base_path' : self.base_path,
-                'action_log_path' : self.get_action_log_path(),
+                'base_path' : relative_data_path(self.base_path),
+                'action_log_path' : relative_data_path(self.get_action_log_path()),
                 'id' : self.id,
                 'name' : self.name,
                 'target_system' : self.target_system,
                 'script_name' : self.script_name,
-                'script_log_folder': self.get_script_log_folder(),
+                'script_log_folder': relative_data_path(self.get_script_log_folder()),
                 'script_counter' : self.get_script_counter(),
                 'log_object_type' : self.type,
                 'tree_entity_type' : 'node',
@@ -99,16 +104,16 @@ class ScriptActionLog:
                 'async_elapsed' : (datetime.datetime.now(datetime.timezone.utc) - self.start_time).total_seconds(),
                 'pre_file' : {
                     'file_type' : self.pre_file[0],
-                    'file_path' : self.pre_file[1]
+                    'file_path' : relative_data_path(self.pre_file[1])
                 } if self.pre_file is not None else {},
                 'post_file' : {
                     'file_type' : self.post_file[0],
-                    'file_path' : self.post_file[1]
+                    'file_path' : relative_data_path(self.post_file[1])
                 } if self.post_file is not None else {},
                 'supporting_files' : [
                     {
                         'file_type' : supporting_file[0],
-                        'file_path' : supporting_file[1]
+                        'file_path' : relative_data_path(supporting_file[1])
                     } for supporting_file in self.supporting_files
                 ],
                 'children' : [
@@ -117,7 +122,7 @@ class ScriptActionLog:
                         'script_counter' : child.get_script_counter(),
                         'log_object_type' : child.get_type(),
                         'tree_entity_type' : 'child',
-                        'action_log_path' : child.get_action_log_path()
+                        'action_log_path' : relative_data_path(child.get_action_log_path())
                     } for child in self.children
                 ],
                 'attributes' : self.attributes

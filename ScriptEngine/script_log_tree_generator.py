@@ -2,7 +2,7 @@ import sys
 import json
 import os
 
-from ScriptEngine.common.constants.script_engine_constants import LOG_TREE_PATH
+from ScriptEngine.common.constants.script_engine_constants import LOG_TREE_PATH, resolve_data_path
 
 bin_path = os.path.abspath("bin")
 os.environ["PATH"] += os.pathsep + bin_path
@@ -14,7 +14,9 @@ class ScriptLogTreeGenerator:
     @staticmethod
     def assemble_script_log_tree(child_obj):
         action_log_dict = None
-        with open(child_obj['action_log_path'], 'r') as action_log_file:
+        # Recorded relative to the data root; absolute for logs written
+        # before that rule, which resolve_data_path passes through.
+        with open(resolve_data_path(child_obj['action_log_path']), 'r') as action_log_file:
             action_log_dict = json.load(action_log_file)
         if action_log_dict is not None:
             child_obj.update(action_log_dict)
