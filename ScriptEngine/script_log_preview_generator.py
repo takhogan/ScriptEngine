@@ -9,6 +9,8 @@ try:
 except ImportError:
     from ScriptEngine.script_log_tree_generator import ScriptLogTreeGenerator
 
+from ScriptEngine.common.constants.script_engine_constants import resolve_data_path
+
 bin_path = os.path.abspath("bin")
 os.environ["PATH"] += os.pathsep + bin_path
 
@@ -172,7 +174,7 @@ class ScriptLogPreviewGenerator:
         # Iterate until we find an action that has an actual image (readable and valid shape)
         first_image = None
         for entry in image_paths:
-            img = cv2.imread(entry['post_file'])
+            img = cv2.imread(resolve_data_path(entry['post_file']))
             if img is not None and hasattr(img, 'shape') and len(img.shape) >= 2 and img.shape[0] > 0 and img.shape[1] > 0:
                 first_image = img
                 break
