@@ -371,10 +371,38 @@ class ClickPathGenerator:
         # plt.show()
         return deltalist_x, deltalist_y
 
+    def direct_path(self, source_x, source_y, target_x, target_y):
+        """
+        The whole move as a single step, in the pixel units generate_click_path
+        returns. Used for moves too short for a generated path to represent, where
+        the alternative is not moving at all.
+        """
+        delta_x = int(round((target_x - source_x) * self.x_max))
+        delta_y = int(round((target_y - source_y) * self.y_max))
+        if delta_x == 0 and delta_y == 0:
+            return [], []
+        return [delta_x], [delta_y]
+
     def generate_click_path(self, source_x, source_y, target_x, target_y):
         script_logger.log('source: ({}, {}), target: ({}, {})'.format(source_x, source_y, target_x, target_y), level='debug')
+        if source_x == target_x and source_y == target_y:
+            # generate_raw_path divides by the source-to-target distance to scale
+            # its gravity term. With nowhere to move, the first step covers no
+            # distance and that divisor is still zero.
+            script_logger.log('source is already the target, nothing to path over', level='debug')
+            return self.direct_path(source_x, source_y, target_x, target_y)
         deltalist_x,deltalist_y = self.generate_raw_path(source_x, source_y, target_x, target_y, self.deviation_degree, self.deviation_probability)
         script_logger.log('deltalist', deltalist_x, deltalist_y, level='debug')
+        if not deltalist_x:
+            # generate_raw_path stops as soon as one step covers more than half
+            # of what is left, so a short enough move exits the walk before
+            # appending anything -- every move of no distance and roughly one in
+            # ten of one to seven pixels. refit_delta_path then averages over the
+            # path it was handed and divides by its length, which is how this
+            # reached callers: a ZeroDivisionError out of any click that landed a
+            # few pixels from where the cursor already was.
+            script_logger.log('move is shorter than the shortest path the generator emits, moving directly', level='debug')
+            return self.direct_path(source_x, source_y, target_x, target_y)
         refitted_path_x,refitted_path_y = self.refit_delta_path(deltalist_x, self.x_max, self.x_increment),self.refit_delta_path(deltalist_y, self.y_max, self.y_increment)
         script_logger.log('refitted', refitted_path_x, refitted_path_y, level='debug')
         discretized_delta_x,discretized_delta_y = self.discretize_deltalist(refitted_path_x, self.x_max, self.x_increment, is_delta_x=True), self.discretize_deltalist(refitted_path_y, self.y_max, self.y_increment, is_delta_x=False)

@@ -118,9 +118,14 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
     from ScriptEngine.script_loader import parse_script
     script_object = parse_script(script_name, system_script, workspace)
     device_params = {}
-    if device_details is not None and device_details != '' and device_details != 'null':
-        if device_details.startswith('file'):
-            file_path = ''.join(device_details.split(':')[1:])
+    # '' and the literal 'null' are how "nothing attached" arrives from the
+    # controller; collapse them to None once so the run has a single answer to
+    # "was a device selected?" — the branch below and the error a device-bound
+    # action raises when device_params stays empty both read it.
+    device_selection = None if device_details in (None, '', 'null') else device_details
+    if device_selection is not None:
+        if device_selection.startswith('file'):
+            file_path = ''.join(device_selection.split(':')[1:])
             file_type = os.path.splitext(file_path)[1]
             script_logger.log('SCRIPT MANAGER: loading input source', file_path, 'file exists', os.path.exists(file_path), level='info')
             import cv2
@@ -138,11 +143,11 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         else:
             with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
                 devices_config = json.load(devices_config_file)
-                if device_details in devices_config:
-                    device_params = devices_config[device_details]
+                if device_selection in devices_config:
+                    device_params = devices_config[device_selection]
                     device_params['script-engine-device-type'] = 'bluestacks'
                 else:
-                    script_logger.log('SCRIPT MANAGER: device config for ', device_details, ' not found! ', level='error')
+                    script_logger.log('SCRIPT MANAGER: device config for ', device_selection, ' not found! ', level='error')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params, level='info')
     errored = False
     from ScriptEngine.device_controller import DeviceController
@@ -157,7 +162,10 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         from ScriptEngine.common.logging import backpressure_monitor
         backpressure_stop = backpressure_monitor.start(io_executor, process_executor)
         secrets_manager = DeviceSecretsManager()
-        device_controller = DeviceController(script_object['props'], device_params, io_executor, secrets_manager)
+        # The selection goes along with the resolved params: when it names a device
+        # host_devices_config.json does not hold, device_params is left empty above and
+        # only the original selection can say why.
+        device_controller = DeviceController(script_object['props'], device_params, io_executor, secrets_manager, device_selection)
         engine_manager = EngineManager(script_id, script_logger.get_log_folder())
         script_action_executor = ScriptActionExecutor(device_controller, io_executor, script_object['props'], screen_plan_server_attached)
         # TODO: might need fixing
