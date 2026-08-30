@@ -19,6 +19,8 @@ credentials.json
 assets/service_credentials.json
 assets/token.json
 token.json
+pikvm.log
+pikvm_default.log
 __pycache__/
 dist/
 build/

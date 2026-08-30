@@ -176,7 +176,11 @@ class ADBDeviceManager(DeviceManager):
             self.dummy_mode = False
 
         if len(adb_args) == 0 and input_source is None:
-            raise Exception('ADB HOST CONTROLLER: no adb args or input source provided')
+            raise Exception(
+                'ADB HOST CONTROLLER: this action requires an ADB device, but no device '
+                'configuration was provided for it. Attach a device to the run, or check that '
+                'the selected device still exists in the host device config.'
+            )
 
         if input_source is not None:
             # File/test mode: skip ADB configuration, use screenshot from input_source
