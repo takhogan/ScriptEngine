@@ -19,10 +19,12 @@ import threading
 import datetime
 import queue
 import subprocess
+import socket
 import os
 import platform
 import re
 from typing import List
+from concurrent.futures import ThreadPoolExecutor
 
 from configobj import ConfigObj 
 from PIL import Image
@@ -133,6 +135,21 @@ script_logger = ScriptLogger()
 
 
 class ADBDeviceManager(DeviceManager):
+    # Android 11+ Wireless Debugging picks a random port in roughly this range
+    # (observed as low as 32789), so it is what we sweep when mDNS cannot tell us
+    # the port directly.
+    ADB_SCAN_START_PORT = 30000
+    ADB_SCAN_END_PORT = 45000
+    # One socket per worker is open at a time, and a GUI-launched app inherits
+    # launchd's maxfiles soft limit of 256, so stay well under it.
+    PORT_SCAN_WORKERS = 128
+    # Closed ports on a LAN answer with RST immediately; this timeout only costs
+    # anything on hosts that silently drop SYNs.
+    PORT_SCAN_CONNECT_TIMEOUT = 0.5
+    # Upper bound on the whole sweep, so a silently dropping host cannot stall
+    # device configuration indefinitely.
+    PORT_SCAN_DEADLINE = 60
+
     def __init__(self, props, adb_args, input_source=None):
         script_logger.log('Configuring ADB with adb_args', adb_args, level='info')
         self.stop_command_gather = False
@@ -482,6 +499,119 @@ class ADBDeviceManager(DeviceManager):
                         script_logger.log('device name fetch failed: ', result, level='error')
         return devices
 
+    def _find_mdns_ports(self, device_ip):
+        """Helper method to find the ports a device advertises over mDNS.
+
+        Android 11+ Wireless Debugging assigns a random port on every session
+        and advertises it over mDNS, which adb already resolves. Asking adb for
+        it avoids having to guess the port by scanning the dynamic range.
+
+        Args:
+            device_ip: The IP address of the device
+
+        Returns:
+            list: Advertised ports as strings, connect services before legacy
+            ones. Empty if mDNS is unavailable or the device is not advertising.
+        """
+        script_logger = ScriptLogger.get_logger()
+        try:
+            result = safe_subprocess_run(
+                [self.adb_path, 'mdns', 'services'],
+                timeout=10,
+                capture_output=True
+            )
+        except Exception as e:
+            script_logger.log(f'ADB CONTROLLER: mdns lookup failed: {e}', level='debug')
+            return []
+
+        if not result or result.returncode != 0:
+            script_logger.log('ADB CONTROLLER: adb mdns services unavailable', level='debug')
+            return []
+
+        # The pairing service (_adb-tls-pairing._tcp.) is listed alongside these
+        # but only accepts pairing codes, so it is never worth an adb connect.
+        tls_ports = []
+        legacy_ports = []
+        output = result.stdout.decode('utf-8', errors='ignore')
+        for line in output.splitlines():
+            if '_adb-tls-connect._tcp.' in line:
+                ports = tls_ports
+            elif '_adb._tcp.' in line:
+                ports = legacy_ports
+            else:
+                continue
+            match = re.search(r'(\d{1,3}(?:\.\d{1,3}){3}):(\d+)', line)
+            if not match or match.group(1) != device_ip:
+                continue
+            port = match.group(2)
+            if port not in ports:
+                ports.append(port)
+
+        found_ports = tls_ports + legacy_ports
+        if found_ports:
+            script_logger.log(f'ADB CONTROLLER: mdns advertises {device_ip} on port(s) {found_ports}', level='debug')
+        else:
+            script_logger.log(f'ADB CONTROLLER: no mdns service advertised for {device_ip}', level='debug')
+        return found_ports
+
+    def _scan_open_ports(self, device_ip, start_port, end_port):
+        """Helper method to find open TCP ports on a host.
+
+        A plain connect scan over the stdlib, rather than shelling out to nmap.
+        nmap is usually not installed, and even when it is, an app launched from
+        Finder inherits a minimal PATH that does not include the directories it
+        normally lives in.
+
+        Args:
+            device_ip: The IP address of the device
+            start_port: First port of the range to sweep, inclusive
+            end_port: Last port of the range to sweep, inclusive
+
+        Returns:
+            list: Open ports as ints, ascending. Empty if none answered.
+        """
+        script_logger = ScriptLogger.get_logger()
+        give_up_at = time.monotonic() + self.PORT_SCAN_DEADLINE
+
+        def probe(port):
+            # Past the deadline the remaining probes return straight away, so the
+            # pool drains quickly instead of running the sweep to completion.
+            if time.monotonic() > give_up_at:
+                return None
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(self.PORT_SCAN_CONNECT_TIMEOUT)
+            try:
+                if sock.connect_ex((device_ip, port)) == 0:
+                    return port
+            except OSError:
+                pass
+            finally:
+                sock.close()
+            return None
+
+        open_ports = []
+        started = time.monotonic()
+        try:
+            with ThreadPoolExecutor(max_workers=self.PORT_SCAN_WORKERS) as pool:
+                for port in pool.map(probe, range(start_port, end_port + 1)):
+                    if port is not None:
+                        open_ports.append(port)
+        except Exception as e:
+            script_logger.log(f'ADB CONTROLLER: port scan of {device_ip} failed: {e}', level='error')
+            return []
+
+        if time.monotonic() > give_up_at:
+            script_logger.log(
+                f'ADB CONTROLLER: port scan hit its {self.PORT_SCAN_DEADLINE}s deadline, results may be incomplete',
+                level='error'
+            )
+        script_logger.log(
+            f'ADB CONTROLLER: scanned ports {start_port}-{end_port} on {device_ip} in '
+            f'{time.monotonic() - started:.1f}s, found {len(open_ports)} open: {open_ports}',
+            level='debug'
+        )
+        return open_ports
+
     def _test_adb_port(self, device_ip, port):
         """Helper method to test if a specific ADB port is active.
         
@@ -555,98 +685,39 @@ class ADBDeviceManager(DeviceManager):
                 script_logger.log(f'ADB CONTROLLER: checking specified port {og_port} first', level='debug')
                 found_port = self._test_adb_port(device_ip, og_port)
             
-            # If specified port didn't work, try port 5555 for older Android devices (quick check)
+            # If the specified port didn't work, ask adb what the device is
+            # advertising over mDNS. Android 11+ devices announce their current
+            # Wireless Debugging port there, so this resolves them on the first
+            # try instead of falling through to the port scan below.
+            if not found_port:
+                for mdns_port in self._find_mdns_ports(device_ip):
+                    script_logger.log(f'ADB CONTROLLER: checking mdns advertised port {mdns_port}', level='debug')
+                    found_port = self._test_adb_port(device_ip, mdns_port)
+                    if found_port:
+                        break
+
+            # If mDNS didn't resolve it, try port 5555 for older Android devices (quick check)
             if not found_port:
                 script_logger.log('ADB CONTROLLER: checking port 5555 for older Android devices', level='debug')
                 found_port = self._test_adb_port(device_ip, '5555')
             
-            # If port 5555 didn't work, use nmap to scan for open ports in Wireless Debugging range
+            # If port 5555 didn't work, sweep the Wireless Debugging range for
+            # anything listening and let adb tell us which one is the device.
             if not found_port:
-                script_logger.log('ADB CONTROLLER: port 5555 not found, scanning Wireless Debugging range (30000-45000) with nmap', level='debug')
-                
-                # Check if nmap is available
-                nmap_available = False
-                try:
-                    nmap_check = safe_subprocess_run(['nmap', '--version'], timeout=5, capture_output=True)
-                    if nmap_check.returncode == 0:
-                        nmap_available = True
-                        script_logger.log('ADB CONTROLLER: nmap is available', level='debug')
-                    else:
-                        script_logger.log('ADB CONTROLLER: nmap check failed', level='debug')
-                except Exception as e:
-                    script_logger.log(f'ADB CONTROLLER: nmap not found: {e}', level='error')
-                
-                if nmap_available:
-                    # Use nmap to scan for open ports in the Wireless Debugging range
-                    try:
-                        script_logger.log(f'ADB CONTROLLER: running nmap scan on {device_ip} ports 30000-45000', level='debug')
-                        nmap_result = safe_subprocess_run(
-                            ['nmap', '-p', '30000-45000', '--open', device_ip],
-                            timeout=60,  # nmap scan can take a while
-                            capture_output=True
-                        )
-                        
-                        if nmap_result.returncode == 0:
-                            # Parse nmap output to find open ports
-                            output = nmap_result.stdout.decode('utf-8', errors='ignore')
-                            open_ports = []
-                            
-                            # Look for port lines in nmap output (format: "PORT      STATE SERVICE")
-                            # or "34000/tcp open  unknown"
-                            for line in output.split('\n'):
-                                line = line.strip()
-                                # Match lines like "34000/tcp open" or "34000/tcp   open"
-                                match = re.search(r'(\d+)/tcp\s+open', line)
-                                if match:
-                                    port = int(match.group(1))
-                                    if 30000 <= port <= 45000:
-                                        open_ports.append(port)
-                            
-                            script_logger.log(f'ADB CONTROLLER: nmap found {len(open_ports)} open ports: {open_ports}', level='debug')
-                            
-                            # Try adb connect on each open port found by nmap
-                            for port in open_ports:
-                                test_ip = f'{device_ip}:{port}'
-                                script_logger.log(f'ADB CONTROLLER: trying adb connect on port {port}', level='debug')
-                                try:
-                                    connect_result = safe_subprocess_run(
-                                        [self.adb_path, 'connect', test_ip],
-                                        timeout=5,
-                                        capture_output=True
-                                    )
-                                    time.sleep(1)
-                                    
-                                    devices_output = self.get_device_list_output()
-                                    for device_line in devices_output:
-                                        if test_ip in device_line and 'device' in device_line and 'offline' not in device_line:
-                                            found_port = str(port)
-                                            # Update port and full_ip immediately when found
-                                            self.adb_port = found_port
-                                            self.full_ip = f'{device_ip}:{found_port}'
-                                            script_logger.log(f'ADB CONTROLLER: found active ADB device on port {port}, updated adb_port to {found_port} and full_ip to {self.full_ip}', level='debug')
-                                            break
-                                    
-                                    if found_port:
-                                        break
-                                    else:
-                                        # Disconnect if connection was made but device is not active
-                                        safe_subprocess_run(
-                                            [self.adb_path, 'disconnect', test_ip],
-                                            timeout=5,
-                                            capture_output=True
-                                        )
-                                except Exception as e:
-                                    script_logger.log(f'ADB CONTROLLER: error testing port {port}: {e}', level='error')
-                                    continue
-                        else:
-                            script_logger.log(f'ADB CONTROLLER: nmap scan failed with return code {nmap_result.returncode}', level='error')
-                    except Exception as e:
-                        script_logger.log(f'ADB CONTROLLER: error running nmap scan: {e}', level='error')
-                else:
-                    script_logger.log('ADB CONTROLLER: nmap not available, cannot scan Wireless Debugging port range', level='error')
-                    script_logger.log('ADB CONTROLLER: please install nmap or manually specify the ADB port', level='error')
-                    raise Exception('ADB CONTROLLER: nmap not available and adb port unavailable, please install nmap or manually specify the ADB port')
-            
+                script_logger.log(
+                    f'ADB CONTROLLER: port 5555 not found, scanning Wireless Debugging range '
+                    f'({self.ADB_SCAN_START_PORT}-{self.ADB_SCAN_END_PORT})',
+                    level='debug'
+                )
+                open_ports = self._scan_open_ports(
+                    device_ip, self.ADB_SCAN_START_PORT, self.ADB_SCAN_END_PORT
+                )
+                for port in open_ports:
+                    script_logger.log(f'ADB CONTROLLER: trying adb connect on open port {port}', level='debug')
+                    found_port = self._test_adb_port(device_ip, port)
+                    if found_port:
+                        break
+
             if found_port:
                 self.adb_port = found_port
                 self.full_ip = f'{device_ip}:{found_port}'
@@ -655,9 +726,16 @@ class ADBDeviceManager(DeviceManager):
                 ports_tried = []
                 if og_port and og_port != 'auto':
                     ports_tried.append(f'specified port {og_port}')
+                ports_tried.append('mdns advertised ports')
                 ports_tried.append('port 5555')
-                ports_tried.append('Wireless Debugging range (30000-49999)')
-                script_logger.log(f'ADB CONTROLLER: unable to find ADB port on {device_ip} after trying {", ".join(ports_tried)}', level='error')
+                ports_tried.append(f'Wireless Debugging range ({self.ADB_SCAN_START_PORT}-{self.ADB_SCAN_END_PORT})')
+                message = (
+                    f'ADB CONTROLLER: unable to find ADB port on {device_ip} after trying '
+                    f'{", ".join(ports_tried)}. Check that the device is awake, on the same '
+                    f'network, and still paired under Wireless Debugging.'
+                )
+                script_logger.log(message, level='error')
+                raise Exception(message)
         else:
             raise Exception('Unsupported emulator type: ' + self.emulator_type)
         if self.adb_port != 'auto':

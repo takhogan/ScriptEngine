@@ -43,6 +43,14 @@ script_logger = ScriptLogger()
 
 
 import os
+import time
+
+# A parallel batch's result wait is normally sub-second. Anything above this is a
+# stall worth one info line: nothing logs around parallel_process.result(), so a
+# slow batch is otherwise only visible as a gap between logged events (see the
+# FromCityViewToLandView 2026-09-22 investigation, where result waits of 20-97s
+# were invisible for exactly this reason).
+PARALLEL_RESULT_WAIT_LOG_THRESHOLD_S = 5.0
 
 DETECT_TYPES_SET = {
     'detectObject',
@@ -797,7 +805,23 @@ class ScriptExecutor:
         self.log_action_details(action)
         parallel_process = self.parallelized_executor.get_process(action["actionGroup"])
         if parallel_process is not None:
+            # Time spent blocked on the worker result. This is the engine's main
+            # blind spot: the wait itself logs nothing, so a slow batch surfaces
+            # only as a gap between logged events. Record waits over the
+            # threshold at info so a stall is attributable to a specific action,
+            # and so it can be compared against the worker-side handler time
+            # (PARALLEL WORKER) to separate genuine worker slowness from
+            # IPC/pickle/queue overhead on large detection results.
+            _result_wait_start = time.monotonic()
             handle_action_result = parallel_process.result()
+            _result_wait_s = time.monotonic() - _result_wait_start
+            if _result_wait_s >= PARALLEL_RESULT_WAIT_LOG_THRESHOLD_S:
+                script_logger.log(
+                    'PARALLEL WAIT: blocked {:.2f}s on result for action {}-{}'.format(
+                        _result_wait_s, action['actionName'], action['actionGroup']
+                    ),
+                    level='info'
+                )
             action, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_handle_action_result(
                 handle_action_result, self.status, self.state, self.context, self.run_queue
             )

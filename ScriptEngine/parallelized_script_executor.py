@@ -47,6 +47,11 @@ class ParallelizedScriptExecutor:
 
     def start_processes(self, script_executor, parallel_actions):
         self.processes = {}
+        # Dispatch runs entirely on the main thread and mostly logs at debug, so
+        # its cost (screenshot capture, blur, arg pickling, submit) is invisible
+        # in an info-level run. Time the whole thing and the screenshot step so a
+        # stall here is distinguishable from a slow worker result (PARALLEL WAIT).
+        _dispatch_start = time.monotonic()
         parent_action_log = script_executor.parent_action_log
         script_logger.log('CONTROL FLOW: starting parallel execution', level='error')
         # if you want to implement for other actions keep in mind you should filter here
@@ -68,7 +73,16 @@ class ParallelizedScriptExecutor:
                 if target_system in system_inputs:
                     input_obj = system_inputs[target_system]
                 else:
+                    _screenshot_start = time.monotonic()
                     input_obj['screencap_im_bgr'] = self.device_controller.get_device_action(target_system, 'screenshot')()
+                    _screenshot_s = time.monotonic() - _screenshot_start
+                    if _screenshot_s >= 3.0:
+                        script_logger.log(
+                            'PARALLEL DISPATCH: {} screenshot capture took {:.2f}s'.format(
+                                target_system, _screenshot_s
+                            ),
+                            level='info'
+                        )
                     input_obj["original_image"] = input_obj['screencap_im_bgr']
                     original_image_blurred = cv2.copyMakeBorder(input_obj['screencap_im_bgr'].copy(), 15, 15, 15, 15,cv2.BORDER_REPLICATE)
                     original_image_blurred = cv2.GaussianBlur(original_image_blurred, (31, 31), 0)
@@ -92,3 +106,12 @@ class ParallelizedScriptExecutor:
             script_logger.log('Parallel process submitted to pool for ' + str(parallel_action["actionGroup"]), level='debug')
 
             self.processes[parallel_action["actionGroup"]] = future
+
+        _dispatch_s = time.monotonic() - _dispatch_start
+        if _dispatch_s >= 3.0:
+            script_logger.log(
+                'PARALLEL DISPATCH: prepared and submitted {} action(s) in {:.2f}s'.format(
+                    len(parallel_actions), _dispatch_s
+                ),
+                level='info'
+            )

@@ -27,7 +27,20 @@ from ScriptEngine.common.types import ScreenPlanImage
 script_logger = ScriptLogger()
 
 def masked_mse(target_im, compare_im, mask_size):
-    return 1 - np.sum(np.square(np.subtract(target_im, compare_im))) / mask_size
+    """Mean absolute difference over the mask, rescaled so that 1.0 is identical.
+
+    Callers pass mask_size as (masked pixels * 3 * 255), which is the normaliser
+    for a sum of absolute differences -- squaring leaves the numerator in units
+    of 255**2 against a denominator carrying one factor of 255, so the result is
+    not the 0..1 average pixel difference it is read as.
+
+    Widen to int32 before subtracting: np.subtract and np.square on two uint8
+    arrays both wrap mod 256, which scored a difference of 16 (16**2 == 256) as
+    a pixel-perfect match and held every result inside 0..1 no matter how far
+    apart the two images were.
+    """
+    diff = np.subtract(target_im.astype(np.int32), compare_im.astype(np.int32))
+    return 1 - float(np.sum(np.abs(diff))) / mask_size
 
 def apply_output_mask(screencap_im_bgr, location_val, output_mask_bgr, output_cropping=None):
     object_h, object_w = output_mask_bgr.shape[0], output_mask_bgr.shape[1]
