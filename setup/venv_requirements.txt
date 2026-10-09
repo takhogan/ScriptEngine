@@ -11,6 +11,7 @@ idna
 imageio
 importlib-metadata
 joblib
+keyring
 lazy_loader
 lief
 MarkupSafe

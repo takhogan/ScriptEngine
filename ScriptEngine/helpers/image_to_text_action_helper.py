@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import cv2
 
@@ -95,6 +97,17 @@ class ImageToTextActionHelper:
         return image_to_text_input, pre_log
 
     @staticmethod
+    def get_tessdata_path():
+        # TESSDATA_PREFIX wins; otherwise use <repo>/tessdata populated by setup/setup_tesseract.py,
+        # falling back to tesserocr's compiled-in default (e.g. homebrew's tessdata on mac)
+        if os.environ.get('TESSDATA_PREFIX'):
+            return None
+        repo_tessdata = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'tessdata'
+        )
+        return repo_tessdata if os.path.isdir(repo_tessdata) else None
+
+    @staticmethod
     def run_tesseract_ocr(action, image_to_text_input, is_image_to_text_debug_mode):
         TARGET_TYPE_TO_PSM = {
             'word': '8',
@@ -125,10 +138,12 @@ class ImageToTextActionHelper:
 
         outputs = []
         inputs_log = ''
-        import tesserocr 
+        import tesserocr
         from PIL import Image
+        tessdata_path = ImageToTextActionHelper.get_tessdata_path()
+        api_kwargs = {'path': tessdata_path} if tessdata_path else {}
         for [psm_value, character_white_list] in tesseract_params:
-            with tesserocr.PyTessBaseAPI() as api:
+            with tesserocr.PyTessBaseAPI(**api_kwargs) as api:
                 api.SetImage(Image.fromarray(image_to_text_input))
                 api.SetPageSegMode(int(psm_value))
                 if len(character_white_list) > 0:

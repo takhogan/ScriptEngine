@@ -164,6 +164,9 @@ class ADBDeviceManager(DeviceManager):
         self.click_path_generator = ClickPathGenerator(41.0, 71.0, self.xmax, self.ymax, 45, 0.4)
         self.image_stitch_calculator_path = './build/ImageStitchCalculator.exe'
         self.event_counter = 1
+        self.touch_slot_protocol = False
+        self.touch_has_btn_touch = False
+        self.touch_is_down = False
 
         #TODO CORRECT ABOVE
         self.distances_dist = {
@@ -292,6 +295,11 @@ class ADBDeviceManager(DeviceManager):
                         adb_path = os.path.join(user_home, 'AppData', 'Local', 'Android', 'Sdk', 'platform-tools', 'adb.exe')
                     if not os.path.exists(adb_path):
                         adb_path = os.path.join(user_home, 'platform-tools', 'adb.exe')
+                    # Fall back to the adb that ships with BlueStacks
+                    if not os.path.exists(adb_path) and self.emulator_type == 'bluestacks':
+                        adb_path = os.path.join(os.path.dirname(self.emulator_path), 'HD-Adb.exe')
+                    if not os.path.exists(adb_path):
+                        adb_path = 'C:\\Program Files\\BlueStacks_nxt\\HD-Adb.exe'
                 elif os_name == 'Darwin':
                     # macOS
                     user_home = os.path.expanduser("~")
@@ -1136,7 +1144,7 @@ class ADBDeviceManager(DeviceManager):
             queue.put(line)
         out.close()
 
-    def set_commands(self, timeout=1):
+    def set_commands(self, timeout=3):
         script_logger = ScriptLogger.get_logger()
         # Run the adb getevent command
         process = subprocess.Popen([self.adb_path, '-s', self.full_ip ,'shell' ,'getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -1153,6 +1161,7 @@ class ADBDeviceManager(DeviceManager):
         output = []
         device_line = False
         device_path = ""
+        device_block = []
         start_time = time.time()
 
         # Read output from the queue for the duration of the timeout
@@ -1163,13 +1172,17 @@ class ADBDeviceManager(DeviceManager):
                 time.sleep(0.1)  # Add a small delay to prevent busy-waiting
             else:
                 output.append(line)
-                if 'add device' in line:
+                if device_path:
+                    # Collect the touch device's capability lines until the next device starts
+                    if 'add device' in line:
+                        break
+                    device_block.append(line)
+                elif 'add device' in line:
                     device_line = True  # Next line should have the device name
                 elif device_line:
                     if "BlueStacks Virtual Touch" in line or "\"virtio_input_multi_touch_1\"" in line:
                         # Extract the device path from the previous 'add device' line
                         device_path = output[-2].split()[3].strip(':')
-                        break
                     device_line = False  # Reset for the next device
 
         # Ensure the subprocess is terminated
@@ -1178,7 +1191,17 @@ class ADBDeviceManager(DeviceManager):
         process.terminate()
         process.wait()
         if device_path:
-            script_logger.log('ADB CONTROLLER:', 'configured input device ', device_path)
+            # Newer BlueStacks touch devices use the multitouch slot protocol (type B) and report
+            # BTN_TOUCH. On those, SYN_MT_REPORT is not a valid "finger up": Android advances its
+            # slot index on it (desyncing from the kernel) and never lifts the contact, and
+            # without BTN_TOUCH=1 the contact is treated as a hover rather than a touch.
+            device_caps = ''.join(device_block)
+            self.touch_slot_protocol = re.search(r'\b002f\b', device_caps) is not None
+            self.touch_has_btn_touch = re.search(r'\b014a\b', device_caps) is not None
+            slot_max_match = re.search(r'\b002f\s*:.*?max (\d+)', device_caps)
+            touch_slot_max = int(slot_max_match.group(1)) if slot_max_match else 9
+            script_logger.log('ADB CONTROLLER:', 'configured input device ', device_path,
+                              'slot protocol', self.touch_slot_protocol, 'btn_touch', self.touch_has_btn_touch)
             self.sendevent_command = 'sendevent ' + device_path +' {} {} {};'
             self.commands = {
                 "tracking_id_mousedown": self.sendevent_command.format(3, int('39', 16), 0),
@@ -1189,10 +1212,18 @@ class ADBDeviceManager(DeviceManager):
                 "action_terminate_command": self.sendevent_command.format(0, 0, 0),
                 "abs_mt_pressure_up": self.sendevent_command.format(3, int('3a', 16), 0),
                 "tracking_id_mouseup": self.sendevent_command.format(3, int('39', 16), '-1'),
-                "syn_mt_report": self.sendevent_command.format(0, 2, 0)
+                "syn_mt_report": self.sendevent_command.format(0, 2, 0),
+                "btn_touch_down": self.sendevent_command.format(1, int('14a', 16), 1) if self.touch_has_btn_touch else '',
+                "btn_touch_up": self.sendevent_command.format(1, int('14a', 16), 0) if self.touch_has_btn_touch else '',
             }
+            if self.touch_slot_protocol:
+                self.reset_touch_slots(touch_slot_max)
             return device_path
         else:
+            script_logger.log('ADB CONTROLLER: could not detect touch input device from getevent, '
+                              'falling back to /dev/input/event5 - clicks may not register', level='error')
+            self.touch_slot_protocol = False
+            self.touch_has_btn_touch = False
             self.sendevent_command = 'sendevent /dev/input/event5 {} {} {};'
             self.commands = {
                 "tracking_id_mousedown": self.sendevent_command.format(3, int('39', 16), 0),
@@ -1311,6 +1342,48 @@ class ADBDeviceManager(DeviceManager):
     def y_command_func(self, y_val):
         return self.sendevent_command.format(3, int('36', 16), y_val)
 
+    def reset_touch_slots(self, slot_max):
+        # Release any contacts left in use (e.g. stuck by a previous session) and leave both the
+        # kernel and Android's input reader on slot 0. The kernel drops ABS events whose value is
+        # unchanged, so select slot 0 first to guarantee the slot_max selection is forwarded, and
+        # set a tracking id before clearing it so the -1 is always forwarded.
+        commands = [self.sendevent_command.format(3, int('2f', 16), 0)]
+        for slot in range(slot_max, -1, -1):
+            commands += [
+                self.sendevent_command.format(3, int('2f', 16), slot),
+                self.sendevent_command.format(3, int('39', 16), 65535),
+                self.sendevent_command.format(3, int('39', 16), -1),
+            ]
+        commands += [self.commands["btn_touch_up"], self.commands["action_terminate_command"]]
+        self.touch_is_down = False
+        self.adb_run(['shell'], input=''.join(commands).encode('utf-8'), timeout=15)
+
+    def touch_down_commands(self, x_val, y_val):
+        # Type B (slot protocol) contact start: new tracking id + position + BTN_TOUCH
+        self.touch_is_down = True
+        return [
+            self.sendevent_command.format(3, int('39', 16), self.event_counter % 65535),
+            self.commands["x_command_func"](x_val),
+            self.commands["y_command_func"](y_val),
+            self.commands["btn_touch_down"],
+            self.commands["action_terminate_command"]
+        ]
+
+    def touch_move_commands(self, x_val, y_val):
+        return [
+            self.commands["x_command_func"](x_val),
+            self.commands["y_command_func"](y_val),
+            self.commands["action_terminate_command"]
+        ]
+
+    def touch_up_commands(self):
+        self.touch_is_down = False
+        return [
+            self.commands["tracking_id_mouseup"],
+            self.commands["btn_touch_up"],
+            self.commands["action_terminate_command"]
+        ]
+
     def click(self, x, y, button='left', important=True, mouse_up=True):
         # 1st point always the og x,y
         self.ensure_device_initialized()
@@ -1344,43 +1417,52 @@ class ADBDeviceManager(DeviceManager):
                 mapped_y_val = int(((self.height - y) / self.height) * self.xmax)
             else:
                 raise Exception('Screen orientation not set')
-            init_click_commands = [
-                self.commands["x_command_func"](mapped_x_val),
-                self.commands["y_command_func"](mapped_y_val),
-                self.commands["syn_mt_report"],
-                self.commands["action_terminate_command"]
-            ]
-            
-            click_command += ['('] + init_click_commands + [') && ']
             n_events = np.random.geometric(p=0.739)
             if important:
                 n_events = 1
+            tail_positions = []
             if n_events > 1:
                 click_tail_x, click_tail_y = self.click_path_generator.generate_click_tail_sequence(n_events)
                 x_pos = mapped_x_val
                 y_pos = mapped_y_val
                 # script_logger.log(click_tail_x,click_tail_y)
                 for click_tail_index in range(0, n_events - 1):
-                    x_delta = click_tail_x[click_tail_index]
-                    y_delta = click_tail_y[click_tail_index]
-                    coord_commands = []
-                    x_pos += x_delta
-                    coord_commands.append(self.commands["x_command_func"](x_pos))
-                    y_pos += y_delta
-                    coord_commands.append(self.commands["y_command_func"](y_pos))
-                    if len(coord_commands) > 0:
-                        click_command += ['('] + coord_commands + [self.commands["syn_mt_report"], self.commands["action_terminate_command"], ') && ']
+                    x_pos += click_tail_x[click_tail_index]
+                    y_pos += click_tail_y[click_tail_index]
+                    tail_positions.append((x_pos, y_pos))
+
+            if self.touch_slot_protocol:
+                if self.touch_is_down:
+                    click_command += self.touch_move_commands(mapped_x_val, mapped_y_val)
+                else:
+                    click_command += self.touch_down_commands(mapped_x_val, mapped_y_val)
+                for x_pos, y_pos in tail_positions:
+                    click_command += self.touch_move_commands(x_pos, y_pos)
+                if mouse_up:
+                    click_command += self.touch_up_commands()
             else:
-                pass
+                init_click_commands = [
+                    self.commands["x_command_func"](mapped_x_val),
+                    self.commands["y_command_func"](mapped_y_val),
+                    self.commands["syn_mt_report"],
+                    self.commands["action_terminate_command"]
+                ]
+                click_command += ['('] + init_click_commands + [') && ']
+                for x_pos, y_pos in tail_positions:
+                    coord_commands = [
+                        self.commands["x_command_func"](x_pos),
+                        self.commands["y_command_func"](y_pos)
+                    ]
+                    click_command += ['('] + coord_commands + [self.commands["syn_mt_report"], self.commands["action_terminate_command"], ') && ']
+                footer_commands = ['(',
+                                   self.commands["syn_mt_report"],
+                                   self.commands["action_terminate_command"],
+                                   ')'] if mouse_up else []
+                click_command += footer_commands
             # subprocess.run([self.adb_path, 'shell', 'input', 'tap', x, y])
             # need to verify that tap will still work with only x as header (maybe try replaying some of the x header clicks)
             self.last_y = y
             self.last_x = x
-            footer_commands = ['(',
-                               self.commands["syn_mt_report"],
-                               self.commands["action_terminate_command"],
-                               ')'] if mouse_up else []
-            click_command += footer_commands
         elif self.emulator_type == 'avd' or self.emulator_type == 'adb':
             click_command.append('input tap {} {};'.format(
                 x, y
@@ -1506,32 +1588,37 @@ class ADBDeviceManager(DeviceManager):
             mapped_source_x = int(frac_source_x * self.xmax)
             mapped_source_y = int(frac_source_y * self.ymax)
 
-            init_click_commands = [
-
-            ]
-
-            command_strings += init_click_commands
             x_pos = mapped_source_x
             y_pos = mapped_source_y
-            # script_logger.log(click_tail_x,click_tail_y)
-            for delta_index in range(0, n_events):
-                x_delta = delta_x[delta_index]
-                y_delta = delta_y[delta_index]
-                coord_commands = []
-                x_pos += x_delta
-                coord_commands.append(self.commands["x_command_func"](x_pos))
-                y_pos += y_delta
-                coord_commands.append(self.commands["y_command_func"](y_pos))
-                if len(coord_commands) > 0:
-                    command_strings += coord_commands + [self.commands["syn_mt_report"],
-                                                        self.commands["action_terminate_command"],
-                                                        'sleep 0.001;' if random.random() < 0 else '']
+            if self.touch_slot_protocol:
+                if not self.touch_is_down:
+                    command_strings += self.touch_down_commands(x_pos, y_pos)
+                for delta_index in range(0, n_events):
+                    x_pos += delta_x[delta_index]
+                    y_pos += delta_y[delta_index]
+                    command_strings += self.touch_move_commands(x_pos, y_pos)
+                if mouse_up:
+                    command_strings += self.touch_up_commands()
+            else:
+                # script_logger.log(click_tail_x,click_tail_y)
+                for delta_index in range(0, n_events):
+                    x_delta = delta_x[delta_index]
+                    y_delta = delta_y[delta_index]
+                    coord_commands = []
+                    x_pos += x_delta
+                    coord_commands.append(self.commands["x_command_func"](x_pos))
+                    y_pos += y_delta
+                    coord_commands.append(self.commands["y_command_func"](y_pos))
+                    if len(coord_commands) > 0:
+                        command_strings += coord_commands + [self.commands["syn_mt_report"],
+                                                            self.commands["action_terminate_command"],
+                                                            'sleep 0.001;' if random.random() < 0 else '']
 
-            footer_commands = [
-                self.commands["syn_mt_report"],
-                self.commands["action_terminate_command"]
-            ] if mouse_up else []
-            command_strings += footer_commands
+                footer_commands = [
+                    self.commands["syn_mt_report"],
+                    self.commands["action_terminate_command"]
+                ] if mouse_up else []
+                command_strings += footer_commands
         elif self.emulator_type == 'avd' or self.emulator_type == 'adb':
             # frac_source_x = (source_x / self.width)
             # frac_target_x = (target_x / self.width)

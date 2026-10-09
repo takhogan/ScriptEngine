@@ -26,6 +26,17 @@ from ScriptEngine.common.types import ScreenPlanImage
 
 script_logger = ScriptLogger()
 
+# Mean per-channel absolute difference (0..255) at which a fixedObject scores 0.
+# Unrelated screen content typically differs by ~40-80 per channel on average,
+# so normalising by the full 255 range left mismatches scoring ~0.7-0.85 and a
+# threshold of 0.7 accepted almost anything. Normalising by 64 instead puts
+# unrelated content near 0 and lines the score up with the TM_CCOEFF_NORMED
+# scores floatingObject thresholds are tuned for:
+#   threshold 0.7  -> mean diff <= ~19
+#   threshold 0.9  -> mean diff <= ~6.4
+#   threshold 0.95 -> mean diff <= ~3.2
+FIXED_OBJECT_MAX_MEAN_DIFF = 64.0
+
 def masked_mse(target_im, compare_im, mask_size):
     """Mean absolute difference over the mask, rescaled so that 1.0 is identical.
 
@@ -41,6 +52,17 @@ def masked_mse(target_im, compare_im, mask_size):
     """
     diff = np.subtract(target_im.astype(np.int32), compare_im.astype(np.int32))
     return 1 - float(np.sum(np.abs(diff))) / mask_size
+
+def fixed_object_score(target_im, compare_im, masked_pixel_count):
+    """Similarity in 0..1 for a fixedObject, scaled to share thresholds with floatingObject.
+
+    1.0 is identical; the score falls linearly with the mean per-channel
+    difference and reaches 0 at FIXED_OBJECT_MAX_MEAN_DIFF.
+    """
+    if masked_pixel_count == 0:
+        return 0.0
+    mean_diff = (1 - masked_mse(target_im, compare_im, masked_pixel_count * 3 * 255)) * 255
+    return max(0.0, 1 - mean_diff / FIXED_OBJECT_MAX_MEAN_DIFF)
 
 def apply_output_mask(screencap_im_bgr, location_val, output_mask_bgr, output_cropping=None):
     object_h, object_w = output_mask_bgr.shape[0], output_mask_bgr.shape[1]
@@ -111,7 +133,7 @@ class DetectSceneHelper:
         mid_log_2 = 'Performing masked MSE'
         script_logger.log(mid_log_2, level='debug')
 
-        ssim_coeff = masked_mse(screencap_masked, screencap_compare, mask_size * 3 * 255)
+        ssim_coeff = fixed_object_score(screencap_masked, screencap_compare, mask_size)
 
         mid_log_3 = 'Masked MSE returned a ssim coef of {}'.format(ssim_coeff)
         script_logger.log(mid_log_3, level='debug')

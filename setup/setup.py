@@ -1,54 +1,53 @@
 import os
 import subprocess
+import sys
 
-# List of requirement files
+from setup_tesseract import setup_tesseract
+
+# Virtual environments to create, each paired with setup/<name>_requirements.txt
 requirement_dirs = ['venv', 'venv_host_server', 'venv_scheduling_server']
-requirement_files = list(map(lambda dir_name: 'setup/' + dir_name + '_requirements.txt', requirement_dirs))
 
-# Create directories for virtual environments
-base_dir = os.getcwd()  # Use the current working directory as the base directory
-for requirement_dir in requirement_dirs:
-    env_path = os.path.join(base_dir, requirement_dir)
-    os.makedirs(env_path, exist_ok=True)
-
+# Resolve paths from this file's location so the script works from any directory
+setup_dir = os.path.dirname(os.path.abspath(__file__))
+base_dir = os.path.dirname(setup_dir)
 
 is_windows = (os.name == 'nt')
 
-try:
-    subprocess.check_output('which python', shell=True).decode('utf-8')
-    python_command = 'python'
-except subprocess.CalledProcessError:
-    try:
-        subprocess.check_output('which python3', shell=True).decode('utf-8')
-        python_command = 'python3'
-    except subprocess.CalledProcessError:
-        print('python command not found')
-        exit(1)
-#
-# if os.path.exists(which_python):
-#     python_command = 'python'
-# else:
-#     which_python =
-#     if os.path.exists(which_python):
-#         python_command = 'python3'
-#     else:
-#         print('unable to find python command')
-#         exit(1)
+# Use the interpreter running this script to build the venvs
+python_command = sys.executable
+print(f'Using Python {sys.version.split()[0]} at {python_command}')
 
-# Create virtual environments and activate them
-for i, requirement_dir in enumerate(requirement_dirs):
+failed = []
+for requirement_dir in requirement_dirs:
     env_path = os.path.join(base_dir, requirement_dir)
+    requirement_file = os.path.join(setup_dir, requirement_dir + '_requirements.txt')
 
-    # Create virtual environment
+    print(f'\n=== {requirement_dir} ===')
     subprocess.run([python_command, '-m', 'venv', env_path], check=True)
 
-    # Activate virtual environment and install requirements
+    # Call the venv's own python directly instead of activating it in a shell
+    env_python = os.path.join(env_path, 'Scripts' if is_windows else 'bin', 'python')
+    subprocess.run([env_python, '-m', 'pip', 'install', '--upgrade', 'pip'], check=True)
 
-    activate_script = os.path.join(env_path, 'Scripts' if is_windows else 'bin', 'activate')
-    activation_command = (['source'] if not is_windows else []) + ['"' + activate_script + '"']
-    pip_install_command = ['pip', 'install', '-r', requirement_files[i]]
+    if not os.path.isfile(requirement_file):
+        print(f'Warning: {requirement_file} not found, {requirement_dir} created without packages')
+        continue
 
     try:
-        print(subprocess.run(f'{" ".join(activation_command)} && {" ".join(pip_install_command)} && deactivate', shell=True, check=True))
+        subprocess.run([env_python, '-m', 'pip', 'install', '-r', requirement_file], check=True)
     except subprocess.CalledProcessError as e:
-        print(f"Error installing requirements for {requirement_dir}: {e}")
+        print(f'Error installing requirements for {requirement_dir}: {e}')
+        failed.append(requirement_dir)
+
+    # tesserocr isn't installable from venv_requirements.txt on Windows, so the script venv gets it separately
+    if requirement_dir == 'venv':
+        try:
+            setup_tesseract(env_python)
+        except Exception as e:
+            print(f'Error setting up tesseract for {requirement_dir}: {e}')
+            failed.append(requirement_dir + ' (tesseract)')
+
+if failed:
+    print(f'\nSetup finished with errors in: {", ".join(failed)}')
+    sys.exit(1)
+print('\nSetup finished')
