@@ -101,7 +101,7 @@ async def close_threads_and_processes(io_executor, process_executor, timeout=30)
     import asyncio
     await asyncio.gather(io_executor.soft_shutdown(script_logger, timeout), process_executor.soft_shutdown(script_logger, timeout))
 
-def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False, read_env=False, write_env=False, workspace="Default", restart_device_on_failure=False):
+def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False, read_env=False, write_env=False, workspace="Default", restart_device_on_crash=False):
     import os
     import json
     import datetime
@@ -165,11 +165,11 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         # The selection goes along with the resolved params: when it names a device
         # host_devices_config.json does not hold, device_params is left empty above and
         # only the original selection can say why.
-        # The script's end time doubles as the deadline for restart_device_on_failure:
+        # The script's end time doubles as the deadline for restart_device_on_crash:
         # past it there is no run left to recover the device for.
         device_controller = DeviceController(
             script_object['props'], device_params, io_executor, secrets_manager, device_selection,
-            restart_device_on_failure=restart_device_on_failure, restart_deadline=timeout
+            restart_device_on_crash=restart_device_on_crash, restart_deadline=timeout
         )
         engine_manager = EngineManager(script_id, script_logger.get_log_folder())
         script_action_executor = ScriptActionExecutor(device_controller, io_executor, script_object['props'], screen_plan_server_attached)
@@ -298,7 +298,7 @@ def main():
         parser.add_argument('--screen-plan-server-attached', '-spsa', action='store_true', help='Whether a screenplan client server is attached')
         parser.add_argument('--constants', '-c', nargs='*', help='Constants in format key:value')
         parser.add_argument('--read-env', action='store_true', help='Read environment variables and pass them to parse_inputs')
-        parser.add_argument('--restart-device-on-failure', '-rdf', action='store_true',
+        parser.add_argument('--restart-device-on-crash', '-rdc', action='store_true',
                             help='When reconnecting to the device fails, stop the device, wait a few seconds, '
                                  'start it again and retry the connection. Keeps retrying until the script end time.')
         # parser.add_argument('--write-env', action='store_true', help='Output script outputs as environment variable exports (cross-platform)')
@@ -380,7 +380,7 @@ def main():
         screen_plan_server_attached=args.screen_plan_server_attached,
         read_env=args.read_env,
         workspace=args.workspace,
-        restart_device_on_failure=args.restart_device_on_failure
+        restart_device_on_crash=args.restart_device_on_crash
         # write_env=args.write_env
     )
 

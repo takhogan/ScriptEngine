@@ -160,16 +160,16 @@ class ADBDeviceManager(DeviceManager):
     # device configuration indefinitely.
     PORT_SCAN_DEADLINE = 60
     # Pause between stopping the device and starting it again when
-    # restart_device_on_failure is set, so the emulator process has fully exited
+    # restart_device_on_crash is set, so the emulator process has fully exited
     # before a new one is launched for the same instance.
     DEVICE_RESTART_WAIT_SECONDS = 5
 
-    def __init__(self, props, adb_args, input_source=None, restart_device_on_failure=False, restart_deadline=None):
+    def __init__(self, props, adb_args, input_source=None, restart_device_on_crash=False, restart_deadline=None):
         script_logger.log('Configuring ADB with adb_args', adb_args, level='info')
         # When set, a failed (re)connection stops and restarts the device and tries
         # again, until restart_deadline (an aware datetime, normally the script's
         # end time) passes. None means keep trying indefinitely.
-        self.restart_device_on_failure = restart_device_on_failure
+        self.restart_device_on_crash = restart_device_on_crash
         self.restart_deadline = restart_deadline
         self.device_restart_lock = threading.Lock()
         self.device_restart_count = 0
@@ -998,7 +998,7 @@ class ADBDeviceManager(DeviceManager):
         time.sleep(3)
 
     def ensure_device_initialized(self, reinitialize=False):
-        if not self.restart_device_on_failure or self.dummy_mode:
+        if not self.restart_device_on_crash or self.dummy_mode:
             return self._initialize_device(reinitialize)
 
         restart_count = self.device_restart_count
