@@ -159,9 +159,20 @@ class ADBDeviceManager(DeviceManager):
     # Upper bound on the whole sweep, so a silently dropping host cannot stall
     # device configuration indefinitely.
     PORT_SCAN_DEADLINE = 60
+    # Pause between stopping the device and starting it again when
+    # restart_device_on_failure is set, so the emulator process has fully exited
+    # before a new one is launched for the same instance.
+    DEVICE_RESTART_WAIT_SECONDS = 5
 
-    def __init__(self, props, adb_args, input_source=None):
+    def __init__(self, props, adb_args, input_source=None, restart_device_on_failure=False, restart_deadline=None):
         script_logger.log('Configuring ADB with adb_args', adb_args, level='info')
+        # When set, a failed (re)connection stops and restarts the device and tries
+        # again, until restart_deadline (an aware datetime, normally the script's
+        # end time) passes. None means keep trying indefinitely.
+        self.restart_device_on_failure = restart_device_on_failure
+        self.restart_deadline = restart_deadline
+        self.device_restart_lock = threading.Lock()
+        self.device_restart_count = 0
         self.stop_command_gather = False
         self.search_pattern_helper = SearchPatternHelper()
         self.status = 'uninitialized'
@@ -832,6 +843,7 @@ class ADBDeviceManager(DeviceManager):
                     break
         elif self.emulator_type == 'adb':
             script_logger.log('ADB CONTROLLER: start device for adb emulator type not supported, please manually start the device')
+            return
         else:
             script_logger.log('ADB CONTROLLER: emulator type ', self.emulator_type, ' not supported', level='error')
             return
@@ -986,6 +998,72 @@ class ADBDeviceManager(DeviceManager):
         time.sleep(3)
 
     def ensure_device_initialized(self, reinitialize=False):
+        if not self.restart_device_on_failure or self.dummy_mode:
+            return self._initialize_device(reinitialize)
+
+        restart_count = self.device_restart_count
+        try:
+            return self._initialize_device(reinitialize)
+        except Exception as e:
+            failure = e
+
+        script_logger = ScriptLogger.get_logger()
+        # One thread restarts the device at a time. Any other thread that failed
+        # meanwhile waits here and, once the device is back, reconnects without
+        # restarting it a second time.
+        with self.device_restart_lock:
+            if self.device_restart_count != restart_count:
+                try:
+                    return self._initialize_device(reinitialize=True)
+                except Exception as e:
+                    failure = e
+            while True:
+                if self._restart_deadline_passed():
+                    script_logger.log(
+                        'ADB CONTROLLER: device still unreachable after {} restart(s), script end time {} reached, giving up'.format(
+                            self.device_restart_count, self.restart_deadline
+                        ),
+                        level='error'
+                    )
+                    raise failure
+                script_logger.log(
+                    'ADB CONTROLLER: connection to device failed, restarting device (restart #{})'.format(
+                        self.device_restart_count + 1
+                    ),
+                    failure,
+                    level='error'
+                )
+                self._restart_device()
+                self.device_restart_count += 1
+                try:
+                    return self._initialize_device(reinitialize=True)
+                except Exception as e:
+                    failure = e
+
+    def _restart_deadline_passed(self):
+        if self.restart_deadline is None:
+            return False
+        return datetime.datetime.now(datetime.timezone.utc) >= self.restart_deadline
+
+    def _restart_device(self):
+        """Stop the device, wait, and start it again.
+
+        Errors from either half are logged rather than raised: a device that is
+        already down can fail to stop, and the reconnect attempt that follows is
+        what decides whether the restart worked.
+        """
+        script_logger = ScriptLogger.get_logger()
+        try:
+            self.stop_device()
+        except Exception as e:
+            script_logger.log('ADB CONTROLLER: stop device failed during restart', e, level='error')
+        time.sleep(self.DEVICE_RESTART_WAIT_SECONDS)
+        try:
+            self.start_device()
+        except Exception as e:
+            script_logger.log('ADB CONTROLLER: start device failed during restart', e, level='error')
+
+    def _initialize_device(self, reinitialize=False):
         script_logger = ScriptLogger.get_logger()
         if self.dummy_mode:
             script_logger.log('skipping adb init system. script running in mock mode')
