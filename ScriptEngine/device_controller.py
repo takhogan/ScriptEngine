@@ -146,7 +146,8 @@ DEVICE_TYPES_REQUIRING_ATTACHMENT = ('adb', 'kvm')
 
 
 class DeviceController:
-    def __init__(self, default_props, default_device_params, io_executor : CustomThreadPool, secrets_manager: DeviceSecretsManager, device_selection=None):
+    def __init__(self, default_props, default_device_params, io_executor : CustomThreadPool, secrets_manager: DeviceSecretsManager, device_selection=None,
+                 restart_device_on_failure=False, restart_deadline=None):
         script_logger.log('Intializing Device Manager')
         if 'script-engine-device-type' in default_device_params and default_device_params['script-engine-device-type'] == 'file':
             self.input_source = default_device_params
@@ -161,6 +162,11 @@ class DeviceController:
         # device is reported in terms of the choice the caller made rather than
         # the empty params dict it produced. None when nothing was selected.
         self.device_selection = device_selection
+        # Passed on to device managers that can restart their device when
+        # reconnecting fails ('--restart-device-on-failure'); restart_deadline is
+        # the script's end time, after which they stop retrying.
+        self.restart_device_on_failure = restart_device_on_failure
+        self.restart_deadline = restart_deadline
 
         self.devices: Dict[str, DeviceManager] = {}
 
@@ -230,11 +236,17 @@ class DeviceController:
         elif (device_type == 'adb'):
             from ScriptEngine.managers.adb_device_manager import ADBDeviceManager
             if device_params is None:
-                self.devices[device_type] = ADBDeviceManager(self.default_props.copy(), self.default_device_params, self.input_source)
+                self.devices[device_type] = ADBDeviceManager(
+                    self.default_props.copy(), self.default_device_params, self.input_source,
+                    restart_device_on_failure=self.restart_device_on_failure, restart_deadline=self.restart_deadline
+                )
                 return self.devices[device_type]
             else:
                 device_params = self._resolve_device_params(device_params['deviceId'], device_type)
-                self.devices[device_params['deviceId']] = ADBDeviceManager(self.default_props.copy(), device_params, self.input_source)
+                self.devices[device_params['deviceId']] = ADBDeviceManager(
+                    self.default_props.copy(), device_params, self.input_source,
+                    restart_device_on_failure=self.restart_device_on_failure, restart_deadline=self.restart_deadline
+                )
                 return self.devices[device_params['deviceId']]
         elif (device_type == 'kvm'):
             from ScriptEngine.managers.pikvm_device_manager import PiKVMDeviceManager
