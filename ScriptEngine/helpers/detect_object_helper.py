@@ -266,7 +266,15 @@ class DetectObjectHelper:
             detect_action_type = action['actionData']['detectActionType']
             if detect_action_type == 'fixedObject':
                 needs_rescale = screencap_im_bgr.shape != fixed_detect_obj["mask"].shape
-                screencap_masked = cv2.bitwise_and(screencap_im_bgr, fixed_detect_obj["mask"])
+                scene_mask = fixed_detect_obj["mask"]
+                if needs_rescale:
+                    # input can be a crop that differs from the mask's source screen size
+                    scene_mask = cv2.resize(
+                        scene_mask,
+                        (screencap_im_bgr.shape[1], screencap_im_bgr.shape[0]),
+                        interpolation=cv2.INTER_NEAREST
+                    )
+                screencap_masked = cv2.bitwise_and(screencap_im_bgr, scene_mask)
                 log_objs['fixedObject'] = (
                     matches, screencap_masked, fixed_detect_obj, needs_rescale
                 )
