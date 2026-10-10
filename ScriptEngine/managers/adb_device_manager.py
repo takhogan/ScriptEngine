@@ -47,6 +47,16 @@ from ScriptEngine.common.logging.script_action_log import ScriptActionLog
 from .adb_command_stats import ADB_SLOW_COMMAND_SECONDS, AdbCommandStats
 
 
+class AdbCommandTimeoutError(Exception):
+    """An adb command timed out on both its attempt and its retry.
+
+    Deliberately not an UnidentifiedImageError, so callers can tell a hung
+    device apart from a bad image. screenshot() skips its own retry for this and
+    goes straight to a single reinitialize; if the screencap there times out
+    too, this propagates and fails the run.
+    """
+
+
 KEYBOARD_KEYS = set(pyautogui.KEYBOARD_KEYS)
 KEY_TO_KEYCODE = {
     "a": "KEYCODE_A",
@@ -418,13 +428,14 @@ class ADBDeviceManager(DeviceManager):
             
         Returns:
             tuple: (stdout, stderr, returncode) on success
-            Raises: UnidentifiedImageError on failure or timeout
+            Raises: UnidentifiedImageError on failure, AdbCommandTimeoutError if the
+            command times out on both its attempt and its retry
         """
         script_logger = ScriptLogger.get_logger()
-        
+
         # Build the full command with adb_path and device selection
         full_args = [self.adb_path, '-s', self.full_ip] + args
-        
+
         # Set default Popen arguments if not provided
         popen_kwargs = {
             'cwd': cwd,
@@ -470,15 +481,20 @@ class ADBDeviceManager(DeviceManager):
         except subprocess.TimeoutExpired:
             AdbCommandStats.record(command_label, time.perf_counter() - started, failed=True, timed_out=True)
             script_logger.log(f'ADBDeviceManager: command timed out after {timeout}s: {" ".join(full_args)}', level='error')
+            # Kill before reaping. Waiting on a hung process first only times out
+            # again, and the kill was then never reached, leaking one adb process
+            # per attempt for as long as the device stayed unresponsive.
+            process.kill()
             try:
-                stdout, stderr = process.communicate(timeout=10)
-                process.kill()
+                stdout, stderr = process.communicate(timeout=5)
                 script_logger.log(stdout.decode('utf-8', errors='ignore'), level='debug')
-            except:
-                pass
+            except subprocess.TimeoutExpired:
+                script_logger.log(f'ADBDeviceManager: adb process {process.pid} did not exit after kill', level='error')
             if retry_on_timeout:
-                self.adb_popen(args, timeout=timeout, cwd=cwd, retry_on_timeout=False, **kwargs)
-            raise UnidentifiedImageError()
+                return self.adb_popen(args, timeout=timeout, cwd=cwd, retry_on_timeout=False, **kwargs)
+            raise AdbCommandTimeoutError(
+                f'ADB device {self.full_ip} unresponsive: "{" ".join(args)}" timed out twice ({timeout}s each)'
+            )
         except Exception as e:
             AdbCommandStats.record(command_label, time.perf_counter() - started, failed=True)
             script_logger.log(f'ADBDeviceManager: error running popen command {" ".join(full_args)}: {e}', level='error')
@@ -1055,7 +1071,9 @@ class ADBDeviceManager(DeviceManager):
                 source_im = self.get_screencap(compressed=True)
                 emulator_active = True
                 screencap_succesful = True
-            except UnidentifiedImageError:
+            # At bring-up a hung screencap still gets one adb server restart: the
+            # device may have only just booted. The screencap below is the last try.
+            except (UnidentifiedImageError, AdbCommandTimeoutError):
                 script_logger.log('ADB CONTROLLER: Scrrencap Failed, trying again in 15 seconds', level='error')
                 self.restart_adb()
                 devices_output = self.get_device_list_output()
@@ -1297,6 +1315,16 @@ class ADBDeviceManager(DeviceManager):
             return self.input_source['screenshot']()
         try:
             source_im = self.get_screencap(compressed=compress_png)
+        except AdbCommandTimeoutError as e:
+            # adb_popen has already retried, so a further screencap would only time
+            # out again. Go straight to the one recovery that can still help: the
+            # reinitialize restarts the adb server, which clears a hang on the host
+            # side. A guest that has stopped responding times out there as well, and
+            # that error is left to fail the run.
+            script_logger.log('ADB CONTROLLER: screencap timed out, reinitializing device', e, level='error')
+            source_im = self.ensure_device_initialized(reinitialize=True)
+            if source_im is None:
+                raise Exception('ADB connection failed')
         except (UnidentifiedImageError, struct.error, ValueError) as e:
             script_logger.log('ADB CONTROLLER: screencap failed', e, level='error')
             try:
