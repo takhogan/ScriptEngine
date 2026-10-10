@@ -30,12 +30,17 @@ script_logger = ScriptLogger()
 # Unrelated screen content typically differs by ~40-80 per channel on average,
 # so normalising by the full 255 range left mismatches scoring ~0.7-0.85 and a
 # threshold of 0.7 accepted almost anything. Normalising by 64 instead puts
-# unrelated content near 0 and lines the score up with the TM_CCOEFF_NORMED
-# scores floatingObject thresholds are tuned for:
-#   threshold 0.7  -> mean diff <= ~19
-#   threshold 0.9  -> mean diff <= ~6.4
-#   threshold 0.95 -> mean diff <= ~3.2
+# unrelated content at 0 and lines the score up with the TM_CCOEFF_NORMED
+# scores floatingObject thresholds are tuned for.
 FIXED_OBJECT_MAX_MEAN_DIFF = 64.0
+# Curve applied to the normalised difference. A straight line was too harsh in
+# the middle of the range; raising it to 1.5 lifts mid-range scores (a mean diff
+# of ~25 scores 0.75 rather than 0.6) while anything at or past
+# FIXED_OBJECT_MAX_MEAN_DIFF still scores 0:
+#   threshold 0.7  -> mean diff <= ~29
+#   threshold 0.9  -> mean diff <= ~14
+#   threshold 0.95 -> mean diff <= ~8.7
+FIXED_OBJECT_SCORE_EXPONENT = 1.5
 
 def masked_mse(target_im, compare_im, mask_size):
     """Mean absolute difference over the mask, rescaled so that 1.0 is identical.
@@ -56,13 +61,14 @@ def masked_mse(target_im, compare_im, mask_size):
 def fixed_object_score(target_im, compare_im, masked_pixel_count):
     """Similarity in 0..1 for a fixedObject, scaled to share thresholds with floatingObject.
 
-    1.0 is identical; the score falls linearly with the mean per-channel
-    difference and reaches 0 at FIXED_OBJECT_MAX_MEAN_DIFF.
+    1.0 is identical; the score is 1 - (mean_diff / FIXED_OBJECT_MAX_MEAN_DIFF)
+    ** FIXED_OBJECT_SCORE_EXPONENT, reaching 0 at FIXED_OBJECT_MAX_MEAN_DIFF.
     """
     if masked_pixel_count == 0:
         return 0.0
     mean_diff = (1 - masked_mse(target_im, compare_im, masked_pixel_count * 3 * 255)) * 255
-    return max(0.0, 1 - mean_diff / FIXED_OBJECT_MAX_MEAN_DIFF)
+    normalised_diff = min(1.0, mean_diff / FIXED_OBJECT_MAX_MEAN_DIFF)
+    return 1 - normalised_diff ** FIXED_OBJECT_SCORE_EXPONENT
 
 def apply_output_mask(screencap_im_bgr, location_val, output_mask_bgr, output_cropping=None):
     object_h, object_w = output_mask_bgr.shape[0], output_mask_bgr.shape[1]
