@@ -202,6 +202,17 @@ def get_running_scripts():
 
     return running_scripts
 
+def is_script_cancelled(script_id):
+    """True once the controller has cancelled the run, which it does by dropping
+    it from running_scripts.json (the same file ScriptExecutor.check_if_done reads
+    between actions)."""
+    try:
+        running_scripts = get_running_scripts()
+    except ValueError:
+        # Read while the controller was rewriting it; ask again next time.
+        return False
+    return not any(running_script.get('script_id') == script_id for running_script in running_scripts)
+
 def safe_subprocess_run(args, timeout=5, capture_output=True, cwd="/", retry_on_timeout=True, **kwargs):
         """
         Helper method to run commands with consistent error handling and timeout management.
