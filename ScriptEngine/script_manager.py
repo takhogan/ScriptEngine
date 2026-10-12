@@ -16,6 +16,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 import time
+import functools
 
 start_time = time.time()
 
@@ -27,7 +28,7 @@ from ScriptEngine.custom_process_pool import CustomProcessPool
 # print(f"non builtin initialization 1 completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 from ScriptEngine.common.constants.script_engine_constants import *
-from ScriptEngine.common.script_engine_utils import datetime_to_local_str, imageFileExtensions, StateEvaluator
+from ScriptEngine.common.script_engine_utils import datetime_to_local_str, imageFileExtensions, StateEvaluator, is_script_cancelled
 # print(f"non builtin initialization 2 completed at {time.time() - start_time:.2f} seconds", flush=True)
 
 from ScriptEngine.common.enums import ScriptExecutionState
@@ -167,9 +168,11 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         # only the original selection can say why.
         # The script's end time doubles as the deadline for restart_device_on_crash:
         # past it there is no run left to recover the device for.
+        # Cancelling the run likewise leaves nothing to recover it for.
         device_controller = DeviceController(
             script_object['props'], device_params, io_executor, secrets_manager, device_selection,
-            restart_device_on_crash=restart_device_on_crash, restart_deadline=timeout
+            restart_device_on_crash=restart_device_on_crash, restart_deadline=timeout,
+            cancel_check=functools.partial(is_script_cancelled, script_id) if screen_plan_server_attached else None
         )
         engine_manager = EngineManager(script_id, script_logger.get_log_folder())
         script_action_executor = ScriptActionExecutor(device_controller, io_executor, script_object['props'], screen_plan_server_attached)

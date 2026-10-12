@@ -147,7 +147,7 @@ DEVICE_TYPES_REQUIRING_ATTACHMENT = ('adb', 'kvm')
 
 class DeviceController:
     def __init__(self, default_props, default_device_params, io_executor : CustomThreadPool, secrets_manager: DeviceSecretsManager, device_selection=None,
-                 restart_device_on_crash=False, restart_deadline=None):
+                 restart_device_on_crash=False, restart_deadline=None, cancel_check=None):
         script_logger.log('Intializing Device Manager')
         if 'script-engine-device-type' in default_device_params and default_device_params['script-engine-device-type'] == 'file':
             self.input_source = default_device_params
@@ -167,6 +167,9 @@ class DeviceController:
         # the script's end time, after which they stop retrying.
         self.restart_device_on_crash = restart_device_on_crash
         self.restart_deadline = restart_deadline
+        # Returns True once the run has been cancelled, so those reconnect and
+        # restart loops stop instead of running on until the deadline.
+        self.cancel_check = cancel_check
 
         self.devices: Dict[str, DeviceManager] = {}
 
@@ -238,14 +241,16 @@ class DeviceController:
             if device_params is None:
                 self.devices[device_type] = ADBDeviceManager(
                     self.default_props.copy(), self.default_device_params, self.input_source,
-                    restart_device_on_crash=self.restart_device_on_crash, restart_deadline=self.restart_deadline
+                    restart_device_on_crash=self.restart_device_on_crash, restart_deadline=self.restart_deadline,
+                    cancel_check=self.cancel_check
                 )
                 return self.devices[device_type]
             else:
                 device_params = self._resolve_device_params(device_params['deviceId'], device_type)
                 self.devices[device_params['deviceId']] = ADBDeviceManager(
                     self.default_props.copy(), device_params, self.input_source,
-                    restart_device_on_crash=self.restart_device_on_crash, restart_deadline=self.restart_deadline
+                    restart_device_on_crash=self.restart_device_on_crash, restart_deadline=self.restart_deadline,
+                    cancel_check=self.cancel_check
                 )
                 return self.devices[device_params['deviceId']]
         elif (device_type == 'kvm'):

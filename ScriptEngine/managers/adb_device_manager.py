@@ -164,13 +164,19 @@ class ADBDeviceManager(DeviceManager):
     # before a new one is launched for the same instance.
     DEVICE_RESTART_WAIT_SECONDS = 5
 
-    def __init__(self, props, adb_args, input_source=None, restart_device_on_crash=False, restart_deadline=None):
+    def __init__(self, props, adb_args, input_source=None, restart_device_on_crash=False, restart_deadline=None, cancel_check=None):
         script_logger.log('Configuring ADB with adb_args', adb_args, level='info')
         # When set, a failed (re)connection stops and restarts the device and tries
         # again, until restart_deadline (an aware datetime, normally the script's
         # end time) passes. None means keep trying indefinitely.
         self.restart_device_on_crash = restart_device_on_crash
         self.restart_deadline = restart_deadline
+        # Returns True once the run has been cancelled. Reconnecting and restarting
+        # can take minutes, all inside one action, so the executor's own
+        # between-actions cancellation check would not be reached until they gave
+        # up; this lets them stop as soon as the run is cancelled. None when the
+        # run cannot be cancelled (not attached to a controller).
+        self.cancel_check = cancel_check
         self.device_restart_lock = threading.Lock()
         self.device_restart_count = 0
         self.stop_command_gather = False
@@ -1018,6 +1024,14 @@ class ADBDeviceManager(DeviceManager):
                 except Exception as e:
                     failure = e
             while True:
+                if self._run_cancelled():
+                    script_logger.log(
+                        'ADB CONTROLLER: device still unreachable after {} restart(s), script was cancelled, giving up'.format(
+                            self.device_restart_count
+                        ),
+                        level='error'
+                    )
+                    raise failure
                 if self._restart_deadline_passed():
                     script_logger.log(
                         'ADB CONTROLLER: device still unreachable after {} restart(s), script end time {} reached, giving up'.format(
@@ -1039,6 +1053,20 @@ class ADBDeviceManager(DeviceManager):
                     return self._initialize_device(reinitialize=True)
                 except Exception as e:
                     failure = e
+
+    def _run_cancelled(self):
+        if self.cancel_check is None:
+            return False
+        try:
+            return bool(self.cancel_check())
+        except Exception as e:
+            script_logger.log('ADB CONTROLLER: cancellation check failed, assuming not cancelled', e, level='error')
+            return False
+
+    def _raise_if_cancelled(self):
+        if self._run_cancelled():
+            script_logger.log('ADB CONTROLLER: script was cancelled, abandoning device connection', level='error')
+            raise Exception('ADB connection abandoned: script was cancelled')
 
     def _restart_deadline_passed(self):
         if self.restart_deadline is None:
@@ -1094,6 +1122,7 @@ class ADBDeviceManager(DeviceManager):
 
 
                     while not check_for_window(instance_window_name):
+                        self._raise_if_cancelled()
                         script_logger.log('ADB CONTROLLER: window {} not found, sleeping for 5 seconds'.format(instance_window_name), level='debug')
                         time.sleep(5)
                         window_attempts += 1
@@ -1130,6 +1159,7 @@ class ADBDeviceManager(DeviceManager):
                 ) for devices_output_line in devices_output)
 
             while not emulator_active:
+                self._raise_if_cancelled()
                 if adb_attempts > max_adb_attempts:
                     script_logger.log('ADB CONTROLLER: adb connection timed out ', level='error')
                     raise Exception('ADB connection failed')
@@ -1168,6 +1198,7 @@ class ADBDeviceManager(DeviceManager):
                 ) for devices_output_line in devices_output)
 
             while not emulator_active:
+                self._raise_if_cancelled()
                 if adb_attempts > max_adb_attempts:
                     script_logger.log('ADB CONTROLLER: adb connection timed out ', level='error')
                     raise Exception('ADB connection failed')
