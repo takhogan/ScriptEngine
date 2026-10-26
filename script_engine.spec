@@ -27,6 +27,13 @@ for _required in (torch_path, torch_lib_path):
             "venv is active, and make sure dependencies are installed." % _required
         )
 
+# Inlined into every *.overlay.html log file; log_overlay.py reads it from
+# its own folder, so it ships next to that module.
+overlay_renderer_data = (
+    'ScriptEngine/common/logging/log_overlay_renderer.js',
+    'ScriptEngine/common/logging',
+)
+
 # Analyses for all executables
 device_secrets_manager_a = Analysis(
     ['ScriptEngine/managers/device_secrets_manager.py'],
@@ -66,7 +73,7 @@ device_controller_a = Analysis(
     ['ScriptEngine/device_controller.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[overlay_renderer_data],
     hiddenimports=[
         'PIL', 'numpy', 'ScriptEngine'
     ],
@@ -80,7 +87,7 @@ script_manager_a = Analysis(
     ['ScriptEngine/script_manager.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[overlay_renderer_data],
     hiddenimports=[
         'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
     ],

@@ -70,12 +70,13 @@ class ScriptActionLog:
 
     @staticmethod
     def _capture_file(role):
-        # Gate artifact capture by log level. post files feed the log video, so
-        # they survive at info and debug but are dropped at error; pre and
-        # supporting files are debug-only detail. Lazy import avoids the
+        # Gate artifact capture by log level. pre files (an action's inputs, so
+        # it can be diagnosed and replayed) and post files (which feed the log
+        # video) survive at info and debug but are dropped at error; supporting
+        # files are debug-only detail. Lazy import avoids the
         # script_logger <-> script_action_log import cycle.
         from ScriptEngine.common.logging.script_logger import ScriptLogger
-        min_level = 'info' if role == 'post' else 'debug'
+        min_level = 'debug' if role == 'supporting' else 'info'
         return ScriptLogger.get_logger().should_log(min_level)
 
     def _flush(self):

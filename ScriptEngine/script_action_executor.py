@@ -100,6 +100,8 @@ class ScriptActionExecutor:
                 self.draw_click,
                 action,
                 thread_script_logger,
+                point_choice,
+                point_list,
                 log_point_choice,
                 log_point_list
             )
@@ -141,7 +143,7 @@ class ScriptActionExecutor:
             script_logger.get_action_log().set_summary('performed {} at location {}'.format(action_type, location_str))
         elif action["actionName"] == "mouseMoveAction":
             self.device_controller.ensure_device_initialized(action['actionData']['targetSystem'])
-            source_point, log_source_point_choice, point_list, log_source_point_list = ClickActionHelper.get_point_choice(
+            source_point, log_source_point_choice, source_point_list, log_source_point_list = ClickActionHelper.get_point_choice(
                 action["actionData"]["sourceDetectTypeData"],
                 action["actionData"]["sourceDetectTypeData"]["inputExpression"],
                 action["actionData"]["sourcePointList"],
@@ -151,7 +153,7 @@ class ScriptActionExecutor:
                 1
             )
 
-            target_point, log_target_point_choice, point_list, log_target_point_list = ClickActionHelper.get_point_choice(
+            target_point, log_target_point_choice, target_point_list, log_target_point_list = ClickActionHelper.get_point_choice(
                 action["actionData"]["targetDetectTypeData"],
                 action["actionData"]["targetDetectTypeData"]["inputExpression"],
                 action["actionData"]["targetPointList"],
@@ -200,10 +202,8 @@ class ScriptActionExecutor:
                     self.draw_click_and_drag,
                     action,
                     thread_script_logger,
-                    log_source_point_choice,
-                    log_source_point_list,
-                    log_target_point_choice,
-                    log_target_point_list,
+                    (source_point, source_point_list, log_source_point_choice, log_source_point_list),
+                    (target_point, target_point_list, log_target_point_choice, log_target_point_list),
                     delta_x,
                     delta_y
                 )
@@ -229,10 +229,8 @@ class ScriptActionExecutor:
                         self.draw_click_and_drag,
                         action,
                         thread_script_logger,
-                        log_source_point_choice,
-                        log_source_point_list,
-                        log_target_point_choice,
-                        log_target_point_list,
+                        (source_point, source_point_list, log_source_point_choice, log_source_point_list),
+                        (target_point, target_point_list, log_target_point_choice, log_target_point_list),
                         delta_x,
                         delta_y
                     )
@@ -608,41 +606,70 @@ class ScriptActionExecutor:
             raise Exception(exception_text)
         return action, status, state, context, run_queue, update_queue
     
-    def draw_click(self, action,thread_script_logger, point_choice, point_list):
+    def draw_click(self, action, thread_script_logger, point_choice, point_list, log_point_choice, log_point_list):
         thread_local_storage.script_logger = thread_script_logger
         # The click-location post image feeds the log video, so it must be
         # generated at both info and debug; only the error level (text-only,
         # no images) skips it.
         if thread_script_logger.get_log_level() == 'error':
             return
+        if not ClickActionHelper.has_point(point_choice):
+            thread_script_logger.log('no click point chosen, skipping click log image', level='debug')
+            return
         thread_script_logger.log('started draw click thread', level='debug')
-        ClickActionHelper.draw_click(
-            self.device_controller.get_device_action(action['actionData']['targetSystem'], 'screenshot')(), point_choice, point_list
+        target_system = action['actionData']['targetSystem']
+        # Draw on the screenshot the target was chosen from, when it came from
+        # an input expression; only a point list from the action's own data
+        # needs a new screenshot.
+        base_bgr = ClickActionHelper.input_screenshot(log_point_list)
+        if base_bgr is None:
+            base_bgr = self.device_controller.get_device_action(target_system, 'screenshot')()
+        log_choice, log_candidates = ClickActionHelper.log_target(
+            base_bgr,
+            self.device_controller.get_device_attribute(target_system, 'width'),
+            self.device_controller.get_device_attribute(target_system, 'height'),
+            point_choice, point_list, log_point_choice, log_point_list
         )
-    
-    def draw_click_and_drag(self, action,
-                            thread_script_logger,
-                            source_point, source_point_list,
-                            target_point, target_point_list,
-                            delta_x, delta_y):
+        ClickActionHelper.draw_click(base_bgr, log_choice, log_candidates)
+
+    def draw_click_and_drag(self, action, thread_script_logger, source, target, delta_x, delta_y):
+        """`source` and `target` are (point_choice, point_list, log_point_choice,
+        log_point_list) as get_point_choice returned them."""
         thread_local_storage.script_logger = thread_script_logger
         # The drag-path post image feeds the log video, so it must be generated
         # at both info and debug; only the error level (text-only, no images)
         # skips it.
         if thread_script_logger.get_log_level() == 'error':
             return
+        if not (ClickActionHelper.has_point(source[0]) and ClickActionHelper.has_point(target[0])):
+            thread_script_logger.log('no drag points chosen, skipping drag log image', level='debug')
+            return
         thread_script_logger.log('started draw click thread', level='debug')
-        xmax = self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'xmax')
-        ymax = self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'ymax')
-        width = self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'width')
-        height = self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'height')
+        target_system = action['actionData']['targetSystem']
+        xmax = self.device_controller.get_device_attribute(target_system, 'xmax')
+        ymax = self.device_controller.get_device_attribute(target_system, 'ymax')
+        width = self.device_controller.get_device_attribute(target_system, 'width')
+        height = self.device_controller.get_device_attribute(target_system, 'height')
 
-        delta_x = list(map(lambda x: (x / xmax) * width, delta_x))
-        delta_y = list(map(lambda y: (y / ymax) * height, delta_y))
+        # Prefer the screenshot the drag's start was chosen from, then its end's.
+        base_bgr = ClickActionHelper.input_screenshot(source[3])
+        if base_bgr is None:
+            base_bgr = ClickActionHelper.input_screenshot(target[3])
+        if base_bgr is None:
+            base_bgr = self.device_controller.get_device_action(target_system, 'screenshot')()
+        source_choice, source_candidates = ClickActionHelper.log_target(base_bgr, width, height, *source)
+        target_choice, target_candidates = ClickActionHelper.log_target(base_bgr, width, height, *target)
+
+        # The deltas are in the device's input coordinates (up to xmax, ymax);
+        # take them to screen coordinates, then to the base screenshot's.
+        scale_x = base_bgr.shape[1] / float(width)
+        scale_y = base_bgr.shape[0] / float(height)
+        delta_x = list(map(lambda x: (x / xmax) * width * scale_x, delta_x))
+        delta_y = list(map(lambda y: (y / ymax) * height * scale_y, delta_y))
 
         ClickActionHelper.draw_click_and_drag(
-            self.device_controller.get_device_action(action['actionData']['targetSystem'], 'screenshot')(),
-            source_point, source_point_list,
-            target_point, target_point_list,
+            base_bgr,
+            source_choice, source_candidates,
+            target_choice, target_candidates,
             zip(delta_x, delta_y)
         )

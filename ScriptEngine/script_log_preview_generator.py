@@ -10,6 +10,7 @@ except ImportError:
     from ScriptEngine.script_log_tree_generator import ScriptLogTreeGenerator
 
 from ScriptEngine.common.constants.script_engine_constants import resolve_data_path
+from ScriptEngine.common.logging.log_overlay import is_overlay_path, render_overlay_file
 
 bin_path = os.path.abspath("bin")
 os.environ["PATH"] += os.pathsep + bin_path
@@ -56,6 +57,18 @@ class ScriptLogPreviewGenerator:
         for child in log_tree.get('children', []):
             last_image = ScriptLogPreviewGenerator.log_tree_to_image_list(child, image_list, last_image)
         return last_image
+
+    @staticmethod
+    def read_frame(post_file):
+        """The image for a post_file path: a PNG, or an overlay rendered onto its screenshot."""
+        frame_path = resolve_data_path(post_file)
+        if is_overlay_path(frame_path):
+            try:
+                return render_overlay_file(frame_path)
+            except (OSError, ValueError) as error:
+                print(f"Error rendering overlay {frame_path}: {error}", file=sys.stderr)
+                return None
+        return cv2.imread(frame_path)
 
     @staticmethod
     def wrap_text(text, max_chars):
@@ -174,7 +187,7 @@ class ScriptLogPreviewGenerator:
         # Iterate until we find an action that has an actual image (readable and valid shape)
         first_image = None
         for entry in image_paths:
-            img = cv2.imread(resolve_data_path(entry['post_file']))
+            img = ScriptLogPreviewGenerator.read_frame(entry['post_file'])
             if img is not None and hasattr(img, 'shape') and len(img.shape) >= 2 and img.shape[0] > 0 and img.shape[1] > 0:
                 first_image = img
                 break
@@ -204,7 +217,7 @@ class ScriptLogPreviewGenerator:
             elapsed = 0.0          # cumulative real time at the start of this action
             frames_written = 0     # also the index of the next frame sample point
             for i, image_path in enumerate(image_paths):
-                img = cv2.imread(image_path['post_file'])
+                img = ScriptLogPreviewGenerator.read_frame(image_path['post_file'])
 
                 if img is None:
                     print(f"Error reading {image_path}. Skipping.", file=sys.stderr)
@@ -245,7 +258,7 @@ class ScriptLogPreviewGenerator:
         else:
             # Regular mode: each image appears once
             for image_path in image_paths:
-                img = cv2.imread(image_path['post_file'])
+                img = ScriptLogPreviewGenerator.read_frame(image_path['post_file'])
 
                 if img is None:
                     print(f"Error reading {image_path}. Skipping.", file=sys.stderr)
