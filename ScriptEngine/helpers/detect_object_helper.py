@@ -25,7 +25,8 @@ from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_
 from ScriptEngine.common.script_engine_utils import state_eval
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.types import ScreenPlanImage
-from ScriptEngine.common.logging.log_overlay import log_overlay
+from ScriptEngine.common.logging import action_result
+from ScriptEngine.common.logging.log_overlay import LOG_IMAGE_STORE, log_overlay
 from .image_matcher import ImageMatcher
 from .detect_scene_helper import DetectSceneHelper, apply_output_mask
 script_logger = ScriptLogger()
@@ -48,7 +49,10 @@ class DetectObjectHelper:
         script_logger.log('Getting detect area for action', action["actionName"] + "-" + str(action["actionGroup"]))
         var_name = action["actionData"]["inputExpression"]
         mid_log = ''
+        input_result = {'source': 'screenshot', 'expression': None, 'area': None}
         if var_name is not None and len(var_name) > 0:
+            input_result['expression'] = var_name
+            input_result['source'] = 'unparsed'
             if var_name not in state:
                 pre_log = 'input named {} not in state'.format(var_name)
             else:
@@ -86,6 +90,10 @@ class DetectObjectHelper:
                     original_image = input_area["original_image"]
                     original_image_blurred = input_area.get("original_image_blurred")
                     fixed_scale = True
+                    input_result['source'] = 'expression'
+                    input_result['area'] = action_result.box(
+                        match_point[0], match_point[1], screencap_im_bgr.shape[1], screencap_im_bgr.shape[0]
+                    )
 
                     mid_log = 'parsed inputExpression, found matched area and match point {}'.format(
                         str(match_point)
@@ -95,16 +103,13 @@ class DetectObjectHelper:
             else:
                 pre_log = 'input named {} was in state but it was blank'
                 script_logger.log(pre_log, level='debug')
+                input_result['source'] = 'blank' if var_name in state else 'missing'
 
         else:
             pre_log = 'no input expression'
             script_logger.log(pre_log, level='debug')
 
-        script_logger.get_action_log().add_supporting_file(
-            'text',
-            'inputExpression-log.txt',
-            pre_log + '\n' +(mid_log if mid_log != '' else '')
-        )
+        script_logger.get_action_log().update_result({'input': input_result})
         return {
             "screencap_im_bgr" : screencap_im_bgr,
             "screencap_mask" : screencap_mask,
@@ -153,11 +158,6 @@ class DetectObjectHelper:
             #                       ' with children: ' + str(action["childGroups"])
             #     update_update_queue_log += context_switch_log + '\n'
             #     script_logger.log(context_switch_log)
-            script_logger.get_action_log().append_supporting_file(
-                'text',
-                'detect_result.txt',
-                update_update_queue_log
-            )
             update_queue.append(
                 [
                     'update',
@@ -197,19 +197,25 @@ class DetectObjectHelper:
         check_image_scale = not action['input_obj']['fixed_scale']
         script_logger.log('Starting handle detect object')
 
-        script_logger.get_action_log().add_supporting_file(
-            'text',
-            'detect_result.txt',
-            ''
-        )
-        
+        skip_detection = action.get('actionData', {}).get('skipDetection')
+        script_logger.get_action_log().update_result({
+            'detect_type': action['actionData']['detectActionType'],
+            'match_mode': action['actionData'].get('matchMode'),
+            'threshold': float(action['actionData']['threshold']),
+            'skipped_detection': skip_detection == True or skip_detection == "true",
+            'screenshot': (
+                action_result.size(screencap_im_bgr.shape[1], screencap_im_bgr.shape[0])
+                if screencap_im_bgr is not None else None
+            ),
+            'output_var': action['actionData'].get('outputVarName'),
+        })
+
         positive_examples = action["actionData"]["positiveExamples"]
         first = positive_examples[0] if positive_examples else {}
         floating_detect_obj = first.get("floatingObject")
         fixed_detect_obj = first.get("fixedObject")
         
         # Check if skipDetection is enabled
-        skip_detection = action.get('actionData', {}).get('skipDetection')
         if skip_detection == True or skip_detection == "true":
             script_logger.log('skipDetection is true, skipping detection methods and returning default match')
             
@@ -324,7 +330,14 @@ class DetectObjectHelper:
             log_objs['fixedObject'] = (
                 matches, screencap_masked, fixed_detect_obj, needs_rescale
             )
-            if matches[0]['score'] < float(action["actionData"]["threshold"]):
+            scene_passed = matches[0]['score'] >= float(action["actionData"]["threshold"])
+            script_logger.get_action_log().update_result({'scene': {
+                'score': ssim_coeff,
+                'passed': scene_passed,
+                'rescaled': needs_rescale,
+                'location': action_result.point(matches[0]['point']),
+            }})
+            if not scene_passed:
                 matches = []
                 if action['actionData']['detectActionType'] == 'fixedObject':
                     detect_scene_result_log = 'detect mode detectScene failed.' +\
@@ -376,12 +389,6 @@ class DetectObjectHelper:
                 matches, match_result
             )
 
-        script_logger.get_action_log().append_supporting_file(
-            'text',
-            'detect_result.txt',
-            (detect_scene_result_log + '\n' if detect_scene_result_log != '' else '') +
-            detect_object_result_log
-        )
         script_logger.log('Completed handle detect object')
         return action, matches, log_objs
 
@@ -403,20 +410,15 @@ class DetectObjectHelper:
             script_logger.log('input image corrupted', level='error')
 
         # The screenshot is the pre file and the match overlay drawn on it is
-        # the post file (both info+). The template copy is debug-only detail;
-        # the overlay keeps its own copy only when it draws the template.
+        # the post file (both info+). The template is a debug-only supporting
+        # file, written through the log image store so that an overlay which
+        # draws it uses this same file.
         if script_logger.should_log('debug'):
-            script_logger.log('Writing template image', level='debug')
-            template_image_relative_path = 'templateImage.png'
-            script_logger.log('Writing to file: ' + script_logger.get_log_path_prefix() + template_image_relative_path, level='debug')
-            cv2.imwrite(
-                script_logger.get_log_path_prefix() + template_image_relative_path, floating_detect_obj["img"]
+            template_path = LOG_IMAGE_STORE.write(
+                floating_detect_obj["img"], script_logger.get_log_path_prefix() + 'template.png'
             )
-            script_logger.log('Successfully wrote to file: ' + template_image_relative_path, level='debug')
-            script_logger.get_action_log().add_supporting_file_reference(
-                'image',
-                template_image_relative_path
-            )
+            script_logger.log('Template image is ' + template_path, level='debug')
+            script_logger.get_action_log().add_supporting_absolute_file_reference('image', template_path)
 
         script_logger.log('@ fixedObject is None?', log_obj['fixedObject'] is None, level='debug')
         if log_obj['fixedObject'] is not None:
@@ -429,7 +431,6 @@ class DetectObjectHelper:
                 matches,
                 None
             )
-            DetectObjectHelper.log_best_match(result_overlay)
             script_logger.log('Writing overlay: ' + script_logger.get_log_path_prefix() + 'detectScene-matchOverlayed', level='debug')
             log_overlay(result_overlay, 'detectScene-matchOverlayed')
 
@@ -460,7 +461,6 @@ class DetectObjectHelper:
                 matches,
                 match_result
             )
-            DetectObjectHelper.log_best_match(result_overlay)
             script_logger.log('Writing overlay: ' + script_logger.get_log_path_prefix() + 'detectObject-matchOverlayed', level='debug')
             log_overlay(result_overlay, 'detectObject-matchOverlayed')
 
@@ -474,22 +474,6 @@ class DetectObjectHelper:
                 cv2.imwrite(script_logger.get_log_path_prefix() + comparison_img_relative_path, match_result_uint8)
                 script_logger.log('Successfully wrote to file: ' + comparison_img_relative_path, level='debug')
                 script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
-
-    @staticmethod
-    def log_best_match(result_overlay):
-        best_point = result_overlay.meta['best_point']
-        result_log = 'Best valid match: {} with score {}\n'.format(
-            str(tuple(best_point) if best_point is not None else None),
-            str(result_overlay.meta['best_score'])
-        )
-        script_logger = ScriptLogger.get_logger()
-        script_logger.log(result_log, level='debug')
-        script_logger.get_action_log().append_supporting_file(
-            'text',
-            'detect_result.txt',
-            result_log
-        )
-
 
     @staticmethod
     def handle_detect_action_result(io_executor, detect_action_result, state, context, run_queue):
@@ -519,6 +503,11 @@ class DetectObjectHelper:
                 truncate_log = 'Truncated {} excess matches'.format(excess_matches)
                 update_update_queue_log += truncate_log + '\n'
                 script_logger.log(truncate_log)
+            script_logger.get_action_log().update_result({
+                'matched': True,
+                'max_matches': max_matches,
+                'excess_matches': max(0, excess_matches),
+            })
             # Get score for summary before modifying matches
             best_score = matches[0]['score']
             if max_matches > 1:
@@ -530,6 +519,7 @@ class DetectObjectHelper:
             script_logger.get_action_log().set_summary('detection succeeded with score {:.3f}'.format(best_score))
         else:
             status = ScriptExecutionState.FAILURE
+            script_logger.get_action_log().update_result({'matched': False})
             script_logger.get_action_log().set_summary('detection failed')
         return action, status, state, context, run_queue
 

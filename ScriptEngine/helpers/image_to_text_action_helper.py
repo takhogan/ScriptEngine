@@ -214,6 +214,16 @@ class ImageToTextActionHelper:
         return outputs, inputs_log, post_log, easy_ocr_reader
 
     @staticmethod
+    def ocr_runs(inputs_log):
+        """The OCR passes in `inputs_log`, one line per pass: '<settings> and output was[:] <text>'."""
+        runs = []
+        for line in inputs_log.split('\n'):
+            settings, separator, output = line.partition(' and output was')
+            if separator:
+                runs.append({'settings': settings, 'output': output.removeprefix(':').removeprefix(' ')})
+        return runs
+
+    @staticmethod
     def handle_image_to_text(action, input_obj, state, io_executor, easy_ocr_reader):
         search_im = input_obj['screencap_im_bgr']
         # raw input (pre) image, kept at info+ so the action can be replayed.
@@ -243,12 +253,13 @@ class ImageToTextActionHelper:
         )
 
         script_logger.log(post_log)
-        script_logger.get_action_log().add_supporting_file(
-            'text',
-            'imageToText-results.txt',
-            pre_log + '\n' + inputs_log + '\n' + post_log
-        )
         extracted_text = outputs[0].strip()
+        script_logger.get_action_log().update_result({
+            'engine': action["actionData"]["conversionEngine"],
+            'preprocessing': [step for step in pre_log.split('\n')[1:] if step],
+            'runs': ImageToTextActionHelper.ocr_runs(inputs_log),
+            'text': extracted_text,
+        })
         state[action["actionData"]["outputVarName"]] = extracted_text
         # Create summary: truncate text if too long
         if len(extracted_text) > 50:

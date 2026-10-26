@@ -65,9 +65,9 @@ def test_floating_matches(tmp_path):
     action = detect_action('floatingObject', max_matches=2)
     overlay = ImageMatcher.create_result_overlay(action, capture, (0, 0), template, matches, None)
     expected = legacy.create_result_im(action, capture.copy(), (0, 0), template, matches, None)
-    document = assert_parity(overlay, expected, tmp_path)
-    assert document['meta']['best_point'] == [50, 100]
-    assert len(document['meta']['matches']) == 3
+    assert_parity(overlay, expected, tmp_path)
+    assert overlay.result['best'] == {'x': 50, 'y': 100, 'score': 0.97}
+    assert [(m['x'], m['y']) for m in overlay.result['matches']] == [(50, 100), (200, 40), (295, 220)]
 
 
 def test_floating_gray_template_and_max_matches_expression(tmp_path):
@@ -91,8 +91,9 @@ def test_floating_no_match_shows_best_candidate(tmp_path):
     action = detect_action('floatingObject')
     overlay = ImageMatcher.create_result_overlay(action, capture, (0, 0), template, [], match_result)
     expected = legacy.create_result_im(action, capture.copy(), (0, 0), template, [], match_result)
-    document = assert_parity(overlay, expected, tmp_path)
-    assert document['meta']['best_point'] == [260, 200]
+    assert_parity(overlay, expected, tmp_path)
+    assert overlay.result['best']['x'] == 260 and overlay.result['best']['y'] == 200
+    assert overlay.result['matches'] == []
 
 
 def test_floating_no_valid_scores(tmp_path):
@@ -203,8 +204,8 @@ def test_drag(tmp_path):
     expected = legacy.draw_click_and_drag(
         capture.copy(), (20.5, 30.5), POINT_LISTS['shape'], (140, 100), POINT_LISTS['rectangle'], iter(deltas)
     )
-    document = assert_parity(overlay, expected, tmp_path)
-    assert len(document['meta']['path']) == 5
+    assert_parity(overlay, expected, tmp_path)
+    assert len(overlay.result['path']) == 5
 
 
 # ---------------------------------------------------------------------------

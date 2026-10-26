@@ -19,7 +19,7 @@ from ScriptEngine.script_action_executor import ScriptActionExecutor
 
 from ScriptEngine.helpers.detect_object_helper import DetectObjectHelper
 
-from .test_overlay_logging import action_log_json, detect_log_obj, match_shape
+from .test_overlay_logging import action_log_json, action_result_json, detect_log_obj, match_shape
 from .test_overlay_parity import screenshot
 
 
@@ -57,13 +57,13 @@ def executor_for(configure_action, monkeypatch):
 CLICK = {'actionName': 'mouseInteractionAction', 'actionData': {'targetSystem': 'desktop'}}
 
 
-def choose(state, expression='', point_list=(), source_width=0, source_height=0, width=640, height=480):
+def choose(state, expression='', point_list=(), source_width=0, source_height=0, width=640, height=480, result_key='target'):
     detect_type_data = {
         'detectActionType': 'floatingObject',
         'positiveExamples': [{'floatingObject': {'sourceScreenWidth': source_width, 'sourceScreenHeight': source_height}}],
     }
     return ClickActionHelper.get_point_choice(
-        detect_type_data, expression, list(point_list), state, width, height, 1
+        detect_type_data, expression, list(point_list), state, width, height, 1, result_key=result_key
     )
 
 
@@ -94,9 +94,15 @@ def test_click_on_a_match_uses_its_screenshot_and_coordinates(configure_action, 
     log, document = overlay_of(prefix)
     assert log['pre_file']['file_path'] == prefix + 'capture.png'
     assert (document['width'], document['height']) == (320, 240)
-    x, y = document['meta']['point_choice']
+    target = action_result_json(prefix)['fields']['target']
+    x, y = target['screenshot_point']['x'], target['screenshot_point']['y']
     assert 60 <= x < 90 and 40 <= y < 60
-    assert document['meta']['input_type'] == 'shape'
+    assert target['input_type'] == 'shape' and target['source'] == 'expression'
+    # The device point is the screenshot point scaled to the device.
+    assert target['remapped'] is True
+    assert target['point'] == {'x': point_choice[0], 'y': point_choice[1]}
+    assert target['source_screen'] == {'width': 320, 'height': 240}
+    assert target['device_screen'] == {'width': 640, 'height': 480}
 
 
 def test_click_reuses_the_detects_screenshot_file(configure_action, executor_for):
@@ -130,7 +136,8 @@ def test_click_on_a_transformed_match_uses_the_original_screenshot(configure_act
 
     log, document = overlay_of(prefix)
     assert np.array_equal(cv2.imread(log['pre_file']['file_path']), capture)
-    x, y = document['meta']['point_choice']
+    point = action_result_json(prefix)['fields']['target']['screenshot_point']
+    x, y = point['x'], point['y']
     assert 60 <= x < 90 and 40 <= y < 60
 
 
@@ -150,7 +157,9 @@ def test_click_from_a_point_list_draws_device_coordinates_on_a_new_screenshot(co
     assert device.screenshots_taken == 1
     log, document = overlay_of(prefix)
     scale = width / 640
-    assert document['meta']['point_choice'] == [int(point_choice[0] * scale), int(point_choice[1] * scale)]
+    target = action_result_json(prefix)['fields']['target']
+    assert target['screenshot_point'] == {'x': int(point_choice[0] * scale), 'y': int(point_choice[1] * scale)}
+    assert target['source'] == 'point_list' and target['candidate_count'] == 3 and target['remapped'] is True
     group = next(layer for layer in document['layers'] if layer['op'] == 'group')
     assert [layer['center'] for layer in group['layers']] == [
         [int(x * 2 * scale), int(y * 2 * scale)] for x, y in points
@@ -172,7 +181,7 @@ def test_drag_from_a_match_to_a_point_list(configure_action, executor_for):
     capture = screenshot()
     state = {'match': match_shape(capture, 60, 40, 30, 20)}
     prefix = configure_action('info', 'mouseMoveAction', 1)
-    source = reorder(choose(state, 'match'))
+    source = reorder(choose(state, 'match', result_key='source'))
     target = reorder(choose({}, point_list=[(200, 150)], source_width=640, source_height=480))
     # The device moved from the source to the target in two steps, in input units.
     total_x = (target[0][0] - source[0][0]) * 2
@@ -188,8 +197,10 @@ def test_drag_from_a_match_to_a_point_list(configure_action, executor_for):
     assert device.screenshots_taken == 0
     log, document = overlay_of(prefix, 'dragPath')
     assert log['pre_file']['file_path'] == prefix + 'capture.png'
-    path = document['meta']['path']
+    fields = action_result_json(prefix)['fields']
+    path = fields['path']
     # Starts at the match's own point, ends at the target scaled into the screenshot.
-    assert path[0] == [int(source[2][0]), int(source[2][1])]
-    assert abs(path[-1][0] - 100) <= 1 and abs(path[-1][1] - 75) <= 1
-    assert document['meta']['target_point'] == [100, 75]
+    assert path[0] == {'x': int(source[2][0]), 'y': int(source[2][1])}
+    assert abs(path[-1]['x'] - 100) <= 1 and abs(path[-1]['y'] - 75) <= 1
+    assert fields['target']['screenshot_point'] == {'x': 100, 'y': 75}
+    assert fields['source']['source'] == 'expression' and fields['target']['source'] == 'point_list'

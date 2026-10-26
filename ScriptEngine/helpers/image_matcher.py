@@ -120,11 +120,7 @@ class ImageMatcher:
             str(screencap_mask_gray.shape)
         )
         script_logger.log(pre_log, level='debug')
-        script_logger.get_action_log().append_supporting_file(
-            'text',
-            'detect_result.txt',
-            '\n' + pre_log
-        )
+        resized_search = False
         resized_im_log = ''
         if not use_resized_im_only:
             try:
@@ -166,11 +162,6 @@ class ImageMatcher:
                 )
                 mid_log += f'Resized image to fit original dimensions width {source_screen_width} and height {source_screen_height}'
                 script_logger.log(mid_log, level='debug')
-                script_logger.get_action_log().append_supporting_file(
-                    'text',
-                    'detect_result.txt',
-                    '\n' + mid_log
-                )
                 script_logger.log('Starting match template', level='debug')
                 match_result_resized = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr_resized.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr_resized,
@@ -190,12 +181,18 @@ class ImageMatcher:
                 else:
                     parse_resized_img = False
             if parse_resized_img:
+                resized_search = True
                 screencap_im_bgr = screencap_im_bgr_resized
                 match_result = match_result_resized
                 thresholded_match_results = threshold_match_results(match_result)
                 height_translation = capture_height/source_screen_height
                 width_translation = capture_width/source_screen_width
         # if there is an erorr resize image to original dims, pass translation factor to filter_matches
+        script_logger.get_action_log().update_result({'template': {
+            'use_color': bool(use_color),
+            'use_mask': bool(use_mask),
+            'resized': resized_search,
+        }})
 
         return ImageMatcher.filter_matches(
             detectObject,
@@ -289,11 +286,10 @@ class ImageMatcher:
         )
 
         script_logger.log(initial_result_log)
-        script_logger.get_action_log().append_supporting_file(
-            'text',
-            'detect_result.txt',
-            initial_result_log
-        )
+        script_logger.get_action_log().update_result({'template': {
+            'initial_match_count': initial_matches,
+            'match_count': len(matches),
+        }})
         return matches, match_result
 
     @staticmethod
@@ -314,8 +310,8 @@ class ImageMatcher:
         at the input's match point inside the blurred full screenshot, so the
         match is shown in context. The pre image is always the input itself: the
         screenshot, or, when the input is an earlier action's output (a match,
-        a transformed match), that output. meta records the best match for
-        detect_result.txt.
+        a transformed match), that output. The overlay's result holds the
+        matches and the best position, in screenshot coordinates.
         """
         input_x = int(input_expression_match_point_xy_absolute[0])
         input_y = int(input_expression_match_point_xy_absolute[1])
@@ -438,17 +434,15 @@ class ImageMatcher:
         else:
             overlay.layers = layers
 
-        overlay.meta = {
-            'detectActionType': detect_action_type,
-            'threshold': threshold,
-            'best_point': best_point_xy_absolute,
-            'best_score': best_point_score,
-            'input_point': [input_x, input_y],
+        overlay.result = {
             'matches': [
-                {'point': [pt[0] + input_x, pt[1] + input_y], 'width': box_w, 'height': box_h, 'score': score}
+                {'x': pt[0] + input_x, 'y': pt[1] + input_y, 'width': box_w, 'height': box_h, 'score': score}
                 for pt, box_w, box_h, score in match_data
             ],
-            'max_matches': max_matches,
+            'best': (
+                {'x': best_point_xy_absolute[0], 'y': best_point_xy_absolute[1], 'score': best_point_score}
+                if best_point_xy_absolute is not None else None
+            ),
         }
         return overlay
 

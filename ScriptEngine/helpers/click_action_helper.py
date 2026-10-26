@@ -19,6 +19,7 @@ import random
 import numpy as np
 import cv2
 from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.logging import action_result
 from ScriptEngine.common.logging.log_overlay import Overlay, bgr_to_hex, int_point, log_overlay, mask_image
 from ScriptEngine.common.script_engine_utils import state_eval
 from ScriptEngine.common.types import ScreenPlanImage
@@ -114,13 +115,18 @@ class ClickActionHelper:
         return remapping_function
 
     @staticmethod
+    def needs_remap(input_params_valid, source_screen_width, source_screen_height, screen_width, screen_height):
+        return bool(input_params_valid) and (source_screen_width != screen_width) and \
+            (source_screen_height != screen_height)
+
+    @staticmethod
     def remap_points_to_screen(
         input_params_valid : bool, source_screen_width : int, source_screen_height : int,
         screen_width : int, screen_height : int, point_list : List[int], point_choice : Tuple[int, int]
     ):
         remap_log = ''
-        if input_params_valid and (source_screen_width != screen_width) and \
-                (source_screen_height != screen_height):
+        if ClickActionHelper.needs_remap(input_params_valid, source_screen_width, source_screen_height,
+                                         screen_width, screen_height):
             rescaling_log = 'difference in device window size detected.' + \
                             ' Remapping point choice from screen (wxh) ({}x{}) to screen ({}x{})'.format(
                                 str(source_screen_width),
@@ -149,10 +155,18 @@ class ClickActionHelper:
         return point_list, point_choice, remap_log
 
     @staticmethod
-    def get_point_choice(detectTypeData, var_name, point_list, state, screen_width, screen_height, point_index, prefer_interior=True):
+    def get_point_choice(detectTypeData, var_name, point_list, state, screen_width, screen_height, point_index,
+                         prefer_interior=True, result_key=None):
+        """The point a mouse action uses. With `result_key`, how it was chosen is
+        recorded in the action's result under that key (a ClickTarget)."""
         point_choice = (None, None)
         log_point_choice = (None, None)
         pre_log = ''
+        target = {
+            'source': 'none', 'expression': None, 'input_type': None, 'selection': None,
+            'candidate_count': None, 'point': None, 'source_point': None, 'source_screen': None,
+            'device_screen': action_result.size(screen_width, screen_height), 'remapped': False,
+        }
 
         if var_name is not None and len(var_name) > 0:
             input_expression_log = 'inputExpression {} was not null or blank, reading from inputExpression'.format(
@@ -163,12 +177,16 @@ class ClickActionHelper:
             input_point = state_eval(var_name, {}, state)
 
             input_expression_type = 'unknown'
+            target['source'] = 'expression'
+            target['expression'] = var_name
+            target['input_type'] = input_point["input_type"]
 
             if input_point["input_type"] == "rectangle":
                 width_coord = random.random() * input_point["width"]
                 height_coord = random.random() * input_point['height']
                 point_choice = (input_point["point"][0] + width_coord, input_point["point"][1] + height_coord)
                 input_expression_type = 'rectangle'
+                target['selection'] = 'uniform'
             elif input_point["input_type"] == "shape":
                 shape_ys, shape_xs = np.where(input_point["output_mask"] > 1)
                 relative_points = list(zip(shape_xs.tolist(), shape_ys.tolist()))
@@ -186,6 +204,8 @@ class ClickActionHelper:
                         input_point["point"][0] + int(relative_choice[0]),
                         input_point["point"][1] + int(relative_choice[1])
                     )
+                    target['candidate_count'] = len(relative_points)
+                    target['selection'] = selection_strategy
                 input_expression_type = 'shape ({})'.format(selection_strategy)
             source_screen_width = input_point["original_width"]
             source_screen_height = input_point["original_height"]
@@ -193,6 +213,10 @@ class ClickActionHelper:
             [], point_choice, remap_log = ClickActionHelper.remap_points_to_screen(
                 True, source_screen_width, source_screen_height,
                 screen_width, screen_height, [], point_choice
+            )
+            target['source_screen'] = action_result.size(source_screen_width, source_screen_height)
+            target['remapped'] = ClickActionHelper.needs_remap(
+                True, source_screen_width, source_screen_height, screen_width, screen_height
             )
             pre_log += '\n' + remap_log
             input_expression_point_choice_log = 'point chosen from input_expression of type {} : {}'.format(
@@ -230,6 +254,14 @@ class ClickActionHelper:
                 'point_list': point_list
             }
 
+            target['source'] = 'point_list'
+            target['selection'] = selection_strategy
+            target['candidate_count'] = len(point_list)
+            if input_params_valid:
+                target['source_screen'] = action_result.size(int(source_screen_width), int(source_screen_height))
+            target['remapped'] = ClickActionHelper.needs_remap(
+                input_params_valid, source_screen_width, source_screen_height, screen_width, screen_height
+            )
             point_list, point_choice, remap_log = ClickActionHelper.remap_points_to_screen(
                 input_params_valid, source_screen_width, source_screen_height,
                 screen_width, screen_height, point_list, point_choice
@@ -244,11 +276,11 @@ class ClickActionHelper:
             log_point_list = []
             pre_log = 'pointList not in actionData and inputExpression is None'
             script_logger.log(pre_log, level='debug')
-        script_logger.get_action_log().add_supporting_file(
-            'text',
-            'clickActionPointChoice-{}-log.txt'.format(str(point_index)),
-            pre_log
-        )
+        if result_key is not None:
+            if ClickActionHelper.has_point(point_choice):
+                target['point'] = action_result.point(point_choice)
+                target['source_point'] = action_result.point(log_point_choice)
+            script_logger.get_action_log().update_result({result_key: target})
         return point_choice, log_point_choice, point_list, log_point_list
 
     @staticmethod
@@ -341,7 +373,7 @@ class ClickActionHelper:
         overlay.images['capture'] = screenshot_bgr
         overlay.layers = [{'op': 'image', 'image': 'capture', 'at': [0, 0]}] + \
             ClickActionHelper.point_choice_layers(overlay, point_choice, point_list)
-        overlay.meta = {'point_choice': int_point(point_choice), 'input_type': point_list['input_type']}
+        overlay.result = {'target': {'screenshot_point': action_result.point(int_point(point_choice))}}
         return overlay
 
     @staticmethod
@@ -364,10 +396,10 @@ class ClickActionHelper:
             traverse_y += delta_pair[1]
             path.append([int(traverse_x), int(traverse_y)])
         overlay.layers.append({'op': 'polyline', 'points': path, 'color': bgr_to_hex((255, 0, 0)), 'thickness': 3})
-        overlay.meta = {
-            'source_point': int_point(source_point_choice),
-            'target_point': int_point(target_point_choice),
-            'path': path
+        overlay.result = {
+            'source': {'screenshot_point': action_result.point(int_point(source_point_choice))},
+            'target': {'screenshot_point': action_result.point(int_point(target_point_choice))},
+            'path': [action_result.point(xy) for xy in path],
         }
         return overlay
 

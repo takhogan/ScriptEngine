@@ -30,12 +30,13 @@ def configure_action(run_folder, monkeypatch):
         logger.set_log_folder(run_folder)
         logger.set_log_header(header)
         logger.set_log_path_prefix(run_folder + header + '-')
+        # The action log reads the level from the thread's logger as it is made.
+        thread_local_storage.script_logger = logger
         action_log = ScriptActionLog(
             {'actionName': action_name, 'actionGroup': counter, 'actionData': {'targetSystem': 'desktop', 'detectActionType': 'floatingObject'}},
             run_folder, header, counter
         )
         logger.set_action_log(action_log)
-        thread_local_storage.script_logger = logger
         return run_folder + header + '-'
 
     configure.logger = logger

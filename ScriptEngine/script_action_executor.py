@@ -92,8 +92,15 @@ class ScriptActionExecutor:
                 state,
                 self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'width'),
                 self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'height'),
-                1
+                1,
+                result_key='target'
             )
+            mouse_action_type = action["actionData"]["mouseActionType"]
+            script_logger.get_action_log().update_result({
+                'mouse_action': mouse_action_type,
+                'button': action["actionData"].get("mouseButton"),
+                'click_count': int(action["actionData"]["clickCount"]) if mouse_action_type == "click" else None,
+            })
             script_logger.log('ADB CONTROLLER: starting draw click thread', level='debug')
             thread_script_logger = script_logger.copy()
             self.io_executor.submit(
@@ -150,7 +157,8 @@ class ScriptActionExecutor:
                 state,
                 self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'width'),
                 self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'height'),
-                1
+                1,
+                result_key='source'
             )
 
             target_point, log_target_point_choice, target_point_list, log_target_point_list = ClickActionHelper.get_point_choice(
@@ -160,8 +168,18 @@ class ScriptActionExecutor:
                 state,
                 self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'width'),
                 self.device_controller.get_device_attribute(action['actionData']['targetSystem'], 'height'),
-                2
+                2,
+                result_key='target'
             )
+            script_logger.get_action_log().update_result({
+                'drag': bool(action["actionData"]["dragMouse"]),
+                'mouse_down': bool(context["mouse_down"]),
+                'released': (
+                    bool(action["actionData"]["releaseMouseOnCompletion"])
+                    if action["actionData"]["dragMouse"] or context["mouse_down"] else None
+                ),
+                'path': [],
+            })
 
             if action["actionData"]["dragMouse"]:
                 drag_log = 'Dragging from {} to {}'.format(
@@ -241,11 +259,6 @@ class ScriptActionExecutor:
                     )
                     script_logger.log(drag_log)
                     context["last_mouse_position"] = target_point
-            script_logger.get_action_log().add_supporting_file(
-                'text',
-                'drag-log.txt',
-                drag_log
-            )
 
             status = ScriptExecutionState.SUCCESS
             # Create summary with source and target locations
@@ -278,26 +291,12 @@ class ScriptActionExecutor:
             color_score = ColorCompareHelper.handle_color_compare(action, self.io_executor)
             if len(action['actionData'].get('outputVarName', '')) > 0:
                 state[action['actionData']['outputVarName']] = color_score
-            if color_score > float(action['actionData']['threshold']):
-                script_logger.get_action_log().append_supporting_file(
-                    'text',
-                    'compare-result.txt',
-                    '\nAction successful. Color Score of {} was above threshold of {}'.format(
-                        color_score,
-                        float(action['actionData']['threshold'])
-                    )
-                )
-                status = ScriptExecutionState.SUCCESS
-            else:
-                script_logger.get_action_log().append_supporting_file(
-                    'text',
-                    'compare-result.txt',
-                    '\nAction failed. Color Score of {} was below threshold of {}'.format(
-                        color_score,
-                        float(action['actionData']['threshold'])
-                    )
-                )
-                status = ScriptExecutionState.FAILURE
+            passed = color_score > float(action['actionData']['threshold'])
+            script_logger.get_action_log().update_result({
+                'threshold': float(action['actionData']['threshold']),
+                'passed': passed,
+            })
+            status = ScriptExecutionState.SUCCESS if passed else ScriptExecutionState.FAILURE
         elif action["actionName"] == "logAction":
             if action["actionData"]["logType"] == "logImage":
                 log_image = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'screenshot')()
