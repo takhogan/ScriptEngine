@@ -23,9 +23,13 @@ Document shape (version 1):
         "capture": {"path": "<data-root-relative>", "href": "<relative to the html>"}
       },
       "pre": "capture",                      # the image that is the action's input
-      "layers": [ ... ],                     # drawn in order
-      "meta": { ... }                        # action-specific numbers (scores, points)
+      "layers": [ ... ]                      # drawn in order
     }
+
+An overlay only says how to draw. The numbers behind it (match boxes and
+scores, click points, drag paths) are the action's result fields, in its
+result.json (see action_result.py): builders return them as `Overlay.result`
+and log_overlay merges them into the action's result.
 
 Layer ops. Coordinates are integer pixels and every op follows the OpenCV call
 it replaces, so the Python renderer reproduces the old images exactly:
@@ -111,7 +115,9 @@ class Overlay:
 
     `images` maps keys to ndarrays, written as PNGs when the overlay is saved.
     `pre_image_key` names the image the action consumed, which becomes its
-    pre_file.
+    pre_file. `result` holds result fields (action_result.py) the builder
+    worked out while drawing; they go to the action's result file, not into
+    the overlay.
     """
 
     def __init__(self, kind, width, height, pre_image_key='capture'):
@@ -121,7 +127,7 @@ class Overlay:
         self.pre_image_key = pre_image_key
         self.images = {}
         self.layers = []
-        self.meta = {}
+        self.result = {}
 
     def to_document(self, image_refs):
         return {
@@ -133,7 +139,6 @@ class Overlay:
             'images': image_refs,
             'pre': self.pre_image_key,
             'layers': self.layers,
-            'meta': self.meta,
         }
 
 
@@ -386,11 +391,10 @@ def log_overlay(overlay, name):
     """Save `overlay` as the current action's post file.
 
     The overlay's images are written next to the action's other log files as
-    `<prefix><key>.png` (unless this run already wrote that array), and its
-    pre image becomes the action's pre_file: the input to load in the editor
-    or replay the action against. At debug level the rendered PNG is kept too,
-    as a supporting file named `<name>.png`, matching the image older logs had
-    as their post file.
+    `<prefix><key>.png` (unless this run already wrote that array), its pre
+    image becomes the action's pre_file (the input to load in the editor or
+    replay the action against), and its result fields go to the action's
+    result file.
     """
     from ScriptEngine.common.logging.script_logger import ScriptLogger
     script_logger = ScriptLogger.get_logger()
@@ -401,9 +405,8 @@ def log_overlay(overlay, name):
     if overlay.pre_image_key in written:
         action_log.set_pre_file('image', written[overlay.pre_image_key], absolute_path=True)
     action_log.set_post_file(OVERLAY_FILE_TYPE, name + OVERLAY_EXTENSION)
-    if script_logger.should_log('debug'):
-        cv2.imwrite(prefix + name + '.png', render_overlay(overlay))
-        action_log.add_supporting_file_reference('image', name + '.png')
+    if overlay.result:
+        action_log.update_result(overlay.result)
 
 
 def log_image_file(script_logger, image, relative_path, role):

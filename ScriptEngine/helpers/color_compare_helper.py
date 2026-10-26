@@ -1,7 +1,7 @@
 import numpy as np
-import cv2
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger, thread_local_storage
+from ScriptEngine.common.logging import action_result
 from ScriptEngine.common.logging.log_overlay import Overlay, bgr_to_hex, log_overlay
 script_logger = ScriptLogger()
 
@@ -61,10 +61,6 @@ class ColorCompareHelper:
             'op': 'rect', 'p1': [match_x, match_y], 'p2': [match_x + square_size, match_y + square_size],
             'color': bgr_to_hex((0, 255, 0)), 'thickness': 1
         })
-        overlay.meta = {
-            'input_color': [float(channel) for channel in img_colors],
-            'match_point': [match_x, match_y],
-        }
         return overlay
 
     @staticmethod
@@ -79,25 +75,6 @@ class ColorCompareHelper:
             ),
             overlay_name
         )
-
-    @staticmethod
-    def create_color_compare_logs(thread_script_logger, img_colors, ref_color_ints, compare_mode, color_score):
-        thread_local_storage.script_logger = thread_script_logger
-        thread_logger = ScriptLogger.get_logger()
-
-        reference_color_relative_path = 'reference_color.png'
-        ColorCompareHelper.create_color_image(
-            ref_color_ints, thread_logger.get_log_path_prefix() + reference_color_relative_path
-        )
-        thread_logger.get_action_log().add_supporting_file_reference('image', reference_color_relative_path)
-
-        results_text = (
-            'Compare Mode: {}\n'.format(compare_mode) +
-            'Input Color: {}\n'.format(img_colors) +
-            'Reference Color: {}\n'.format(ref_color_ints) +
-            'Similarity Score: {}'.format(color_score)
-        )
-        thread_logger.get_action_log().add_supporting_file('text', 'results.txt', results_text)
 
     @staticmethod
     def handle_color_compare(action, io_executor):
@@ -161,13 +138,17 @@ class ColorCompareHelper:
         ref_color_ints = list(map(int, action['actionData']['referenceColor']))
         color_score = (100 - ColorCompareHelper.compare_colors(img_colors, ref_color_ints)) / 100
 
-        post_log = 'Color Score: {}'.format(color_score)
-
-        script_logger.get_action_log().add_supporting_file(
-            'text',
-            'compare-result.txt',
-            pre_log_1 + '\n' + pre_log_2 + '\n' + pre_log_3 + '\n' + post_log
-        )
+        script_logger.log('Color Score: {}'.format(color_score), level='debug')
+        match_point = action['input_obj'].get('match_point', (0, 0))
+        script_logger.get_action_log().update_result({
+            'compare_mode': action["actionData"]["compareMode"],
+            'reference_color': ref_color_ints,
+            'measured_color': img_colors,
+            'score': color_score,
+            'area': action_result.box(
+                match_point[0], match_point[1], screencap_im_bgr.shape[1], screencap_im_bgr.shape[0]
+            ),
+        })
 
         # The screenshot (pre) and the input_color overlay (post, which feeds
         # the log video) are captured at info+ but skipped at error (no images
@@ -180,21 +161,9 @@ class ColorCompareHelper:
                 screencap_im_bgr,
                 action['input_obj'].get('original_image'),
                 action['input_obj'].get('original_image_blurred'),
-                action['input_obj'].get('match_point', (0, 0)),
+                match_point,
                 img_colors,
                 'input_color'
-            )
-
-        # reference swatch + results.txt are debug-only supporting files.
-        if script_logger.should_log('debug'):
-            compare_logs_script_logger = script_logger.copy()
-            io_executor.submit(
-                ColorCompareHelper.create_color_compare_logs,
-                compare_logs_script_logger,
-                img_colors,
-                ref_color_ints,
-                action["actionData"]["compareMode"],
-                color_score
             )
 
         return color_score
@@ -210,13 +179,3 @@ class ColorCompareHelper:
         # Calculate the Euclidean distance between the two LAB colors (Delta E)
         delta_e = np.sqrt(np.sum((color1_lab - color2_lab) ** 2))
         return delta_e
-
-    @staticmethod
-    def create_color_image(rgb, filename):
-        # Create a 64x64x3 array of the specified color
-        # Note: OpenCV uses BGR format instead of RGB
-        color = np.array([rgb[2], rgb[1], rgb[0]])  # Convert RGB to BGR
-        image = np.full((64, 64, 3), color, dtype=np.uint8)
-
-        # Write the image to a file
-        cv2.imwrite(filename, image)

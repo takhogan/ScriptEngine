@@ -25,6 +25,12 @@ def action_log_json(prefix):
         return json.load(action_log_file)
 
 
+def action_result_json(prefix):
+    script_action_log_mod._log_executor.submit(lambda: None).result()
+    with open(prefix + 'result.json') as result_file:
+        return json.load(result_file)
+
+
 def test_info_keeps_the_screenshot_and_an_overlay(configure_action):
     prefix = configure_action('info', 'mouseInteractionAction', 1)
     ClickActionHelper.draw_click(screenshot(), (120, 70), POINT_LIST)
@@ -32,7 +38,8 @@ def test_info_keeps_the_screenshot_and_an_overlay(configure_action):
     log = action_log_json(prefix)
     assert log['pre_file'] == {'file_type': 'image', 'file_path': prefix + 'capture.png'}
     assert log['post_file'] == {'file_type': OVERLAY_FILE_TYPE, 'file_path': prefix + 'clickLocation.overlay.html'}
-    assert log['supporting_files'] == []
+    # The result file is the only supporting file at info.
+    assert log['supporting_files'] == [{'file_type': 'text', 'file_path': prefix + 'result.json'}]
     assert np.array_equal(cv2.imread(prefix + 'capture.png'), screenshot())
     assert not os.path.exists(prefix + 'clickLocation.png')
 
@@ -40,14 +47,13 @@ def test_info_keeps_the_screenshot_and_an_overlay(configure_action):
     assert document['images']['capture']['href'] == os.path.basename(prefix) + 'capture.png'
 
 
-def test_debug_also_keeps_the_rendered_png(configure_action):
+def test_debug_keeps_no_rendered_copy_of_the_overlay(configure_action):
     prefix = configure_action('debug', 'mouseInteractionAction', 1)
     ClickActionHelper.draw_click(screenshot(), (120, 70), POINT_LIST)
 
     log = action_log_json(prefix)
     assert log['post_file']['file_type'] == OVERLAY_FILE_TYPE
-    assert {'file_type': 'image', 'file_path': prefix + 'clickLocation.png'} in log['supporting_files']
-    assert cv2.imread(prefix + 'clickLocation.png') is not None
+    assert not os.path.exists(prefix + 'clickLocation.png')
 
 
 def test_error_writes_no_images(configure_action, run_folder):
@@ -55,8 +61,8 @@ def test_error_writes_no_images(configure_action, run_folder):
     ClickActionHelper.draw_click(screenshot(), (120, 70), POINT_LIST)
 
     log = action_log_json(prefix)
-    assert log['pre_file'] == {} and log['post_file'] == {}
-    assert not [name for name in os.listdir(run_folder) if name.endswith(('.png', '.html'))]
+    assert log['pre_file'] == {} and log['post_file'] == {} and log['supporting_files'] == []
+    assert not [name for name in os.listdir(run_folder) if name.endswith(('.png', '.html', 'result.json'))]
 
 
 def test_actions_sharing_a_screenshot_store_it_once(configure_action, run_folder):
@@ -100,13 +106,13 @@ def test_detect_log_images_at_info(configure_action):
 
 def test_html_data_block_survives_script_end_tags(tmp_path):
     overlay = Overlay('test', 2, 2)
-    overlay.meta = {'note': '</script><script>alert(1)</script>'}
+    overlay.kind = '</script><script>alert(1)</script>'
     html = overlay_html(overlay.to_document({}), 'a <b> & c')
     assert html.count('</script>') == 2  # the data block's and the renderer's
     assert '<title>a &lt;b> &amp; c</title>' in html
     path = tmp_path / 'test.overlay.html'
     path.write_text(html, encoding='utf-8')
-    assert read_overlay_document(str(path))['meta']['note'] == overlay.meta['note']
+    assert read_overlay_document(str(path))['kind'] == overlay.kind
 
 
 def test_store_never_overwrites_a_referenced_file(tmp_path):

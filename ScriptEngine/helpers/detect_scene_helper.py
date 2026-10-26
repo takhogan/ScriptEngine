@@ -147,16 +147,12 @@ class DetectSceneHelper:
         object_h,object_w = object_mask_single_channel.shape
         fixed_location_xy_relative = sceneAction["actionData"]["sceneLocation"][0]
         
-        mid_log_4 = 'Applying output mask'
-        mid_log_5 = ''
         match_img_bgr = apply_output_mask(
             screencap_im_bgr, 
             fixed_location_xy_relative, 
             screencap_outputmask_bgr,
             output_cropping
         )
-        if output_cropping is not None:
-            mid_log_5 = 'Cropping masked output'
 
         post_log = 'Final output image size is {}'.format(str(match_img_bgr.shape))
         script_logger.log(post_log, level='debug')
@@ -192,15 +188,6 @@ class DetectSceneHelper:
         # so output point is in full-screen coordinates (same as floatingObject path).
         input_expression_match_point_xy_absolute = sceneAction['input_obj'].get('match_point', (0, 0))
         fixed_location_xy_absolute = (fixed_location_xy_relative[0] + input_expression_match_point_xy_absolute[0], fixed_location_xy_relative[1] + input_expression_match_point_xy_absolute[1])
-
-        script_logger.get_action_log().add_supporting_file(
-            'text',
-            'detectScene-log.txt',
-            pre_log + '\n' + mid_log_1 + '\n' + mid_log_2 + '\n' +\
-            mid_log_3 + '\n' + mid_log_4 + '\n' + mid_log_5 + '\n' +\
-            post_log + '\n' + (post_post_log + '\n' if post_post_log != '' else '') +\
-            final_log
-        )
 
         return [
             ScreenPlanImage(
