@@ -11,8 +11,12 @@ class ScriptLogger:
     # error < info < debug. A message/artifact is kept when its own level is at
     # least as important as the configured one, i.e. rank(level) <= rank(log_level):
     #   error -> only error logs, no files, no video
-    #   info  -> error + info logs, post files only (enough to render the video)
-    #   debug -> everything: all logs, pre/post/supporting files
+    #   info  -> error + info logs, pre and post files: each action's input and
+    #            its result, with annotated images stored as overlays on the
+    #            input (see log_overlay.py); enough to replay actions and render
+    #            the video
+    #   debug -> everything: all logs, pre/post/supporting files, plus rendered
+    #            PNGs of the overlays
     LOG_LEVELS = {'error': 0, 'info': 1, 'debug': 2}
     _write_queue = queue.Queue()
     _writer_thread = None

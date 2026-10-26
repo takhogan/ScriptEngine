@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger, thread_local_storage
+from ScriptEngine.common.logging.log_overlay import log_image_file
 script_logger = ScriptLogger()
 
 
@@ -215,11 +216,10 @@ class ImageToTextActionHelper:
     @staticmethod
     def handle_image_to_text(action, input_obj, state, io_executor, easy_ocr_reader):
         search_im = input_obj['screencap_im_bgr']
-        # raw input (pre) image is debug-only detail.
-        if script_logger.should_log('debug'):
-            pre_image_relative_path = 'imageToTextAction-raw-input.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, search_im)
-            script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
+        # raw input (pre) image, kept at info+ so the action can be replayed.
+        # When the input is an earlier action's logged output, this is that file.
+        if script_logger.should_log('info'):
+            log_image_file(script_logger, search_im, 'imageToTextAction-raw-input.png', 'pre')
 
         image_to_text_input, pre_log = ImageToTextActionHelper.preprocess_image(
             action, search_im

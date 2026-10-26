@@ -23,6 +23,7 @@ from ScriptEngine.common.types import ScreenPlanImage, TemplateMatch
 
 MINIMUM_MATCH_PIXEL_SPACING = 15
 from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.logging.log_overlay import Overlay, bgr_to_hex, int_point
 
 script_logger = ScriptLogger()
 class ImageMatcher:
@@ -305,84 +306,72 @@ class ImageMatcher:
         )
 
     @staticmethod
-    def create_result_im(detectObject, screencap_im_bgr, input_expression_match_point_xy_absolute, screencap_search_bgr, matches, match_result):
-        script_logger = ScriptLogger.get_logger()
-        best_point_xy_absolute = 'None'
-        best_point_score = 0
-        result_im_bgr = screencap_im_bgr.copy()
+    def create_result_overlay(detectObject, screencap_im_bgr, input_expression_match_point_xy_absolute, screencap_search_bgr, matches, match_result):
+        """The detectObject post image (matches over the input) as a log overlay.
+
+        Layers are drawn in the input's own coordinates. When the input came
+        from an input expression (fixed_scale), they are drawn in a frame placed
+        at the input's match point inside the blurred full screenshot, so the
+        match is shown in context. The pre image is always the input itself: the
+        screenshot, or, when the input is an earlier action's output (a match,
+        a transformed match), that output. meta records the best match for
+        detect_result.txt.
+        """
+        input_x = int(input_expression_match_point_xy_absolute[0])
+        input_y = int(input_expression_match_point_xy_absolute[1])
+        input_h, input_w = screencap_im_bgr.shape[:2]
         h, w = screencap_search_bgr.shape[0:2]
-        if len(screencap_search_bgr.shape) < 3:
-            script_logger.log('converting search image to BGR for logging', level='debug')
-            screencap_search_bgr = cv2.cvtColor(screencap_search_bgr, cv2.COLOR_GRAY2BGR)
         threshold = float(detectObject['actionData']['threshold'])
-        # draw red box around best match
-        if detectObject['actionData']['detectActionType'] == "floatingObject":
+        detect_action_type = detectObject['actionData']['detectActionType']
+        input_obj = detectObject['input_obj']
+        fixed_scale = input_obj['fixed_scale']
+
+        if fixed_scale:
+            capture = input_obj.get('original_image')
+            overlay = Overlay('detectObject', capture.shape[1], capture.shape[0], pre_image_key='input')
+            overlay.images['capture'] = capture
+            overlay.images['input'] = screencap_im_bgr
+            input_key = 'input'
+        else:
+            overlay = Overlay('detectObject', input_w, input_h)
+            overlay.images['capture'] = screencap_im_bgr
+            input_key = 'capture'
+
+        layers = [{'op': 'image', 'image': input_key, 'at': [0, 0]}]
+        uses_template = False
+        best_point_xy_absolute = None
+        best_point_score = 0
+
+        if detect_action_type == "floatingObject":
             if len(matches) > 0:
-                best_point_xy_absolute = matches[0]['point']
-                best_point_score = matches[0]['score']
+                best_point_xy_absolute = int_point(matches[0]['point'])
+                best_point_score = float(matches[0]['score'])
             else:
+                # Nothing met the threshold: show the template faintly at the
+                # best scoring point, boxed in red scaled by the score.
                 valid_matched_points = np.where(np.isinf(match_result) | np.isnan(match_result), -np.inf, match_result)
                 max_valid_point = np.max(valid_matched_points)
                 if max_valid_point != -np.inf:
                     best_point_yx_relative = np.unravel_index(np.argmax(valid_matched_points), valid_matched_points.shape)
                     best_point_score = float(match_result[best_point_yx_relative])
-
-                    best_point_xy_relative = (best_point_yx_relative[1], best_point_yx_relative[0])
-                    best_point_xy_absolute = (
-                        best_point_xy_relative[0] + input_expression_match_point_xy_absolute[0], 
-                        best_point_xy_relative[1] + input_expression_match_point_xy_absolute[1]
-                    )
-                    
-                    box_w, box_h = ImageMatcher.adjust_box_to_bounds(best_point_xy_relative, w, h, screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2)
-                    end_y = min(best_point_xy_relative[1] + box_h, result_im_bgr.shape[0])
-                    end_x = min(best_point_xy_relative[0] + box_w, result_im_bgr.shape[1])
-                    slice_h = end_y - best_point_xy_relative[1]
-                    slice_w = end_x - best_point_xy_relative[0]
-                    result_im_bgr[
-                        best_point_xy_relative[1]:best_point_xy_relative[1] + box_h, 
-                        best_point_xy_relative[0]:best_point_xy_relative[0] + box_w
-                    ] = screencap_search_bgr[:slice_h,:slice_w]
-                    result_im_bgr = cv2.addWeighted(result_im_bgr, 0.3, screencap_im_bgr, 0.7, 0)
-
-                    top_left = (int(best_point_xy_relative[0]), int(best_point_xy_relative[1]))
-                    bottom_right = (int(best_point_xy_relative[0] + box_w), int(best_point_xy_relative[1] + box_h))
-                    cv2.rectangle(
-                        result_im_bgr,
-                        top_left,
-                        bottom_right,
-                        (0, 0, int((255 * best_point_score + 255) / 2)),
-                        2
-                    )
-        else:
-            top_left = (
-                int(matches[0]['point'][0] - input_expression_match_point_xy_absolute[0]),
-                int(matches[0]['point'][1] - input_expression_match_point_xy_absolute[1]),
-            )
-            bottom_right = (
-                int(matches[0]['point'][0] + w - input_expression_match_point_xy_absolute[0]),
-                int(matches[0]['point'][1] + h - input_expression_match_point_xy_absolute[1]),
-            )
-            cv2.rectangle(
-                screencap_im_bgr,
-                top_left,
-                bottom_right,
-                (0, 0, int(255 * matches[0]['score'])), 2
-            )
-
-        result_log = 'Best valid match: {} with score {}\n'.format(
-            str(best_point_xy_absolute),
-            str(best_point_score)
-        )
-
-        script_logger.log(result_log, level='debug')
-        script_logger.get_action_log().append_supporting_file(
-            'text',
-            'detect_result.txt',
-            result_log
-        )
-
-        overlay = result_im_bgr.copy()
-        alpha = 0.5
+                    best_point_xy_relative = (int(best_point_yx_relative[1]), int(best_point_yx_relative[0]))
+                    best_point_xy_absolute = [
+                        best_point_xy_relative[0] + input_x,
+                        best_point_xy_relative[1] + input_y
+                    ]
+                    box_w, box_h = ImageMatcher.adjust_box_to_bounds(best_point_xy_relative, w, h, input_w, input_h, 2)
+                    uses_template = True
+                    layers.append({'op': 'group', 'opacity': 0.3, 'layers': [{
+                        'op': 'image', 'image': 'template',
+                        'at': list(best_point_xy_relative), 'src': [0, 0, int(box_w), int(box_h)]
+                    }]})
+                    layers.append({
+                        'op': 'rect',
+                        'p1': list(best_point_xy_relative),
+                        'p2': [int(best_point_xy_relative[0] + box_w), int(best_point_xy_relative[1] + box_h)],
+                        'color': bgr_to_hex((0, 0, int((255 * best_point_score + 255) / 2))),
+                        'thickness': 2
+                    })
 
         # Precompute match geometry once per match
         match_data = []
@@ -391,92 +380,77 @@ class ImageMatcher:
                 continue
             match_point_xy_absolute = tuple(map(int, match_obj['point']))
             match_point_xy_relative = (
-                int(match_point_xy_absolute[0] - input_expression_match_point_xy_absolute[0]), 
-                int(match_point_xy_absolute[1] - input_expression_match_point_xy_absolute[1])
+                int(match_point_xy_absolute[0] - input_x),
+                int(match_point_xy_absolute[1] - input_y)
             )
             box_w, box_h = ImageMatcher.adjust_box_to_bounds(
-                match_point_xy_relative, 
-                w, h, 
-                screencap_im_bgr.shape[1], screencap_im_bgr.shape[0], 2
+                match_point_xy_relative,
+                w, h,
+                input_w, input_h, 2
             )
-            
-            match_data.append((match_point_xy_relative, box_w, box_h, match_obj['score']))
+            match_data.append((match_point_xy_relative, int(box_w), int(box_h), float(match_obj['score'])))
 
         if 'maxMatches' in detectObject['actionData'] and str(detectObject['actionData']['maxMatches']).isdigit():
             max_matches = int(detectObject['actionData']['maxMatches'])
         else:
             max_matches = 1
 
-        # Draw all search images first (floatingObject only)
-        if detectObject['actionData']['detectActionType'] == "floatingObject":
-            for pt, box_w, box_h, score in match_data:
-                end_y = min(pt[1] + box_h, result_im_bgr.shape[0])
-                end_x = min(pt[0] + box_w, result_im_bgr.shape[1])
-                slice_h = end_y - pt[1]
-                slice_w = end_x - pt[0]
-                result_im_bgr[
-                    pt[1]:pt[1] + box_h, pt[0]:pt[0] + box_w
-                ] = screencap_search_bgr[:slice_h, :slice_w]
-            result_im_bgr = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
+        if len(match_data) > 0:
+            # Templates at half strength (floatingObject only), then the match
+            # areas washed red. The red boxes cover every pasted template, so
+            # drawing them over the blended result matches blending both at once.
+            if detect_action_type == "floatingObject":
+                uses_template = True
+                layers.append({'op': 'group', 'opacity': 0.5, 'layers': [
+                    {'op': 'image', 'image': 'template', 'at': list(pt), 'src': [0, 0, box_w, box_h]}
+                    for pt, box_w, box_h, score in match_data
+                ]})
+            layers.append({'op': 'group', 'opacity': 0.5, 'layers': [
+                {
+                    'op': 'rect', 'p1': list(pt), 'p2': [pt[0] + box_w, pt[1] + box_h],
+                    'color': bgr_to_hex((0, 0, 255)), 'thickness': -1
+                }
+                for pt, box_w, box_h, score in match_data
+            ]})
 
-        # Then color in match areas with red
-        for pt, box_w, box_h, score in match_data:
-            
-            cv2.rectangle(
-                overlay,
-                pt,
-                (int(pt[0] + box_w), int(pt[1] + box_h)),
-                (0, 0, 255),
-                thickness=-1
-            )
-        result_im_bgr = cv2.addWeighted(overlay, alpha, result_im_bgr, 1 - alpha, 0)
+        # Blue outline around the first max_matches, brighter for higher scores.
+        for pt, box_w, box_h, score in match_data[:max_matches]:
+            layers.append({
+                'op': 'rect', 'p1': list(pt), 'p2': [pt[0] + box_w, pt[1] + box_h],
+                'color': bgr_to_hex((int((255 * score + 255) / 2), 0, 0)), 'thickness': 2
+            })
 
-        # Draw blue rectangle around first max_matches above threshold (reuses match_data)
-        for match_index, (pt, box_w, box_h, score) in enumerate(match_data):
-            if match_index >= max_matches:
-                break
-            cv2.rectangle(
-                result_im_bgr,
-                pt,
-                (int(pt[0] + box_w), int(pt[1] + box_h)),
-                (int((255 * score + 255) / 2), 0, 0),
-                2
-            )
+        if uses_template:
+            overlay.images['template'] = screencap_search_bgr
 
-        # place subimage inside original image if input expression is an image.
-        # result_im_bgr is always built at the input area's native footprint
-        # (the match-time rescale in get_match is internal to the SSIM compare and
-        # does not affect this image), so it can always be composited back into the
-        # full original image at the input's match point.
-        if detectObject['input_obj']['fixed_scale']:
-            rescaled_base = detectObject['input_obj'].get('original_image_blurred')
-            if rescaled_base is None:
-                rescaled_base = detectObject['input_obj']['original_image']
-            rescaled_result_im_bgr = rescaled_base.copy()
-            ix = int(input_expression_match_point_xy_absolute[0])
-            iy = int(input_expression_match_point_xy_absolute[1])
-            h0, w0 = int(screencap_im_bgr.shape[0]), int(screencap_im_bgr.shape[1])
-            rescaled_result_im_bgr[iy : iy + h0, ix : ix + w0] = result_im_bgr
-
-            top_left = (
-                int(input_expression_match_point_xy_absolute[0]), 
-                int(input_expression_match_point_xy_absolute[1])
-            )
-            bottom_right = (
-                int(input_expression_match_point_xy_absolute[0] + screencap_im_bgr.shape[1]), 
-                int(input_expression_match_point_xy_absolute[1] + screencap_im_bgr.shape[0])
-            )
-            cv2.rectangle(
-                rescaled_result_im_bgr,
-                top_left,
-                bottom_right,
-                (255, 0, 0),
-                1
-            )
+        if fixed_scale:
+            overlay.layers.append({'op': 'image', 'image': 'capture', 'at': [0, 0]})
+            # original_image_blurred is this same blur of the capture.
+            if input_obj.get('original_image_blurred') is not None:
+                overlay.layers.append({'op': 'blur', 'kernel': 31})
+            overlay.layers.append({
+                'op': 'frame', 'at': [input_x, input_y], 'width': input_w, 'height': input_h, 'layers': layers
+            })
+            overlay.layers.append({
+                'op': 'rect', 'p1': [input_x, input_y], 'p2': [input_x + input_w, input_y + input_h],
+                'color': bgr_to_hex((255, 0, 0)), 'thickness': 1
+            })
         else:
-            rescaled_result_im_bgr = result_im_bgr
+            overlay.layers = layers
 
-        return rescaled_result_im_bgr
+        overlay.meta = {
+            'detectActionType': detect_action_type,
+            'threshold': threshold,
+            'best_point': best_point_xy_absolute,
+            'best_score': best_point_score,
+            'input_point': [input_x, input_y],
+            'matches': [
+                {'point': [pt[0] + input_x, pt[1] + input_y], 'width': box_w, 'height': box_h, 'score': score}
+                for pt, box_w, box_h, score in match_data
+            ],
+            'max_matches': max_matches,
+        }
+        return overlay
 
     # def produce_logistic_matches(self, screencap_im, screencap_search, screencap_mask, logs_path, assets_folder, threshold=0.7):
     #     # https://towardsdatascience.com/logistic-regression-using-python-sklearn-numpy-mnist-handwriting-recognition-matplotlib-a6b31e2b166a

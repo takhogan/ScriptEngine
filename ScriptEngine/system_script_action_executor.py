@@ -35,6 +35,7 @@ from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.types import ScreenPlanImage, is_screenplan_image_result
 from ScriptEngine.common.script_engine_utils import generate_context_switch_action, sanitize_statement_input, state_eval, state_exec
 from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.logging.log_overlay import log_image_file
 from typing import Callable, Dict, List, Tuple
 script_logger = ScriptLogger()
 
@@ -388,11 +389,10 @@ class SystemScriptActionExecutor:
                 raise Exception(action["actionName"] + ' input expression was blank')
 
             transform_im = state[action['actionData']['inputExpression']]['matched_area']
-            # input (pre) image is debug-only detail.
-            if script_logger.should_log('debug'):
-                pre_image_relative_path = 'imageTransformationAction-input.png'
-                cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, transform_im)
-                script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
+            # input (pre) image, kept at info+ so the action can be replayed.
+            # When the input is an earlier action's logged output, this is that file.
+            if script_logger.should_log('info'):
+                log_image_file(script_logger, transform_im, 'imageTransformationAction-input.png', 'pre')
 
             if action["actionData"]["transformationType"] == "blur":
                 if action["actionData"]["blurType"] == 'bilateralFilter':
@@ -469,10 +469,10 @@ class SystemScriptActionExecutor:
                     transform_im = cv2.cvtColor(transform_im, cv2.COLOR_GRAY2BGR)
 
             # output (post) image feeds the log video (info+); skipped at error.
+            # It goes through the log image store, so an action that consumes
+            # this output records this same file as its pre_file.
             if script_logger.should_log('info'):
-                post_image_relative_path = 'imageTransformationAction-output.png'
-                cv2.imwrite(script_logger.get_log_path_prefix() + post_image_relative_path, transform_im)
-                script_logger.get_action_log().set_post_file('image', post_image_relative_path)
+                log_image_file(script_logger, transform_im, 'imageTransformationAction-output.png', 'post')
 
             if len(action['actionData']['outputVarName']) > 0:
                 state[action['actionData']['outputVarName']] = state[action['actionData']['inputExpression']].copy()
