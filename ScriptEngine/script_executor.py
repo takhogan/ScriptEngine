@@ -220,7 +220,9 @@ class ScriptExecutor:
         self.parent_action_log = script_action_log
 
     def parse_inputs(self, input_state):
-        with open(self.log_folder + 'inputs.txt', 'w') as input_log_file:
+        # Values can be OCR text, which brings ligatures like 'ﬁ' that the
+        # Windows default code page (cp1252) cannot encode.
+        with open(self.log_folder + 'inputs.txt', 'w', encoding='utf-8', errors='replace') as input_log_file:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing_inputs ', self.inputs, level='info')
             for [var_name, input_expression, default_value] in self.inputs:
                 var_name = var_name.strip()
@@ -258,7 +260,7 @@ class ScriptExecutor:
         )
 
     def parse_outputs(self, outputState, outputs_log_file_path):
-        with open(outputs_log_file_path, 'w') as outputs_log_file:
+        with open(outputs_log_file_path, 'w', encoding='utf-8', errors='replace') as outputs_log_file:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing outputs ', self.outputs, level='info')
             for [var_name, input_expression, default_value] in self.outputs:
                 var_name = var_name.strip()
