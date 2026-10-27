@@ -33,6 +33,7 @@ from .script_loader import parse_zip
 from .system_script_handler import SystemScriptHandler
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.common.logging.script_action_log import ScriptActionLog
+from ScriptEngine.common.disk_space_monitor import raise_if_low_disk
 from .helpers.random_variable_helper import RandomVariableHelper
 from .custom_thread_pool import CustomThreadPool
 from .custom_process_pool import CustomProcessPool
@@ -532,6 +533,7 @@ class ScriptExecutor:
     def check_if_done(self):
         end_branch = False
         script_logger.log('-----' + self.props['script_name'] + ' CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches" + '-----', level='info')
+        raise_if_low_disk()
         if datetime.datetime.now().astimezone(tz=tz.tzutc()) > self.timeout:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script has timed out - script timeout - ', datetime.datetime.now(), level='error')
             self.status_detail = ScriptExecutionStatusDetail.TIMED_OUT
