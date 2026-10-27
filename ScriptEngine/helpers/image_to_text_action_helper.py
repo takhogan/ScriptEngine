@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger, thread_local_storage
+from ScriptEngine.common.logging.log_overlay import log_image_file
 script_logger = ScriptLogger()
 
 
@@ -213,13 +214,22 @@ class ImageToTextActionHelper:
         return outputs, inputs_log, post_log, easy_ocr_reader
 
     @staticmethod
+    def ocr_runs(inputs_log):
+        """The OCR passes in `inputs_log`, one line per pass: '<settings> and output was[:] <text>'."""
+        runs = []
+        for line in inputs_log.split('\n'):
+            settings, separator, output = line.partition(' and output was')
+            if separator:
+                runs.append({'settings': settings, 'output': output.removeprefix(':').removeprefix(' ')})
+        return runs
+
+    @staticmethod
     def handle_image_to_text(action, input_obj, state, io_executor, easy_ocr_reader):
         search_im = input_obj['screencap_im_bgr']
-        # raw input (pre) image is debug-only detail.
-        if script_logger.should_log('debug'):
-            pre_image_relative_path = 'imageToTextAction-raw-input.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + pre_image_relative_path, search_im)
-            script_logger.get_action_log().set_pre_file('image', pre_image_relative_path)
+        # raw input (pre) image, kept at info+ so the action can be replayed.
+        # When the input is an earlier action's logged output, this is that file.
+        if script_logger.should_log('info'):
+            log_image_file(script_logger, search_im, 'imageToTextAction-raw-input.png', 'pre')
 
         image_to_text_input, pre_log = ImageToTextActionHelper.preprocess_image(
             action, search_im
@@ -243,12 +253,13 @@ class ImageToTextActionHelper:
         )
 
         script_logger.log(post_log)
-        script_logger.get_action_log().add_supporting_file(
-            'text',
-            'imageToText-results.txt',
-            pre_log + '\n' + inputs_log + '\n' + post_log
-        )
         extracted_text = outputs[0].strip()
+        script_logger.get_action_log().update_result({
+            'engine': action["actionData"]["conversionEngine"],
+            'preprocessing': [step for step in pre_log.split('\n')[1:] if step],
+            'runs': ImageToTextActionHelper.ocr_runs(inputs_log),
+            'text': extracted_text,
+        })
         state[action["actionData"]["outputVarName"]] = extracted_text
         # Create summary: truncate text if too long
         if len(extracted_text) > 50:

@@ -19,7 +19,10 @@ import random
 import numpy as np
 import cv2
 from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.logging import action_result
+from ScriptEngine.common.logging.log_overlay import Overlay, bgr_to_hex, int_point, log_overlay, mask_image
 from ScriptEngine.common.script_engine_utils import state_eval
+from ScriptEngine.common.types import ScreenPlanImage
 from typing import Tuple, Callable, List
 script_logger = ScriptLogger()
 
@@ -112,13 +115,18 @@ class ClickActionHelper:
         return remapping_function
 
     @staticmethod
+    def needs_remap(input_params_valid, source_screen_width, source_screen_height, screen_width, screen_height):
+        return bool(input_params_valid) and (source_screen_width != screen_width) and \
+            (source_screen_height != screen_height)
+
+    @staticmethod
     def remap_points_to_screen(
         input_params_valid : bool, source_screen_width : int, source_screen_height : int,
         screen_width : int, screen_height : int, point_list : List[int], point_choice : Tuple[int, int]
     ):
         remap_log = ''
-        if input_params_valid and (source_screen_width != screen_width) and \
-                (source_screen_height != screen_height):
+        if ClickActionHelper.needs_remap(input_params_valid, source_screen_width, source_screen_height,
+                                         screen_width, screen_height):
             rescaling_log = 'difference in device window size detected.' + \
                             ' Remapping point choice from screen (wxh) ({}x{}) to screen ({}x{})'.format(
                                 str(source_screen_width),
@@ -147,10 +155,18 @@ class ClickActionHelper:
         return point_list, point_choice, remap_log
 
     @staticmethod
-    def get_point_choice(detectTypeData, var_name, point_list, state, screen_width, screen_height, point_index, prefer_interior=True):
+    def get_point_choice(detectTypeData, var_name, point_list, state, screen_width, screen_height, point_index,
+                         prefer_interior=True, result_key=None):
+        """The point a mouse action uses. With `result_key`, how it was chosen is
+        recorded in the action's result under that key (a ClickTarget)."""
         point_choice = (None, None)
         log_point_choice = (None, None)
         pre_log = ''
+        target = {
+            'source': 'none', 'expression': None, 'input_type': None, 'selection': None,
+            'candidate_count': None, 'point': None, 'source_point': None, 'source_screen': None,
+            'device_screen': action_result.size(screen_width, screen_height), 'remapped': False,
+        }
 
         if var_name is not None and len(var_name) > 0:
             input_expression_log = 'inputExpression {} was not null or blank, reading from inputExpression'.format(
@@ -161,12 +177,16 @@ class ClickActionHelper:
             input_point = state_eval(var_name, {}, state)
 
             input_expression_type = 'unknown'
+            target['source'] = 'expression'
+            target['expression'] = var_name
+            target['input_type'] = input_point["input_type"]
 
             if input_point["input_type"] == "rectangle":
                 width_coord = random.random() * input_point["width"]
                 height_coord = random.random() * input_point['height']
                 point_choice = (input_point["point"][0] + width_coord, input_point["point"][1] + height_coord)
                 input_expression_type = 'rectangle'
+                target['selection'] = 'uniform'
             elif input_point["input_type"] == "shape":
                 shape_ys, shape_xs = np.where(input_point["output_mask"] > 1)
                 relative_points = list(zip(shape_xs.tolist(), shape_ys.tolist()))
@@ -184,6 +204,8 @@ class ClickActionHelper:
                         input_point["point"][0] + int(relative_choice[0]),
                         input_point["point"][1] + int(relative_choice[1])
                     )
+                    target['candidate_count'] = len(relative_points)
+                    target['selection'] = selection_strategy
                 input_expression_type = 'shape ({})'.format(selection_strategy)
             source_screen_width = input_point["original_width"]
             source_screen_height = input_point["original_height"]
@@ -191,6 +213,10 @@ class ClickActionHelper:
             [], point_choice, remap_log = ClickActionHelper.remap_points_to_screen(
                 True, source_screen_width, source_screen_height,
                 screen_width, screen_height, [], point_choice
+            )
+            target['source_screen'] = action_result.size(source_screen_width, source_screen_height)
+            target['remapped'] = ClickActionHelper.needs_remap(
+                True, source_screen_width, source_screen_height, screen_width, screen_height
             )
             pre_log += '\n' + remap_log
             input_expression_point_choice_log = 'point chosen from input_expression of type {} : {}'.format(
@@ -228,6 +254,14 @@ class ClickActionHelper:
                 'point_list': point_list
             }
 
+            target['source'] = 'point_list'
+            target['selection'] = selection_strategy
+            target['candidate_count'] = len(point_list)
+            if input_params_valid:
+                target['source_screen'] = action_result.size(int(source_screen_width), int(source_screen_height))
+            target['remapped'] = ClickActionHelper.needs_remap(
+                input_params_valid, source_screen_width, source_screen_height, screen_width, screen_height
+            )
             point_list, point_choice, remap_log = ClickActionHelper.remap_points_to_screen(
                 input_params_valid, source_screen_width, source_screen_height,
                 screen_width, screen_height, point_list, point_choice
@@ -242,74 +276,146 @@ class ClickActionHelper:
             log_point_list = []
             pre_log = 'pointList not in actionData and inputExpression is None'
             script_logger.log(pre_log, level='debug')
-        script_logger.get_action_log().add_supporting_file(
-            'text',
-            'clickActionPointChoice-{}-log.txt'.format(str(point_index)),
-            pre_log
-        )
+        if result_key is not None:
+            if ClickActionHelper.has_point(point_choice):
+                target['point'] = action_result.point(point_choice)
+                target['source_point'] = action_result.point(log_point_choice)
+            script_logger.get_action_log().update_result({result_key: target})
         return point_choice, log_point_choice, point_list, log_point_list
 
     @staticmethod
-    def draw_point_choice(screenshot_bgr, point_choice, point_list):
-        script_logger = ScriptLogger.get_logger()
-        script_logger.log('draw point choice', point_choice, level='debug')
-        overlay = screenshot_bgr.copy()
+    def input_screenshot(log_point_list):
+        """The screenshot a click target was chosen from, or None.
+
+        A target from an input expression is a match (or a transformed or
+        nested match) that carries the screenshot it was found in, and its
+        point and mask are in that screenshot's coordinates. Targets from the
+        action's own point list have no screenshot behind them.
+        """
+        if isinstance(log_point_list, (dict, ScreenPlanImage)):
+            if log_point_list.get('input_type') in ('shape', 'rectangle'):
+                return log_point_list.get('original_image')
+        return None
+
+    @staticmethod
+    def scale_point(point, scale_x, scale_y):
+        return (point[0] * scale_x, point[1] * scale_y)
+
+    @staticmethod
+    def log_target(base_bgr, screen_width, screen_height,
+                   point_choice, point_list, log_point_choice, log_point_list):
+        """(point_choice, point_list) to draw one click target on `base_bgr`.
+
+        A target chosen from `base_bgr` itself is drawn in its own coordinates,
+        exactly where it was found. Anything else is in device coordinates
+        (after the remap to the device's screen) and is scaled to the base:
+        the action's point list keeps its candidate points, while a target from
+        a different screenshot shows only the chosen point, since its candidate
+        area belongs to that other image.
+        """
+        if base_bgr is ClickActionHelper.input_screenshot(log_point_list):
+            return log_point_choice, log_point_list
+        scale_x = base_bgr.shape[1] / float(screen_width)
+        scale_y = base_bgr.shape[0] / float(screen_height)
+        candidates = {'input_type': 'none'}
+        if ClickActionHelper.input_screenshot(log_point_list) is None and \
+                isinstance(point_list, dict) and point_list.get('input_type') == 'point_list':
+            candidates = {
+                'input_type': 'point_list',
+                'point_list': [
+                    tuple(map(int, ClickActionHelper.scale_point(point, scale_x, scale_y)))
+                    for point in point_list['point_list']
+                ]
+            }
+        return ClickActionHelper.scale_point(point_choice, scale_x, scale_y), candidates
+
+    @staticmethod
+    def has_point(point_choice):
+        return point_choice is not None and None not in tuple(point_choice)
+
+    @staticmethod
+    def point_choice_layers(overlay, point_choice, point_list, mask_key='mask'):
+        """Layers marking a click: the candidate area washed red, the chosen point in blue."""
+        candidates = []
         if point_list['input_type'] == 'point_list':
             for point in point_list['point_list']:
-                cv2.circle(overlay, point, radius=1, color=(0, 0, 255), thickness=-1)
+                candidates.append({
+                    'op': 'circle', 'center': int_point(point), 'radius': 1,
+                    'color': bgr_to_hex((0, 0, 255)), 'thickness': -1
+                })
         elif point_list['input_type'] == 'rectangle':
-            cv2.rectangle(
-                overlay,
-                point_list["point"],
-                (int(point_list["point"][0] + point_list["width"]),
-                 int(point_list["point"][1] + point_list["height"])),
-                color=(0, 0, 255),
-                thickness=-1
-            )
+            candidates.append({
+                'op': 'rect',
+                'p1': int_point(point_list["point"]),
+                'p2': [int(point_list["point"][0] + point_list["width"]),
+                       int(point_list["point"][1] + point_list["height"])],
+                'color': bgr_to_hex((0, 0, 255)), 'thickness': -1
+            })
         elif point_list['input_type'] == 'shape':
-            shape_ys, shape_xs = np.where(point_list["output_mask"] > 1)
-            for point in zip(shape_xs, shape_ys):
-                cv2.circle(
-                    overlay,
-                    (
-                        int(point_list["point"][0] + point[0]),
-                        int(point_list["point"][1] + point[1])
-                    ),
-                    radius=1,
-                    color=(0, 0, 255),
-                    thickness=-1
-                )
+            overlay.images[mask_key] = mask_image(point_list["output_mask"])
+            candidates.append({
+                'op': 'mask', 'image': mask_key, 'at': int_point(point_list["point"]),
+                'color': bgr_to_hex((0, 0, 255))
+            })
 
-        alpha = 0.5  # 0.0 fully transparent, 1.0 fully opaque
-        screenshot_bgr = cv2.addWeighted(overlay, alpha, screenshot_bgr, 1 - alpha, 0)
-        cv2.circle(screenshot_bgr, list(map(int, point_choice)), radius=5, color=(255, 0, 0), thickness=-1)
-        return screenshot_bgr
+        layers = []
+        if candidates:
+            layers.append({'op': 'group', 'opacity': 0.5, 'layers': candidates})
+        layers.append({
+            'op': 'circle', 'center': int_point(point_choice), 'radius': 5,
+            'color': bgr_to_hex((255, 0, 0)), 'thickness': -1
+        })
+        return layers
+
+    @staticmethod
+    def create_click_overlay(screenshot_bgr, point_choice, point_list):
+        overlay = Overlay('mouseInteractionAction', screenshot_bgr.shape[1], screenshot_bgr.shape[0])
+        overlay.images['capture'] = screenshot_bgr
+        overlay.layers = [{'op': 'image', 'image': 'capture', 'at': [0, 0]}] + \
+            ClickActionHelper.point_choice_layers(overlay, point_choice, point_list)
+        overlay.result = {'target': {'screenshot_point': action_result.point(int_point(point_choice))}}
+        return overlay
+
+    @staticmethod
+    def create_click_and_drag_overlay(screenshot_bgr,
+                                      source_point_choice, source_point_list,
+                                      target_point_choice, target_point_list,
+                                      deltas):
+        overlay = Overlay('mouseMoveAction', screenshot_bgr.shape[1], screenshot_bgr.shape[0])
+        overlay.images['capture'] = screenshot_bgr
+        overlay.layers = [{'op': 'image', 'image': 'capture', 'at': [0, 0]}] + \
+            ClickActionHelper.point_choice_layers(overlay, source_point_choice, source_point_list, 'source_mask') + \
+            ClickActionHelper.point_choice_layers(overlay, target_point_choice, target_point_list, 'target_mask')
+
+        # The drag path: each delta is one segment from where the last one ended.
+        traverse_x = source_point_choice[0]
+        traverse_y = source_point_choice[1]
+        path = [[int(traverse_x), int(traverse_y)]]
+        for delta_pair in deltas:
+            traverse_x += delta_pair[0]
+            traverse_y += delta_pair[1]
+            path.append([int(traverse_x), int(traverse_y)])
+        overlay.layers.append({'op': 'polyline', 'points': path, 'color': bgr_to_hex((255, 0, 0)), 'thickness': 3})
+        overlay.result = {
+            'source': {'screenshot_point': action_result.point(int_point(source_point_choice))},
+            'target': {'screenshot_point': action_result.point(int_point(target_point_choice))},
+            'path': [action_result.point(xy) for xy in path],
+        }
+        return overlay
 
     @staticmethod
     def draw_click(screenshot_bgr, point_choice, point_list):
         script_logger = ScriptLogger.get_logger()
 
-        # The clickLocation post image feeds the log video, so it must be
-        # generated at both info and debug; only the error level (text-only,
-        # no images) skips it. The pre image below is debug-only.
+        # The screenshot (pre) and the clickLocation overlay (post) are kept at
+        # info and debug; the overlay feeds the log video. Only the error level
+        # (text-only, no images) skips them.
         if script_logger.get_log_level() == 'error':
             return
 
-        if script_logger.should_log('debug'):
-            input_image_relative_path = 'drawClick-inputImage.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screenshot_bgr)
-            script_logger.get_action_log().set_pre_file(
-                'image',
-                input_image_relative_path
-            )
-
-        screenshot_bgr = ClickActionHelper.draw_point_choice(screenshot_bgr, point_choice, point_list)
-        output_image_relative_path = 'clickLocation.png'
-        cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
-        # script_logger.log()
-        script_logger.get_action_log().set_post_file(
-            'image',
-            output_image_relative_path
+        log_overlay(
+            ClickActionHelper.create_click_overlay(screenshot_bgr, point_choice, point_list),
+            'clickLocation'
         )
 
     @staticmethod
@@ -319,40 +425,19 @@ class ClickActionHelper:
                             deltas):
         script_logger = ScriptLogger.get_logger()
 
-        # The dragPath post image feeds the log video, so it must be generated
-        # at both info and debug; only the error level (text-only, no images)
-        # skips it. The pre image below is debug-only.
+        # The screenshot (pre) and the dragPath overlay (post) are kept at info
+        # and debug; the overlay feeds the log video. Only the error level
+        # (text-only, no images) skips them.
         if script_logger.get_log_level() == 'error':
             return
 
-        if script_logger.should_log('debug'):
-            input_image_relative_path = 'drawClick-inputImage.png'
-            cv2.imwrite(script_logger.get_log_path_prefix() + input_image_relative_path, screenshot_bgr)
-            script_logger.get_action_log().set_pre_file(
-                'image',
-                input_image_relative_path
-            )
-
-        screenshot_bgr = ClickActionHelper.draw_point_choice(screenshot_bgr, source_point_choice, source_point_list)
-        screenshot_bgr = ClickActionHelper.draw_point_choice(screenshot_bgr, target_point_choice, target_point_list)
-        traverse_x = source_point_choice[0]
-        traverse_y = source_point_choice[1]
-
-        for delta_pair in deltas:
-            cv2.line(
+        script_logger.log('Saving dragPath overlay', level='debug')
+        log_overlay(
+            ClickActionHelper.create_click_and_drag_overlay(
                 screenshot_bgr,
-                (int(traverse_x), int(traverse_y)),
-                (int(traverse_x + delta_pair[0]), int(traverse_y + delta_pair[1])),
-                (255, 0, 0),
-                3
-            )
-            traverse_x += delta_pair[0]
-            traverse_y += delta_pair[1]
-
-        output_image_relative_path = 'dragPath.png'
-        cv2.imwrite(script_logger.get_log_path_prefix() + output_image_relative_path, screenshot_bgr)
-        script_logger.log('Saving dragPath.png', level='debug')
-        script_logger.get_action_log().set_post_file(
-            'image',
-            output_image_relative_path
+                source_point_choice, source_point_list,
+                target_point_choice, target_point_list,
+                deltas
+            ),
+            'dragPath'
         )

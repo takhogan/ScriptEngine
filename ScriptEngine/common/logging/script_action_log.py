@@ -5,6 +5,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 
 from ScriptEngine.common.constants.script_engine_constants import relative_data_path
+from ScriptEngine.common.logging import action_result
 
 # Shared cross-project contract. The on-disk shape of action-log.json is
 # defined by `ScriptActionLog` in screenplan_contracts (packages/screenplan-contracts).
@@ -62,6 +63,17 @@ class ScriptActionLog:
                 "detectActionType": action["actionData"]["detectActionType"]
             }
 
+        # Every action writes a result file (see action_result.py), listed
+        # first among its supporting files.
+        self.result_path = None
+        if self._capture_file('result'):
+            self.result_path = self.default_path_header + action_result.RESULT_FILE_SUFFIX
+            self._result_envelope = action_result.envelope(
+                action["actionName"], action.get("actionGroup"), script_counter
+            )
+            self.supporting_files.append(('text', self.result_path))
+            self.update_result({})
+
         self.to_dict()
 
     def _write_text_file(self, path, mode, contents, end):
@@ -70,12 +82,13 @@ class ScriptActionLog:
 
     @staticmethod
     def _capture_file(role):
-        # Gate artifact capture by log level. post files feed the log video, so
-        # they survive at info and debug but are dropped at error; pre and
-        # supporting files are debug-only detail. Lazy import avoids the
+        # Gate artifact capture by log level. pre files (an action's inputs, so
+        # it can be diagnosed and replayed) and post files (which feed the log
+        # video) survive at info and debug but are dropped at error; supporting
+        # files are debug-only detail. Lazy import avoids the
         # script_logger <-> script_action_log import cycle.
         from ScriptEngine.common.logging.script_logger import ScriptLogger
-        min_level = 'info' if role == 'post' else 'debug'
+        min_level = 'debug' if role == 'supporting' else 'info'  # pre, post, result
         return ScriptLogger.get_logger().should_log(min_level)
 
     def _flush(self):
@@ -281,6 +294,21 @@ class ScriptActionLog:
             _log_executor.submit(self._write_text_file, existing_supporting_file_path, 'a', file_contents, end)
         else:
             raise Exception('Unsupported File Type')
+
+    def update_result(self, fields):
+        """Merge `fields` into this action's result file (see action_result.py).
+
+        Nested objects merge, so `{'target': {'screenshot_point': ...}}` adds to
+        a target recorded earlier rather than replacing it.
+        """
+        if self.result_path is None:
+            return
+        _log_executor.submit(
+            action_result.write_result,
+            self.result_path,
+            dict(self._result_envelope, fields={}),
+            action_result.jsonable(fields)
+        )
 
     def add_child(self, action_logger):
         self.children.append(action_logger)
