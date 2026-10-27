@@ -17,6 +17,11 @@ import ScriptEngine.helpers.match_merge_helper as match_merge_helper_mod
 class FakeActionLog:
     def __init__(self):
         self.summary = None
+        self.result = {}
+
+    def update_result(self, fields):
+        from ScriptEngine.common.logging.action_result import merge
+        merge(self.result, fields)
 
     def set_summary(self, summary):
         self.summary = summary
