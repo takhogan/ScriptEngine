@@ -116,6 +116,10 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
     import numpy as np
     np.set_printoptions(threshold=3, edgeitems=0, linewidth=80, precision=2, suppress=True)
     script_logger.log('constants : ', constants, level='info')
+    # Runs off the main thread; ScriptExecutor.check_if_done raises between
+    # actions once it finds 2 GB or less free, which lands in the except below.
+    from ScriptEngine.common import disk_space_monitor
+    disk_space_stop = disk_space_monitor.start(script_logger.get_log_folder())
     from ScriptEngine.script_loader import parse_script
     script_object = parse_script(script_name, system_script, workspace)
     device_params = {}
@@ -262,6 +266,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         backpressure_stop.set()
     except Exception:
         pass
+    disk_space_stop.set()
     log_run_summary(locals().get('process_executor'))
     script_logger.log('Script Manager process completed', level='error')
     if errored:
