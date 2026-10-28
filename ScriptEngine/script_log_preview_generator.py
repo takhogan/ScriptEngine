@@ -286,12 +286,8 @@ class ScriptLogPreviewGenerator:
         ScriptLogPreviewGenerator.log_tree_to_image_list(log_tree, image_list)
         if len(image_list) > 0:
             if realtime:
-                # 2 fps, not 30: the video is stills held for each action's duration, so
-                # more frames add size, not motion. On Windows the encoder falls back to
-                # Media Foundation, whose bitrate is width * height * fps (27 Mbit/s at
-                # 30 fps for 720x1280, several GB per hourly run). Actions shorter than
-                # half a second can be dropped from the video; their time still counts.
-                ScriptLogPreviewGenerator.images_to_video(image_list, output_path, fps=2, realtime=True)
+                # For real-time mode, use higher FPS for smoother playback
+                ScriptLogPreviewGenerator.images_to_video(image_list, output_path, fps=30, realtime=True)
             else:
                 ScriptLogPreviewGenerator.images_to_video(image_list, output_path, fps=2)
 
