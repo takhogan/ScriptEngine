@@ -142,7 +142,19 @@ def warm_request_path_imports():
 # Device types that drive something outside this host and therefore need a
 # device attached to the run. 'python' is the host desktop itself, so it needs
 # nothing attached.
-DEVICE_TYPES_REQUIRING_ATTACHMENT = ('adb', 'kvm')
+DEVICE_TYPES_REQUIRING_ATTACHMENT = ('adb', 'kvm', 'ios')
+
+# Actions about an iOS device that is not registered yet - discovery, and the
+# prerequisite checks and fixes behind the Add Device form's buttons. Named here
+# rather than imported from the helper so that dispatching a request does not
+# import pymobiledevice3; ios_setup_helper.SETUP_ACTIONS holds the handlers.
+IOS_SETUP_ACTIONS = (
+    'ios_list_devices',
+    'ios_check_prerequisites',
+    'ios_pair_device',
+    'ios_reveal_developer_mode',
+    'ios_mount_developer_image',
+)
 
 
 class DeviceController:
@@ -253,6 +265,19 @@ class DeviceController:
                     cancel_check=self.cancel_check
                 )
                 return self.devices[device_params['deviceId']]
+        elif (device_type == 'ios'):
+            from ScriptEngine.managers.ios_device_manager import IOSDeviceManager
+            if device_params is None:
+                self.devices[device_type] = IOSDeviceManager(
+                    self.default_props.copy(), self.default_device_params, self.input_source
+                )
+                return self.devices[device_type]
+            else:
+                device_params = self._resolve_device_params(device_params['deviceId'], device_type)
+                self.devices[device_params['deviceId']] = IOSDeviceManager(
+                    self.default_props.copy(), device_params, self.input_source
+                )
+                return self.devices[device_params['deviceId']]
         elif (device_type == 'kvm'):
             from ScriptEngine.managers.pikvm_device_manager import PiKVMDeviceManager
             if device_params is None:
@@ -303,6 +328,16 @@ class DeviceController:
                 device_type = 'adb'
             elif device_subtype == 'pikvm':
                 device_type = 'kvm'
+            elif device_subtype == 'ios':
+                device_type = 'ios'
+            else:
+                # Without this, an unrecognized prefix left device_type unbound and
+                # the request failed with UnboundLocalError, which names neither the
+                # device nor the prefix that was not understood.
+                raise Exception(
+                    "DEVICE CONTROLLER: device '{}' has an unrecognized type prefix '{}'. Known "
+                    'prefixes are avd, bluestacks, adb, pikvm and ios.'.format(device_id, device_subtype)
+                )
         return device_type
 
     @staticmethod
@@ -319,13 +354,25 @@ class DeviceController:
     
     def parse_inputs(self, inputs):
         device_key = inputs[1]
+        device_action = inputs[2]
+
+        # Answered before any device is resolved: these report on what is attached
+        # to the host and on a device's prerequisites, which the Add Device form
+        # asks about while registering a device that has no configuration yet. A
+        # device key is still sent so the controller's per-device lock serializes
+        # them, but it names no configured device and nothing here looks it up.
+        if device_action in IOS_SETUP_ACTIONS:
+            from ScriptEngine.helpers.ios_setup_helper import run_setup_action
+            return {
+                "data": run_setup_action(device_action, inputs[3] if len(inputs) > 3 else None)
+            }
+
         device_type = self.device_id_to_device_type(device_key)
         script_logger.log('DEVICE CONTROLLER: device type', device_type, device_key, level='debug')
         device_params = {
             'deviceId' : device_key
         }
-        
-        device_action = inputs[2]
+
         if device_action == 'check_status':
             status = self.get_device_action(device_type, 'get_status', device_params)()
             return {

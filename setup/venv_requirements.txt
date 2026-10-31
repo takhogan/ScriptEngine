@@ -27,6 +27,7 @@ PyAutoGUI
 pydirectinput-rgx
 PyGetWindow
 pyinstaller
+pymobiledevice3
 pymongo
 PyMsgBox
 PyMySQL
