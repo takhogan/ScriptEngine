@@ -36,6 +36,7 @@ from typing import Dict
 from ScriptEngine.managers.device_manager import DeviceManager
 from ScriptEngine.managers.device_secrets_manager import DeviceSecretsManager
 from ScriptEngine.common.script_engine_utils import DummyFile
+from ScriptEngine.common.screenshot_failures import ScreenshotFailureTracker, SCREENSHOT_FAILURE_LIMIT_SECONDS
 
 from ScriptEngine.helpers.device_action_interpreter import DeviceActionInterpreter
 
@@ -159,7 +160,8 @@ IOS_SETUP_ACTIONS = (
 
 class DeviceController:
     def __init__(self, default_props, default_device_params, io_executor : CustomThreadPool, secrets_manager: DeviceSecretsManager, device_selection=None,
-                 restart_device_on_crash=False, restart_deadline=None, cancel_check=None):
+                 restart_device_on_crash=False, restart_deadline=None, cancel_check=None,
+                 screenshot_failure_limit_s=SCREENSHOT_FAILURE_LIMIT_SECONDS):
         script_logger.log('Intializing Device Manager')
         if 'script-engine-device-type' in default_device_params and default_device_params['script-engine-device-type'] == 'file':
             self.input_source = default_device_params
@@ -182,8 +184,13 @@ class DeviceController:
         # Returns True once the run has been cancelled, so those reconnect and
         # restart loops stop instead of running on until the deadline.
         self.cancel_check = cancel_check
+        # How long a device's screenshots may keep failing before that ends the
+        # run. None for the interactive controller, which has no run to end.
+        self.screenshot_failure_limit_s = screenshot_failure_limit_s
 
         self.devices: Dict[str, DeviceManager] = {}
+        # Keyed like self.devices.
+        self.screenshot_failures: Dict[str, ScreenshotFailureTracker] = {}
 
     def _require_attached_device(self, device_type):
         """Raises when an action needs a device but the run has none attached.
@@ -302,17 +309,44 @@ class DeviceController:
                 )
                 return self.devices[device_params['deviceId']]
     
+    def get_screenshot_failures(self, device_type, device_params=None) -> ScreenshotFailureTracker:
+        device_key = device_params['deviceId'] if device_params is not None else device_type
+        if device_key not in self.screenshot_failures:
+            device_name = device_key
+            if device_params is None and self.default_device_params.get('deviceId'):
+                device_name = '{} ({})'.format(self.default_device_params['deviceId'], device_type)
+            self.screenshot_failures[device_key] = ScreenshotFailureTracker(
+                device_name, limit_s=self.screenshot_failure_limit_s
+            )
+        return self.screenshot_failures[device_key]
+
     def get_device_action(self, device_type, action_type, device_params=None):
         device = self.initialize_device(device_type, device_params)
         action_method_map = {
             'mouse_move': 'smooth_move'
         }
         method_name = action_method_map.get(action_type, action_type)
-        return getattr(device, method_name)
+        device_action = getattr(device, method_name)
+        if action_type == 'screenshot':
+            # A screenshot that cannot be taken raises ScreenshotFailedError, which
+            # the action executor turns into a FAILURE, until the device has
+            # failed for the whole limit (ScreenshotFailureLimitError ends the run).
+            screenshot_failures = self.get_screenshot_failures(device_type, device_params)
+            return lambda *args, **kwargs: screenshot_failures.capture(lambda: device_action(*args, **kwargs))
+        return device_action
     
     def ensure_device_initialized(self, device_type, device_params=None):
         device = self.initialize_device(device_type, device_params)
-        device.ensure_device_initialized()
+        # The kvm, desktop and ios managers take a screenshot here to learn the
+        # screen size, and adb's checks the device answers, so a click that
+        # cannot initialize its device fails the way a detect that cannot see
+        # does. A device that is already initialized does nothing here, and that
+        # is no evidence the screen can be read now: only a call that had work
+        # to do resets the failure timer.
+        already_initialized = getattr(device, 'width', None) is not None and getattr(device, 'height', None) is not None
+        self.get_screenshot_failures(device_type, device_params).capture(
+            device.ensure_device_initialized, counts_as_success=not already_initialized
+        )
             
     
     def get_device_attribute(self, device_type, attribute_name, device_params=None):
@@ -549,5 +583,5 @@ if __name__ == '__main__':
             "height" : None,
             "scriptMode" : 'train'
 
-        }, {}, io_executor, DeviceSecretsManager())))
+        }, {}, io_executor, DeviceSecretsManager(), screenshot_failure_limit_s=None)))
         asyncio.run(io_executor.soft_shutdown(script_logger))

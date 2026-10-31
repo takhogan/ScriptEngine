@@ -73,7 +73,15 @@ class PiKVMDeviceManager(DeviceManager):
         return self.instance.set_atx_power(action="off")
     
     def screenshot(self):
-        pil_image = self.instance.get_streamer_image()
+        try:
+            pil_image = self.instance.get_streamer_image()
+        except Exception as e:
+            # pikvm_lib waits 30s for the streamer to report its video source
+            # online, then raises this. A target that is asleep, off or unplugged
+            # sends no HDMI signal, which is the usual reason.
+            if str(e) == 'Failed to initialize streamer':
+                raise Exception('PiKVM streamer reported no video source within 30s (no HDMI signal: target asleep, off or disconnected)') from e
+            raise
         cv2_image = cv2.cvtColor(numpy.array(pil_image), cv2.COLOR_RGB2BGR)
         return cv2_image
     

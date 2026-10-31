@@ -808,7 +808,16 @@ class ScriptExecutor:
 
         self.log_action_details(action)
         parallel_process = self.parallelized_executor.get_process(action["actionGroup"])
-        if parallel_process is not None:
+        screenshot_failure = self.parallelized_executor.get_screenshot_failure(action["actionGroup"])
+        if screenshot_failure is not None:
+            # A parallel detect whose shared screenshot could not be taken; its
+            # action log was created when the group was dispatched.
+            script_logger.configure_action_logger_from_strs(*action["script_logger"])
+            _, self.status, self.state, self.context, self.run_queue, update_queue = self.script_action_executor.screenshot_failed(
+                action, self.state, self.context, self.run_queue, screenshot_failure
+            )
+            script_logger.get_action_log().set_status(self.status.name)
+        elif parallel_process is not None:
             # Time spent blocked on the worker result. This is the engine's main
             # blind spot: the wait itself logs nothing, so a slow batch surfaces
             # only as a gap between logged events. Record waits over the

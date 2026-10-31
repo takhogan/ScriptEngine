@@ -142,26 +142,35 @@ class DesktopDeviceManager(DeviceManager):
         img = np.array(sct.grab(sct.monitors[1]))
         return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
+    def _ensure_initialized_for_keyboard(self):
+        """Keys need neither the screen size nor a screenshot, and pressing one is
+        how a sleeping machine gets woken, so a screen that cannot be captured must
+        not stop them. The next action that needs the screen initializes again."""
+        try:
+            self.ensure_device_initialized()
+        except Exception as e:
+            script_logger.log('PythonHostController: could not initialize before keyboard input, sending it anyway', e, level='error')
+
     def key_up(self, key):
-        self.ensure_device_initialized()
+        self._ensure_initialized_for_keyboard()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from keyUp')
         _input_module.keyUp(key)
 
     def key_down(self, key):
-        self.ensure_device_initialized()
+        self._ensure_initialized_for_keyboard()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from keyDown')
         _input_module.keyDown(key)
 
     def key_press(self, key):
-        self.ensure_device_initialized()
+        self._ensure_initialized_for_keyboard()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from press')
         pyautogui.press(key)
 
     def hotkey(self, keys):
-        self.ensure_device_initialized()
+        self._ensure_initialized_for_keyboard()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from hotKey')
         _input_module.hotkey(*keys)
