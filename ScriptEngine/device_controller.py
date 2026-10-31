@@ -412,7 +412,18 @@ async def process_input(device_controller: DeviceController, inputs: list):
         async with response_lock:
             input_response = json.dumps(output)
             script_logger.log('DEVICE CONTROLLER: Sending response for {}'.format(request_id), flush=True)
-            script_logger.log('<--{}-->'.format(request_id) + input_response + '<--{}-->'.format(request_id), file=DummyFile(), flush=True)
+            # level='error' so the frame is never dropped by the verbosity filter.
+            # This is not a log line the user reads, it is the response itself: the
+            # host parses it out of stdout. At the default 'info' it was suppressed
+            # whenever the controller ran at log level 'error' - which happens as
+            # soon as the Script-Engine-Controller's own level is warning or error,
+            # since getDeviceControllerLogLevel() maps both of those to 'error' -
+            # and then every device command, for every device type, failed on its
+            # five-minute queue timeout instead of answering.
+            script_logger.log(
+                '<--{}-->'.format(request_id) + input_response + '<--{}-->'.format(request_id),
+                file=DummyFile(), flush=True, level='error'
+            )
             # script_logger.log('DEVICE CONTROLLER: response', input_response, flush=True)
             script_logger.log('DEVICE CONTROLLER: Response sent for {}'.format(request_id), flush=True)
 
