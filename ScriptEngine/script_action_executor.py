@@ -140,7 +140,7 @@ class ScriptActionExecutor:
                         click_counts
                     )
                 else:
-                    delays = [0]
+                    delays = [0] * click_counts
                 click_func = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'click')
                 for click_count in range(0, click_counts):
                     click_func(*point_choice, action["actionData"]["mouseButton"])
