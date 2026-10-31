@@ -26,7 +26,8 @@ class ScriptLogPreviewGenerator:
             log_tree['name'].startswith('sleepStatement') or\
             log_tree['name'].startswith('conditionalStatement') or\
             log_tree['name'].startswith('imageToTextAction') or\
-            log_tree['name'].startswith('keyboardAction'):
+            log_tree['name'].startswith('keyboardAction') or\
+            log_tree['name'].startswith('userPromptAction'):
             if last_image is not None:
                 # Reuse the previous image
                 image_list.append({
