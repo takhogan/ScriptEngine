@@ -19,7 +19,22 @@ the design and what each file in it does. It needs a signed build, because macOS
 validates the daemon against the app's signature — in a dev checkout the button
 says so and names `sudo pymobiledevice3 remote tunneld` instead.
 
-Still open: 1d, 1e, 1g, 1h, and all of phase 2 (WebDriverAgent input).
+1d, 1e, 1g and 1h are done as well. A run's device is labelled by its own type
+(1d). `ios` is in `SystemName` in both `screenplan-contracts` and the editor's
+mirror in `screenplan-script-actions` (1e). The editor maps a device id to its
+target system in one place, `deviceIdToTargetSystem()`, so an iPhone's actions
+are stamped `ios` rather than falling through to `adb` (1g). A notarized build
+was installed and run against a real iPhone: the frozen engine passes every
+check and the frozen tunnel daemon opens a tunnel (1h). Two things only showed
+up in the frozen build. Packages that read their own version at import time need
+their dist-info bundled. And a root process cannot read the engine out of
+`~/Documents`, so test it from where it ships.
+
+Until phase 2, the editor flags any mouse action made for an iPhone (a ⚠️ on its
+card, and the reason in its information panel), because the engine would only
+fail it at run time.
+
+Still open: all of phase 2 (WebDriverAgent input).
 
 ---
 
