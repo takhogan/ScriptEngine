@@ -1,7 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
+import glob
 import os
 import sys
 import sysconfig
+from PyInstaller.utils.hooks import collect_submodules
 sys.path.append(os.path.join(os.getcwd(), 'ScriptEngine'))
 
 block_cipher = None
@@ -26,6 +28,13 @@ for _required in (torch_path, torch_lib_path):
             "Run this through runBuild.sh (macOS/Linux) or runBuild.cmd (Windows) so the "
             "venv is active, and make sure dependencies are installed." % _required
         )
+
+# tesserocr 2.10's Windows wheel vendors cysignals as tesserocr.cysignals, and the
+# compiled tesserocr module imports it at load time. PyInstaller cannot see an import
+# made from inside a .pyd, so without this the bundle ships tesserocr without it and
+# every imageToTextAction fails with "No module named 'tesserocr.cysignals'".
+# The filter drops cysignals-CSI-helper, a gdb script whose name is not importable.
+tesserocr_hiddenimports = collect_submodules('tesserocr', filter=lambda name: '-' not in name)
 
 # Inlined into every *.overlay.html log file; log_overlay.py reads it from
 # its own folder, so it ships next to that module.
@@ -90,12 +99,29 @@ script_manager_a = Analysis(
     datas=[overlay_renderer_data],
     hiddenimports=[
         'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
-    ],
+    ] + tesserocr_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
 )
+
+# Fail the build rather than ship an engine whose OCR cannot import. Every compiled
+# module in the installed tesserocr package has to be among script_manager's binaries;
+# the venv's own tests import tesserocr from site-packages and never see this gap.
+_tesserocr_dir = os.path.join(site_packages, 'tesserocr')
+_bundled = {os.path.normcase(os.path.normpath(dest)) for dest, _src, _kind in script_manager_a.binaries}
+_missing = [
+    path for path in glob.glob(os.path.join(_tesserocr_dir, '**', '*.pyd'), recursive=True)
+    + glob.glob(os.path.join(_tesserocr_dir, '**', '*.so'), recursive=True)
+    if os.path.normcase(os.path.relpath(path, site_packages)) not in _bundled
+]
+if _missing:
+    raise SystemExit(
+        "script_engine.spec: these tesserocr extension modules would be left out of the "
+        "bundle, so imageToTextAction would fail to import tesserocr:\n  %s"
+        % "\n  ".join(_missing)
+    )
 
 # MERGE to share dependencies
 MERGE(
