@@ -53,10 +53,13 @@ class SystemScriptActionExecutor:
             self.user_secrets_helper = UserSecretsHelper()
             from .helpers.calendar_action_helper import CalendarActionHelper
             self.calendar_action_helper = CalendarActionHelper()
+            from .helpers.user_prompt_helper import UserPromptHelper
+            self.user_prompt_helper = UserPromptHelper()
 
         else:
             self.messaging_helper = None
             self.calendar_action_helper = None
+            self.user_prompt_helper = None
         self.match_merge_helper = MatchMergeHelper()
         self.easy_ocr_reader = None
 
@@ -883,6 +886,14 @@ class SystemScriptActionExecutor:
                 status = ScriptExecutionState.FAILURE
             else:
                 status, state = self.calendar_action_helper.handle_action(action, state)
+        elif action["actionName"] == "userPromptAction":
+            if not self.screen_plan_server_attached:
+                # The controller is what shows the prompt and collects the answer.
+                script_logger.log('unable to prompt the user, screen plan server not active', level='error')
+                script_logger.get_action_log().set_summary('prompt failed: no controller')
+                status = ScriptExecutionState.FAILURE
+            else:
+                status, state = self.user_prompt_helper.handle_action(action, state, self.props['script_name'])
         else:
             # If action name doesn't match any handler, log error and set status to FAILURE
             script_logger.log('ERROR: Unknown action name "{}" for action group {}'.format(action["actionName"], action.get("actionGroup", "unknown")), level='error')
