@@ -315,6 +315,18 @@ class ScriptActionLog:
             action_result.jsonable(fields)
         )
 
+    def set_capture(self, capture):
+        """Record the screenshot behind the pre file (capture_log.py)."""
+        if self.result_path is None:
+            return
+        _log_executor.submit(
+            action_result.write_result,
+            self.result_path,
+            dict(self._result_envelope, fields={}),
+            {},
+            {'capture': action_result.jsonable(capture)}
+        )
+
     def add_child(self, action_logger):
         self.children.append(action_logger)
         self.to_dict()
@@ -349,3 +361,19 @@ class ScriptActionLog:
     def set_script_log_folder(self, script_log_folder_path):
         self.script_log_folder = script_log_folder_path
         self.to_dict()
+
+
+class DetachedActionLog:
+    """The action log when no action is being logged: every call does nothing.
+
+    It is what ScriptLogger.get_action_log() returns outside a run, so the
+    helpers an action uses (detects, colour compares) can run as a library,
+    as the UI mapper's template re-evaluation does, without a run folder or an
+    action to report to (UI_MAPPER.md §5.1).
+    """
+
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: None
+
+
+DETACHED_ACTION_LOG = DetachedActionLog()

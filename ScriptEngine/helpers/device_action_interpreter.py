@@ -4,6 +4,7 @@ import time
 from .random_variable_helper import RandomVariableHelper
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.logging.capture_log import timestamp
 from ScriptEngine.common.script_engine_utils import state_eval
 from .user_secrets_helper import SecureSecret
 from .typeable_text import UntypeableTextError
@@ -36,9 +37,12 @@ class DeviceActionInterpreter:
         target_system = keyboard_action["actionData"]["targetSystem"]
         dummy_mode = device_controller.get_device_attribute(target_system, 'dummy_mode', device_params)
 
+        action_log = script_logger.get_action_log()
+        action_log.update_result({'keyboard_action': action_type, 'keys': None, 'masked': False, 'input_at': None})
+
         if dummy_mode:
             script_logger.log('DeviceActionIntepreter: script running in dummy mode, returning from keyboard action')
-            return
+            return ScriptExecutionState.SUCCESS, state, context
 
         # What was sent, key by key, with when: a target in firmware (a
         # BitLocker PIN prompt, which a PiKVM shows no video of) drops keys
@@ -68,6 +72,7 @@ class DeviceActionInterpreter:
             script_logger.log(f'HotKeyKeys {hot_key_keys}', level='debug')
             
             hot_key_func = device_controller.get_device_action(target_system, 'hotkey', device_params)
+            DeviceActionInterpreter._note_keys(action_log, hot_key_keys, False)
             timed('hotkey', '+'.join(hot_key_keys), lambda: hot_key_func(hot_key_keys))
             typed_chars_log += ' '.join(hot_key_keys)
 
@@ -98,6 +103,7 @@ class DeviceActionInterpreter:
                     return ScriptExecutionState.FAILURE, state, context
             key_func = device_controller.get_device_action(target_system, device_action, device_params)
 
+            DeviceActionInterpreter._note_keys(action_log, keys, any(secret_flags))
             for key, is_secret in zip(keys, secret_flags):
                 shown = '*' if is_secret else key
                 timed(op, shown, lambda key=key: key_func(key))
@@ -113,6 +119,17 @@ class DeviceActionInterpreter:
         script_logger.get_action_log().set_summary(typed_chars_log.strip())
         return ScriptExecutionState.SUCCESS, state, context
         
+    @staticmethod
+    def _note_keys(action_log, keys, is_secret):
+        """The keys about to be sent, as result fields; a secret's are masked
+        and so is their count (UI_MAPPER.md §8, E2). Any secret in the
+        expression masks them all."""
+        action_log.update_result({
+            'keys': None if is_secret else [str(key) for key in keys],
+            'masked': bool(is_secret),
+            'input_at': timestamp(),
+        })
+
     @staticmethod
     def hid_state(device_controller, target_system, device_params=None):
         """The device's report of its keyboard (a PiKVM's kvmd), or None for a

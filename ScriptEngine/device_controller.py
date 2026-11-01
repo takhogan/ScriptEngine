@@ -37,6 +37,7 @@ from ScriptEngine.managers.device_manager import DeviceManager
 from ScriptEngine.managers.device_secrets_manager import DeviceSecretsManager
 from ScriptEngine.common.script_engine_utils import DummyFile
 from ScriptEngine.common.screenshot_failures import ScreenshotFailureTracker, SCREENSHOT_FAILURE_LIMIT_SECONDS
+from ScriptEngine.common.logging.capture_log import CAPTURE_LOG, TAKEN_BY_ACTION
 
 from ScriptEngine.helpers.device_action_interpreter import DeviceActionInterpreter
 from ScriptEngine.helpers.live_input import parse_live_drag_args
@@ -345,7 +346,11 @@ class DeviceController:
             )
         return self.screenshot_failures[device_key]
 
-    def get_device_action(self, device_type, action_type, device_params=None):
+    def get_device_action(self, device_type, action_type, device_params=None, taken_by=TAKEN_BY_ACTION):
+        """The device's method for `action_type`. For a screenshot, `taken_by`
+        says who it is for (capture_log.py): an action to work on, or a log
+        thread to draw on after the action has acted. None records nothing,
+        for screenshots outside a run."""
         device = self.initialize_device(device_type, device_params)
         action_method_map = {
             'mouse_move': 'smooth_move'
@@ -357,7 +362,11 @@ class DeviceController:
             # the action executor turns into a FAILURE, until the device has
             # failed for the whole limit (ScreenshotFailureLimitError ends the run).
             screenshot_failures = self.get_screenshot_failures(device_type, device_params)
-            return lambda *args, **kwargs: screenshot_failures.capture(lambda: device_action(*args, **kwargs))
+            if taken_by is None:
+                return lambda *args, **kwargs: screenshot_failures.capture(lambda: device_action(*args, **kwargs))
+            return lambda *args, **kwargs: CAPTURE_LOG.record(
+                screenshot_failures.capture(lambda: device_action(*args, **kwargs)), taken_by
+            )
         return device_action
     
     def ensure_device_initialized(self, device_type, device_params=None):
@@ -438,7 +447,7 @@ class DeviceController:
                 "data": status
             }
         elif device_action == 'screen_capture':
-            screenshot = self.get_device_action(device_type, 'screenshot', device_params)()
+            screenshot = self.get_device_action(device_type, 'screenshot', device_params, taken_by=None)()
             from cv2 import imencode
             _, buffer = imencode('.jpg', screenshot)
             byte_array = buffer.tobytes()

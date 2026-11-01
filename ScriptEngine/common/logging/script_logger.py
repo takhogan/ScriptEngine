@@ -1,4 +1,4 @@
-from ScriptEngine.common.logging.script_action_log import ScriptActionLog
+from ScriptEngine.common.logging.script_action_log import DETACHED_ACTION_LOG, ScriptActionLog
 import sys
 import threading
 thread_local_storage = threading.local()
@@ -95,7 +95,9 @@ class ScriptLogger:
                         # stdout may be closed or finalized during interpreter shutdown
                         pass
 
-                if write_to_log_file:
+                # No file outside a run (the helpers used as a library): a
+                # missing path used to raise here and end this thread.
+                if write_to_log_file and self.log_file_path:
                     with open(self.log_file_path, 'a', encoding='utf-8', errors='replace') as log_file:
                         log_file.write(message)
                         log_file.flush()
@@ -242,7 +244,9 @@ class ScriptLogger:
         self.action_log = action_log
 
     def get_action_log(self) -> ScriptActionLog:
-        return self.action_log
+        # Outside a run there is no action to log to; the detached log
+        # swallows what helpers report (script_action_log.DetachedActionLog).
+        return self.action_log if self.action_log is not None else DETACHED_ACTION_LOG
 
     def set_log_level(self, log_level : str):
         # argparse already restricts choices; this guards programmatic callers.

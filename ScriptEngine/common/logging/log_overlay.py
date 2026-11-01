@@ -76,6 +76,7 @@ import cv2
 import numpy as np
 
 from ScriptEngine.common.constants.script_engine_constants import LOGS_FOLDER, relative_data_path, resolve_data_path
+from ScriptEngine.common.logging.capture_log import CAPTURE_LOG
 
 OVERLAY_FORMAT = 'screenplan.overlay'
 OVERLAY_VERSION = 1
@@ -404,6 +405,7 @@ def log_overlay(overlay, name):
     written = write_overlay(overlay, prefix + name + OVERLAY_EXTENSION, image_paths)
     if overlay.pre_image_key in written:
         action_log.set_pre_file('image', written[overlay.pre_image_key], absolute_path=True)
+        action_log.set_capture(CAPTURE_LOG.describe(overlay.images[overlay.pre_image_key], written[overlay.pre_image_key]))
     action_log.set_post_file(OVERLAY_FILE_TYPE, name + OVERLAY_EXTENSION)
     if overlay.result:
         action_log.update_result(overlay.result)
@@ -421,6 +423,7 @@ def log_image_file(script_logger, image, relative_path, role):
     action_log = script_logger.get_action_log()
     if role == 'pre':
         action_log.set_pre_file('image', path, absolute_path=True)
+        action_log.set_capture(CAPTURE_LOG.describe(image, path))
     else:
         action_log.set_post_file('image', path, absolute_path=True)
     return path

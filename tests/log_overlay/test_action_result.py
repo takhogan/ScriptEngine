@@ -14,7 +14,12 @@ from ScriptEngine.helpers.detect_object_helper import DetectObjectHelper
 from .test_overlay_logging import action_log_json, action_result_json, detect_log_obj, match_shape, system_executor  # noqa: F401 (fixture)
 from .test_overlay_parity import screenshot
 
-SCHEMA_PATH = Path(__file__).resolve().parents[4] / 'packages' / 'screenplan-contracts' / 'schemas' / 'script-action-result.schema.json'
+# CONTRACTS_DIR: a checkout of the schemas to check against, such
+# as a worktree of them. Default: the one beside the engine.
+SCHEMA_PATH = Path(
+    os.environ.get('CONTRACTS_DIR')
+    or Path(__file__).resolve().parents[4] / 'packages' / 'screenplan-contracts'
+) / 'schemas' / 'script-action-result.schema.json'
 
 
 def check_against_schema(document):
@@ -33,7 +38,7 @@ def check_against_schema(document):
     assert variant is not None, 'no ScriptActionResult variant for ' + document['action']
     assert set(variant['required']) <= set(document), sorted(set(variant['required']) - set(document))
     assert set(document) <= set(variant['properties'])
-    assert document['format'] == 'screenplan.action-result' and document['version'] == 1
+    assert document['format'] == 'screenplan.action-result' and document['version'] == 2
 
     def check(value, definition, where):
         if '$ref' in definition:
@@ -52,7 +57,11 @@ def check_against_schema(document):
             for index, item in enumerate(value):
                 check(item, definition['items'], '{}[{}]'.format(where, index))
 
-    check(document['fields'], defs[variant['properties']['fields']['$ref'].split('/')[-1]], 'fields')
+    fields = variant['properties']['fields']
+    fields = fields['anyOf'][0] if 'anyOf' in fields else fields
+    check(document['fields'], defs[fields['$ref'].split('/')[-1]], 'fields')
+    if 'capture' in document:
+        check(document['capture'], defs['Capture'], 'capture')
 
 
 def detect_action(group=1, **action_data):
@@ -66,7 +75,7 @@ def test_every_action_has_one_at_info_and_none_at_error(configure_action, run_fo
     prefix = configure_action('info', 'sleepStatement', 1)
     document = action_result_json(prefix)
     assert document == {
-        'format': 'screenplan.action-result', 'version': 1,
+        'format': 'screenplan.action-result', 'version': 2,
         'action': 'sleepStatement', 'action_group': 1, 'script_counter': 1, 'fields': {}
     }
     check_against_schema(document)

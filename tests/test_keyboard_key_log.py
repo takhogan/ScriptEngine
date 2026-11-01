@@ -18,6 +18,10 @@ class FakeActionLog:
     def __init__(self):
         self.files = {}
         self.summary = None
+        self.result = {}
+
+    def update_result(self, fields):
+        self.result.update(fields)
 
     def add_post_file(self, file_type, name, text):
         self.files[name] = text
@@ -87,6 +91,8 @@ def test_each_key_is_logged_with_when_it_was_sent_and_a_secret_masked_key_by_key
     # A non-secret variable after a secret one used to unmask the secret in the log.
     assert '4711' not in log and '4711' not in action_log.summary
     assert action_log.summary == 'Typed Characters: * * * * a n n enter'
+    # The result fields mask every key, and their count, once any came from a secret.
+    assert action_log.result['keys'] is None and action_log.result['masked'] is True
     lines = [line for line in log.splitlines() if line.startswith('  +')]
     assert len(lines) == 8
     assert lines[0].split()[1:3] == ['press', '*']

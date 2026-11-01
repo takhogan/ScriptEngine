@@ -12,10 +12,15 @@ The type definition is ScriptActionResult in screenplan-contracts
 Change a field there and here together.
 
     {
-      "format": "screenplan.action-result", "version": 1,
+      "format": "screenplan.action-result", "version": 2,
       "action": "detectObject", "action_group": 1, "script_counter": 2,
+      "capture": { "path": ..., "sha": ..., "captured_at": ..., "taken_by": "action", ... },
       "fields": { "detect_type": "floatingObject", "matches": [...], ... }
     }
+
+Version 2 adds `capture`, the screenshot behind the action's pre_file
+(capture_log.py), and `input_at`, when an input action reached the device.
+Nothing else changed, so readers of version 2 read version 1 files too.
 
 Fields arrive from several places while an action runs (the detection, the
 thread that draws its log images, the executor), and a parallel detect runs
@@ -31,7 +36,7 @@ import os
 import numpy as np
 
 RESULT_FORMAT = 'screenplan.action-result'
-RESULT_VERSION = 1
+RESULT_VERSION = 2
 RESULT_FILE_SUFFIX = 'result.json'
 
 
@@ -85,8 +90,9 @@ def envelope(action_name, action_group, script_counter):
     }
 
 
-def write_result(path, initial, fields):
-    """Merge `fields` into the result file at `path`, creating it from `initial`."""
+def write_result(path, initial, fields, envelope_fields=None):
+    """Merge `fields` into the result file at `path`, creating it from `initial`.
+    `envelope_fields` (such as capture) replace keys beside `fields`."""
     document = None
     if os.path.exists(path):
         try:
@@ -97,6 +103,7 @@ def write_result(path, initial, fields):
     if document is None:
         document = initial
     merge(document.setdefault('fields', {}), fields)
+    document.update(envelope_fields or {})
     temp_path = path + '.tmp'
     with open(temp_path, 'w', encoding='utf-8') as result_file:
         json.dump(document, result_file, indent=2)

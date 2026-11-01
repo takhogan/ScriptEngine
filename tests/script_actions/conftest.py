@@ -50,6 +50,9 @@ class FakeActionLog:
     def set_post_file(self, *args, **kwargs):
         return None
 
+    def set_capture(self, capture):
+        self.capture = capture
+
 
 class FakeLogger:
     LOG_LEVELS = {'error': 0, 'info': 1, 'debug': 2}
@@ -101,7 +104,7 @@ class FakeDeviceController:
     def get_device_attribute(self, target, attr):
         return self.attrs[attr]
 
-    def get_device_action(self, target, action_name):
+    def get_device_action(self, target, action_name, device_params=None, taken_by=None):
         return self.actions[action_name]
 
 

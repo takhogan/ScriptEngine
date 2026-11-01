@@ -25,6 +25,7 @@ from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_
 from ScriptEngine.common.script_engine_utils import state_eval
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.screenshot_failures import ScreenshotFailedError
+from ScriptEngine.common.logging.capture_log import TAKEN_BY_LOGGER, note_input_sent
 from typing import Tuple, Callable, List, Dict
 script_logger = ScriptLogger()
 
@@ -120,6 +121,8 @@ class ScriptActionExecutor:
                 'mouse_action': mouse_action_type,
                 'button': action["actionData"].get("mouseButton"),
                 'click_count': int(action["actionData"]["clickCount"]) if mouse_action_type == "click" else None,
+                'scroll_distance': action["actionData"].get("scrollDistance") if mouse_action_type == "scroll" else None,
+                'input_at': None,
             })
             script_logger.log('ADB CONTROLLER: starting draw click thread', level='debug')
             thread_script_logger = script_logger.copy()
@@ -143,6 +146,7 @@ class ScriptActionExecutor:
                 else:
                     delays = [0] * click_counts
                 click_func = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'click')
+                note_input_sent(script_logger.get_action_log())
                 for click_count in range(0, click_counts):
                     click_func(*point_choice, action["actionData"]["mouseButton"])
                     time.sleep(delays[click_count])
@@ -152,16 +156,19 @@ class ScriptActionExecutor:
                     script_logger.log("mouseUp selected but no mouseDown to release")
                 else:
                     mouse_up_func = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'mouse_up')
+                    note_input_sent(script_logger.get_action_log())
                     mouse_up_func(context["last_mouse_position"][0], context["last_mouse_position"][1])
                     context["mouse_down"] = False
             elif action["actionData"]["mouseActionType"] == "mouseDown":
                 context["mouse_down"] = True
                 context["last_mouse_position"] = point_choice
                 mouse_down_func = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'mouse_down')
+                note_input_sent(script_logger.get_action_log())
                 mouse_down_func(*point_choice)
             elif action["actionData"]["mouseActionType"] == "scroll":
                 scroll_distance = action["actionData"]["scrollDistance"]
                 scroll_func = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'scroll')
+                note_input_sent(script_logger.get_action_log())
                 scroll_func(*point_choice, scroll_distance)
             status = ScriptExecutionState.SUCCESS
             # Create summary with action type and location
@@ -199,6 +206,7 @@ class ScriptActionExecutor:
                     if action["actionData"]["dragMouse"] or context["mouse_down"] else None
                 ),
                 'path': [],
+                'input_at': None,
             })
 
             if action["actionData"]["dragMouse"]:
@@ -209,6 +217,7 @@ class ScriptActionExecutor:
 
                 script_logger.log(drag_log)
                 click_and_drag_func = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'click_and_drag')
+                note_input_sent(script_logger.get_action_log())
                 delta_x, delta_y = click_and_drag_func(
                     source_point[0],
                     source_point[1],
@@ -254,6 +263,7 @@ class ScriptActionExecutor:
 
                     script_logger.log(drag_log)
                     click_and_drag_func = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'click_and_drag')
+                    note_input_sent(script_logger.get_action_log())
                     delta_x, delta_y = click_and_drag_func(
                         source_point[0],
                         source_point[1],
@@ -345,6 +355,13 @@ class ScriptActionExecutor:
                 actionType, applicationName, actionPayload, targetSystem
             )
             script_logger.log(pre_log)
+            script_logger.get_action_log().update_result({
+                'application_action': actionType,
+                'application': applicationName,
+                'payload': actionPayload or None,
+                'succeeded': False,
+                'input_at': None,
+            })
 
             try:
                 if actionType == "start":
@@ -352,6 +369,7 @@ class ScriptActionExecutor:
                     # For Android, combine as package/activity format if actionPayload is provided
                     start_app_func = self.device_controller.get_device_action(targetSystem, 'start_application')
                     args_list = shlex.split(actionPayload) if actionPayload else None
+                    note_input_sent(script_logger.get_action_log())
                     start_app_func(applicationName, args_list)
                     post_log = 'Successfully started application: {}'.format(applicationName)
                     script_logger.log(post_log)
@@ -359,6 +377,7 @@ class ScriptActionExecutor:
                 elif actionType == "stop":
                     # Call stop_application with applicationName (actionPayload not used for stop)
                     stop_app_func = self.device_controller.get_device_action(targetSystem, 'stop_application')
+                    note_input_sent(script_logger.get_action_log())
                     stop_app_func(applicationName)
                     post_log = 'Successfully stopped application: {}'.format(applicationName)
                     script_logger.log(post_log)
@@ -378,6 +397,7 @@ class ScriptActionExecutor:
                 'interactApplicationAction-log.txt',
                 pre_log + '\n' + post_log
             )
+            script_logger.get_action_log().update_result({'succeeded': status == ScriptExecutionState.SUCCESS})
         # TODO: to be reintroduced in another form
         # elif action["actionName"] == "searchPatternStartAction":
             # context = self.search_pattern_helper.generate_pattern(action, context, log_folder, self.props['dir_path'])
@@ -643,7 +663,7 @@ class ScriptActionExecutor:
         base_bgr = ClickActionHelper.input_screenshot(log_point_list)
         if base_bgr is None:
             try:
-                base_bgr = self.device_controller.get_device_action(target_system, 'screenshot')()
+                base_bgr = self.device_controller.get_device_action(target_system, 'screenshot', taken_by=TAKEN_BY_LOGGER)()
             except ScreenshotFailedError as e:
                 thread_script_logger.log('skipping click log image,', e, level='debug')
                 return
@@ -680,7 +700,7 @@ class ScriptActionExecutor:
             base_bgr = ClickActionHelper.input_screenshot(target[3])
         if base_bgr is None:
             try:
-                base_bgr = self.device_controller.get_device_action(target_system, 'screenshot')()
+                base_bgr = self.device_controller.get_device_action(target_system, 'screenshot', taken_by=TAKEN_BY_LOGGER)()
             except ScreenshotFailedError as e:
                 thread_script_logger.log('skipping drag log image,', e, level='debug')
                 return

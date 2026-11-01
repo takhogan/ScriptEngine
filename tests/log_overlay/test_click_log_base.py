@@ -32,7 +32,7 @@ class DeviceController:
     def get_device_attribute(self, target, attr):
         return self.attrs[attr]
 
-    def get_device_action(self, target, action_name):
+    def get_device_action(self, target, action_name, device_params=None, taken_by=None):
         assert action_name == 'screenshot'
 
         def take_screenshot():
