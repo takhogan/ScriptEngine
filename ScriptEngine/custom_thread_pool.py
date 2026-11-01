@@ -20,6 +20,12 @@ class CustomThreadPool(ThreadPoolExecutor):
 
     def _log_task_exception(self, future):
         """If the task raised, log it so errors are visible instead of swallowed."""
+        # soft_shutdown cancels what is still queued when a run ends. A cancelled
+        # task did not fail, and exception() would raise CancelledError here,
+        # which concurrent.futures prints to stderr; the controller marks any run
+        # with stderr output ERROR.
+        if future.cancelled():
+            return
         exc = future.exception()
         if exc is not None:
             logger.error(
