@@ -36,6 +36,7 @@ from typing import Dict
 from ScriptEngine.managers.device_manager import DeviceManager
 from ScriptEngine.managers.device_secrets_manager import DeviceSecretsManager
 from ScriptEngine.common.script_engine_utils import DummyFile
+from ScriptEngine.common.screenshot_failures import ScreenshotFailureTracker, SCREENSHOT_FAILURE_LIMIT_SECONDS
 
 from ScriptEngine.helpers.device_action_interpreter import DeviceActionInterpreter
 
@@ -142,12 +143,25 @@ def warm_request_path_imports():
 # Device types that drive something outside this host and therefore need a
 # device attached to the run. 'python' is the host desktop itself, so it needs
 # nothing attached.
-DEVICE_TYPES_REQUIRING_ATTACHMENT = ('adb', 'kvm')
+DEVICE_TYPES_REQUIRING_ATTACHMENT = ('adb', 'kvm', 'ios')
+
+# Actions about an iOS device that is not registered yet - discovery, and the
+# prerequisite checks and fixes behind the Add Device form's buttons. Named here
+# rather than imported from the helper so that dispatching a request does not
+# import pymobiledevice3; ios_setup_helper.SETUP_ACTIONS holds the handlers.
+IOS_SETUP_ACTIONS = (
+    'ios_list_devices',
+    'ios_check_prerequisites',
+    'ios_pair_device',
+    'ios_reveal_developer_mode',
+    'ios_mount_developer_image',
+)
 
 
 class DeviceController:
     def __init__(self, default_props, default_device_params, io_executor : CustomThreadPool, secrets_manager: DeviceSecretsManager, device_selection=None,
-                 restart_device_on_crash=False, restart_deadline=None, cancel_check=None):
+                 restart_device_on_crash=False, restart_deadline=None, cancel_check=None,
+                 screenshot_failure_limit_s=SCREENSHOT_FAILURE_LIMIT_SECONDS):
         script_logger.log('Intializing Device Manager')
         if 'script-engine-device-type' in default_device_params and default_device_params['script-engine-device-type'] == 'file':
             self.input_source = default_device_params
@@ -170,8 +184,13 @@ class DeviceController:
         # Returns True once the run has been cancelled, so those reconnect and
         # restart loops stop instead of running on until the deadline.
         self.cancel_check = cancel_check
+        # How long a device's screenshots may keep failing before that ends the
+        # run. None for the interactive controller, which has no run to end.
+        self.screenshot_failure_limit_s = screenshot_failure_limit_s
 
         self.devices: Dict[str, DeviceManager] = {}
+        # Keyed like self.devices.
+        self.screenshot_failures: Dict[str, ScreenshotFailureTracker] = {}
 
     def _require_attached_device(self, device_type):
         """Raises when an action needs a device but the run has none attached.
@@ -253,6 +272,19 @@ class DeviceController:
                     cancel_check=self.cancel_check
                 )
                 return self.devices[device_params['deviceId']]
+        elif (device_type == 'ios'):
+            from ScriptEngine.managers.ios_device_manager import IOSDeviceManager
+            if device_params is None:
+                self.devices[device_type] = IOSDeviceManager(
+                    self.default_props.copy(), self.default_device_params, self.input_source
+                )
+                return self.devices[device_type]
+            else:
+                device_params = self._resolve_device_params(device_params['deviceId'], device_type)
+                self.devices[device_params['deviceId']] = IOSDeviceManager(
+                    self.default_props.copy(), device_params, self.input_source
+                )
+                return self.devices[device_params['deviceId']]
         elif (device_type == 'kvm'):
             from ScriptEngine.managers.pikvm_device_manager import PiKVMDeviceManager
             if device_params is None:
@@ -277,17 +309,44 @@ class DeviceController:
                 )
                 return self.devices[device_params['deviceId']]
     
+    def get_screenshot_failures(self, device_type, device_params=None) -> ScreenshotFailureTracker:
+        device_key = device_params['deviceId'] if device_params is not None else device_type
+        if device_key not in self.screenshot_failures:
+            device_name = device_key
+            if device_params is None and self.default_device_params.get('deviceId'):
+                device_name = '{} ({})'.format(self.default_device_params['deviceId'], device_type)
+            self.screenshot_failures[device_key] = ScreenshotFailureTracker(
+                device_name, limit_s=self.screenshot_failure_limit_s
+            )
+        return self.screenshot_failures[device_key]
+
     def get_device_action(self, device_type, action_type, device_params=None):
         device = self.initialize_device(device_type, device_params)
         action_method_map = {
             'mouse_move': 'smooth_move'
         }
         method_name = action_method_map.get(action_type, action_type)
-        return getattr(device, method_name)
+        device_action = getattr(device, method_name)
+        if action_type == 'screenshot':
+            # A screenshot that cannot be taken raises ScreenshotFailedError, which
+            # the action executor turns into a FAILURE, until the device has
+            # failed for the whole limit (ScreenshotFailureLimitError ends the run).
+            screenshot_failures = self.get_screenshot_failures(device_type, device_params)
+            return lambda *args, **kwargs: screenshot_failures.capture(lambda: device_action(*args, **kwargs))
+        return device_action
     
     def ensure_device_initialized(self, device_type, device_params=None):
         device = self.initialize_device(device_type, device_params)
-        device.ensure_device_initialized()
+        # The kvm, desktop and ios managers take a screenshot here to learn the
+        # screen size, and adb's checks the device answers, so a click that
+        # cannot initialize its device fails the way a detect that cannot see
+        # does. A device that is already initialized does nothing here, and that
+        # is no evidence the screen can be read now: only a call that had work
+        # to do resets the failure timer.
+        already_initialized = getattr(device, 'width', None) is not None and getattr(device, 'height', None) is not None
+        self.get_screenshot_failures(device_type, device_params).capture(
+            device.ensure_device_initialized, counts_as_success=not already_initialized
+        )
             
     
     def get_device_attribute(self, device_type, attribute_name, device_params=None):
@@ -303,6 +362,16 @@ class DeviceController:
                 device_type = 'adb'
             elif device_subtype == 'pikvm':
                 device_type = 'kvm'
+            elif device_subtype == 'ios':
+                device_type = 'ios'
+            else:
+                # Without this, an unrecognized prefix left device_type unbound and
+                # the request failed with UnboundLocalError, which names neither the
+                # device nor the prefix that was not understood.
+                raise Exception(
+                    "DEVICE CONTROLLER: device '{}' has an unrecognized type prefix '{}'. Known "
+                    'prefixes are avd, bluestacks, adb, pikvm and ios.'.format(device_id, device_subtype)
+                )
         return device_type
 
     @staticmethod
@@ -319,13 +388,25 @@ class DeviceController:
     
     def parse_inputs(self, inputs):
         device_key = inputs[1]
+        device_action = inputs[2]
+
+        # Answered before any device is resolved: these report on what is attached
+        # to the host and on a device's prerequisites, which the Add Device form
+        # asks about while registering a device that has no configuration yet. A
+        # device key is still sent so the controller's per-device lock serializes
+        # them, but it names no configured device and nothing here looks it up.
+        if device_action in IOS_SETUP_ACTIONS:
+            from ScriptEngine.helpers.ios_setup_helper import run_setup_action
+            return {
+                "data": run_setup_action(device_action, inputs[3] if len(inputs) > 3 else None)
+            }
+
         device_type = self.device_id_to_device_type(device_key)
         script_logger.log('DEVICE CONTROLLER: device type', device_type, device_key, level='debug')
         device_params = {
             'deviceId' : device_key
         }
-        
-        device_action = inputs[2]
+
         if device_action == 'check_status':
             status = self.get_device_action(device_type, 'get_status', device_params)()
             return {
@@ -412,7 +493,18 @@ async def process_input(device_controller: DeviceController, inputs: list):
         async with response_lock:
             input_response = json.dumps(output)
             script_logger.log('DEVICE CONTROLLER: Sending response for {}'.format(request_id), flush=True)
-            script_logger.log('<--{}-->'.format(request_id) + input_response + '<--{}-->'.format(request_id), file=DummyFile(), flush=True)
+            # level='error' so the frame is never dropped by the verbosity filter.
+            # This is not a log line the user reads, it is the response itself: the
+            # host parses it out of stdout. At the default 'info' it was suppressed
+            # whenever the controller ran at log level 'error' - which happens as
+            # soon as the Script-Engine-Controller's own level is warning or error,
+            # since getDeviceControllerLogLevel() maps both of those to 'error' -
+            # and then every device command, for every device type, failed on its
+            # five-minute queue timeout instead of answering.
+            script_logger.log(
+                '<--{}-->'.format(request_id) + input_response + '<--{}-->'.format(request_id),
+                file=DummyFile(), flush=True, level='error'
+            )
             # script_logger.log('DEVICE CONTROLLER: response', input_response, flush=True)
             script_logger.log('DEVICE CONTROLLER: Response sent for {}'.format(request_id), flush=True)
 
@@ -491,5 +583,5 @@ if __name__ == '__main__':
             "height" : None,
             "scriptMode" : 'train'
 
-        }, {}, io_executor, DeviceSecretsManager())))
+        }, {}, io_executor, DeviceSecretsManager(), screenshot_failure_limit_s=None)))
         asyncio.run(io_executor.soft_shutdown(script_logger))
