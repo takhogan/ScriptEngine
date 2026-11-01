@@ -139,17 +139,24 @@ def test_choice_answers_are_booleans(logger, prompt_type, accepted, expected_sta
 
 def test_timeout_uses_the_default_value(logger):
     api = FakeControllerAPI([])
-    status, state = run(api, make_action(defaultValue='fallback', timeoutSeconds='5'), clock=FakeClock(2))
+    state = make_state()
+    state['code'] = 1234
+    status, state = run(api, make_action(defaultValue='code + 1', timeoutSeconds='5'), state, clock=FakeClock(2))
     assert status == ScriptExecutionState.SUCCESS
-    assert state['userResponse'] == 'fallback'
+    # As a typed answer would be: a string.
+    assert state['userResponse'] == '1235'
+    assert api.requests[0].payload['defaultValue'] == '1235'
     assert api.paths('POST')[-1] == 'user-prompts/p1/cancel'
 
 
 def test_timeout_default_answers_a_choice(logger):
     api = FakeControllerAPI([])
-    status, state = run(api, make_action(promptType='yesno', defaultValue='No', timeoutSeconds='5'), clock=FakeClock(2))
+    status, state = run(api, make_action(promptType='yesno', defaultValue='False', timeoutSeconds='5'), clock=FakeClock(2))
     assert status == ScriptExecutionState.FAILURE
     assert state['userResponse'] is False
+    status, state = run(FakeControllerAPI([]), make_action(promptType='okcancel', defaultValue="'ok'", timeoutSeconds='5'), clock=FakeClock(2))
+    assert status == ScriptExecutionState.SUCCESS
+    assert state['userResponse'] is True
 
 
 def test_timeout_without_default_fails(logger):
@@ -158,11 +165,15 @@ def test_timeout_without_default_fails(logger):
     assert status == ScriptExecutionState.FAILURE
     assert state['userResponse'] is None
     assert api.requests[0].payload['timeoutSeconds'] == 4
+    assert api.requests[0].payload['defaultValue'] == ''
+    status, state = run(FakeControllerAPI([]), make_action(defaultValue='None', timeoutSeconds='4'), clock=FakeClock(2))
+    assert status == ScriptExecutionState.FAILURE
+    assert state['userResponse'] is None
 
 
 def test_controller_expiry_uses_the_default_value(logger):
     api = FakeControllerAPI([{'status': 'expired'}])
-    status, state = run(api, make_action(defaultValue='fallback'))
+    status, state = run(api, make_action(defaultValue="'fallback'"))
     assert status == ScriptExecutionState.SUCCESS
     assert state['userResponse'] == 'fallback'
 
@@ -170,7 +181,7 @@ def test_controller_expiry_uses_the_default_value(logger):
 def test_cancelled_run_cancels_the_prompt(logger, monkeypatch):
     monkeypatch.setattr(user_prompt_helper_mod, 'is_script_cancelled', lambda script_id: script_id == 'script-1')
     api = FakeControllerAPI([])
-    status, state = run(api, make_action(defaultValue='fallback'))
+    status, state = run(api, make_action(defaultValue="'fallback'"))
     assert status == ScriptExecutionState.FAILURE
     assert state['userResponse'] is None
     assert api.paths('POST') == ['user-prompts', 'user-prompts/p1/cancel']
