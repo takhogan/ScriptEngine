@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ScriptEngine import detect_scorer
+from ScriptEngine import agent_tools, detect_scorer
 import ScriptEngine.script_loader as script_loader_mod
 
 
@@ -111,7 +111,7 @@ def test_a_detect_on_an_earlier_match_says_it_was_scored_on_the_whole_image():
     assert out['inRunSearches'] == 'earlierMatch'
 
 
-def test_every_detect_on_every_image_through_the_cli(tmp_path, monkeypatch):
+def test_every_detect_on_every_image_through_the_agent_tools_entry_point(tmp_path, monkeypatch):
     with_square = tmp_path / 'with.png'
     without = tmp_path / 'without.png'
     cv2.imwrite(str(with_square), _screen())
@@ -131,7 +131,7 @@ def test_every_detect_on_every_image_through_the_cli(tmp_path, monkeypatch):
         'images': [{'id': 'with', 'path': str(with_square)}, {'id': 'without', 'path': str(without)}, {'id': 'gone', 'path': str(tmp_path / 'gone.png')}],
     }))
     output = tmp_path / 'out.json'
-    assert detect_scorer.main(['--score-detects', str(request), '--output', str(output)]) == 0
+    assert agent_tools.main(['score-detects', '--request', str(request), '--output', str(output)]) == 0
     result = json.loads(output.read_text())
     assert result['missing'] == []
     by = {(r['action'], r['image']): r for r in result['results']}
@@ -149,3 +149,35 @@ def test_a_named_detect_the_script_lacks_is_listed_missing(tmp_path, monkeypatch
     result = detect_scorer.score_detects({'workspace': 'W', 'scriptName': 'S', 'actions': ['detectObject-9'], 'images': []})
     assert result['missing'] == ['detectObject-9']
     assert result['results'] == []
+
+
+def test_an_unknown_tool_exits_2_and_writes_nothing(tmp_path, capsys):
+    request = tmp_path / 'request.json'
+    request.write_text('{}')
+    output = tmp_path / 'out.json'
+    assert agent_tools.main(['no-such-tool', '--request', str(request), '--output', str(output)]) == agent_tools.EXIT_UNKNOWN_TOOL
+    assert not output.exists()
+    assert 'score-detects' in capsys.readouterr().err
+
+
+def test_a_missing_script_is_the_tools_answer_not_a_failure(tmp_path, monkeypatch):
+    def missing(name, workspace='Default', **_):
+        raise FileNotFoundError('no scripts/scriptLibrary/W/S/actionRows.json')
+    monkeypatch.setattr(script_loader_mod, 'parse_script', missing)
+    request = tmp_path / 'request.json'
+    request.write_text(json.dumps({'workspace': 'W', 'scriptName': 'S', 'actions': None, 'images': []}))
+    output = tmp_path / 'out.json'
+    assert agent_tools.main(['score-detects', '--request', str(request), '--output', str(output)]) == 0
+    assert json.loads(output.read_text())['error'] == 'not-found'
+
+
+def test_the_entry_point_runs_as_a_module(tmp_path):
+    import subprocess
+    request = tmp_path / 'request.json'
+    request.write_text('{}')
+    done = subprocess.run(
+        [sys.executable, '-m', 'ScriptEngine.agent_tools', 'no-such-tool', '--request', str(request), '--output', str(tmp_path / 'o.json')],
+        cwd=str(Path(__file__).resolve().parents[1]), capture_output=True, text=True, timeout=120,
+    )
+    assert done.returncode == agent_tools.EXIT_UNKNOWN_TOOL
+    assert 'unknown tool no-such-tool' in done.stderr

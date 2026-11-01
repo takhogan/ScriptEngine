@@ -151,6 +151,28 @@ if _missing:
         % "\n  ".join(_missing)
     )
 
+# Agent tools: the controller's MCP tools that need the engine's own code
+# without running a script (ScriptEngine/agent_tools.py; score_detects today).
+# Its own executable so script_manager stays the one that runs scripts. It
+# loads scripts and runs detection, so it needs the vision stack that
+# detection uses, but not OCR's torch/easyocr, which MERGE shares anyway.
+agent_tools_a = Analysis(
+    ['ScriptEngine/agent_tools.py'],
+    pathex=[],
+    binaries=[],
+    datas=[overlay_renderer_data],
+    hiddenimports=[
+        'PIL', 'numpy', 'ScriptEngine',
+        # Each tool's module is imported by name at run time (agent_tools.TOOLS),
+        # which static analysis does not follow.
+        'ScriptEngine.detect_scorer',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+)
+
 # The iOS tunnel server: its own executable because it is the one thing here
 # that runs as root (ScriptEngine/ios_tunnel_server.py explains why). Keeping it
 # separate means the launchd job names one binary that does one job, rather than
@@ -198,7 +220,8 @@ MERGE(
     (log_preview_a, 'script_log_preview_generator', 'script_log_preview_generator'),
     (device_controller_a, 'device_controller', 'device_controller'),
     (device_secrets_manager_a, 'device_secrets_manager', 'device_secrets_manager'),
-    (ios_tunnel_server_a, 'ios_tunnel_server', 'ios_tunnel_server')
+    (ios_tunnel_server_a, 'ios_tunnel_server', 'ios_tunnel_server'),
+    (agent_tools_a, 'agent_tools', 'agent_tools')
 )
 
 # Create PYZ archives
@@ -207,6 +230,7 @@ pyz1 = PYZ(log_preview_a.pure, log_preview_a.zipped_data, cipher=block_cipher)
 pyz2 = PYZ(device_controller_a.pure, device_controller_a.zipped_data, cipher=block_cipher)
 pyz3 = PYZ(script_manager_a.pure, script_manager_a.zipped_data, cipher=block_cipher)
 pyz4 = PYZ(ios_tunnel_server_a.pure, ios_tunnel_server_a.zipped_data, cipher=block_cipher)
+pyz5 = PYZ(agent_tools_a.pure, agent_tools_a.zipped_data, cipher=block_cipher)
 
 # Create EXEs
 exe0 = EXE(pyz0, device_secrets_manager_a.scripts, [], exclude_binaries=True, name='device_secrets_manager', debug=False, strip=False, upx=True, console=True)
@@ -214,6 +238,7 @@ exe1 = EXE(pyz1, log_preview_a.scripts, [], exclude_binaries=True, name='script_
 exe2 = EXE(pyz2, device_controller_a.scripts, [], exclude_binaries=True, name='device_controller', debug=False, strip=False, upx=True, console=True)
 exe3 = EXE(pyz3, script_manager_a.scripts, [], exclude_binaries=True, name='script_manager', debug=False, strip=False, upx=True, console=True)
 exe4 = EXE(pyz4, ios_tunnel_server_a.scripts, [], exclude_binaries=True, name='ios_tunnel_server', debug=False, strip=False, upx=True, console=True)
+exe5 = EXE(pyz5, agent_tools_a.scripts, [], exclude_binaries=True, name='agent_tools', debug=False, strip=False, upx=True, console=True)
 
 # COLLECT everything into one directory
 COLLECT(
@@ -237,6 +262,10 @@ COLLECT(
     ios_tunnel_server_a.binaries,
     ios_tunnel_server_a.zipfiles,
     ios_tunnel_server_a.datas,
+    exe5,
+    agent_tools_a.binaries,
+    agent_tools_a.zipfiles,
+    agent_tools_a.datas,
     strip=False,
     upx=True,
     name='script_engine'

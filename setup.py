@@ -29,6 +29,7 @@ setup(
             'script-engine=ScriptEngine.script_manager:main',
             'script-log-preview=ScriptEngine.script_log_preview_generator:main',
             'script-messaging=ScriptEngine.messaging_helper:main',
+            'screenplan-agent-tools=ScriptEngine.agent_tools:main',
         ],
     },
     python_requires='>=3.8',

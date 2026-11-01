@@ -17,9 +17,9 @@
 
 """Scores a script's detectObject actions against saved images, without a run.
 
-The controller's score_detects tool runs this as
-`script_manager --score-detects REQUEST.json --output RESULT.json`. Each
-detect is scored on each image with the engine's own detection
+The controller's score_detects tool runs this through the agent tools
+entry point, `agent_tools score-detects --request REQUEST.json --output
+RESULT.json` (agent_tools.py). Each detect is scored on each image with the engine's own detection
 (DetectObjectHelper.handle_detect_object, as a run calls it), so a score
 here is the score a run would get on that screen. Every detect is scored on
 its own: in a run, the first of a firstMatch group to succeed cancels its
@@ -40,10 +40,6 @@ The result, per detect and image: matched, score (the best score, met the
 threshold or not), threshold, location (where that score is), and for a
 detect that compares a scene first, the scene's score as well.
 """
-
-import json
-import os
-import sys
 
 import cv2
 
@@ -172,29 +168,3 @@ def score_detects(request):
                 entry.update(score_one(detects[label], bgr, script_mode))
             results.append(entry)
     return {'scriptName': request['scriptName'], 'workspace': request['workspace'], 'missing': missing, 'results': results}
-
-
-def main(argv):
-    import argparse
-    parser = argparse.ArgumentParser(description='Score detectObject actions against saved images')
-    parser.add_argument('--score-detects', required=True, help='The request, a JSON file')
-    parser.add_argument('--output', required=True, help='Where the result JSON is written')
-    parser.add_argument('--data-root', help='Read by script_engine_constants from sys.argv')
-    args = parser.parse_args(argv)
-    # The result goes to --output; nothing of the engine's logging goes to stdout or a log file.
-    script_logger.set_log_to_stdout(False)
-    script_logger.set_log_level('error')
-    script_logger.set_log_file_path(os.devnull)
-    with open(args.score_detects, 'r', encoding='utf-8') as request_file:
-        request = json.load(request_file)
-    try:
-        result = score_detects(request)
-    except FileNotFoundError as e:
-        result = {'error': 'not-found', 'message': str(e)}
-    with open(args.output, 'w', encoding='utf-8') as output_file:
-        json.dump(result, output_file)
-    return 0
-
-
-if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:]))
