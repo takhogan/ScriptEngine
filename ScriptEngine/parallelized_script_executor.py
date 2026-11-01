@@ -21,6 +21,7 @@ import time
 import cv2
 from .helpers.detect_object_helper import DetectObjectHelper
 from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.screenshot_failures import ScreenshotFailedError
 from .helpers.parallelized_script_executor_helper import ParallelizedScriptExecutorHelper
 script_logger = ScriptLogger()
 from .device_controller import DeviceController
@@ -33,11 +34,18 @@ class ParallelizedScriptExecutor:
         self.device_controller = device_controller
         self.process_executor = process_executor
         self.processes = {}
+        # actionGroup -> ScreenshotFailedError, for the actions that were not
+        # started because the screenshot they share could not be taken.
+        self.screenshot_failures = {}
 
     def clear_processes(self):
         for _, process in self.processes.items():
             process.cancel()
         self.processes = {}
+        self.screenshot_failures = {}
+
+    def get_screenshot_failure(self, action_group):
+        return self.screenshot_failures.get(action_group)
 
     def get_process(self, action_group):
         if action_group in self.processes:
@@ -47,6 +55,7 @@ class ParallelizedScriptExecutor:
 
     def start_processes(self, script_executor, parallel_actions):
         self.processes = {}
+        self.screenshot_failures = {}
         # Dispatch runs entirely on the main thread and mostly logs at debug, so
         # its cost (screenshot capture, blur, arg pickling, submit) is invisible
         # in an info-level run. Time the whole thing and the screenshot step so a
@@ -72,9 +81,22 @@ class ParallelizedScriptExecutor:
                 target_system = parallel_action['actionData']['targetSystem']
                 if target_system in system_inputs:
                     input_obj = system_inputs[target_system]
+                    if isinstance(input_obj, ScreenshotFailedError):
+                        self.screenshot_failures[parallel_action["actionGroup"]] = input_obj
+                        continue
                 else:
                     _screenshot_start = time.monotonic()
-                    input_obj['screencap_im_bgr'] = self.device_controller.get_device_action(target_system, 'screenshot')()
+                    try:
+                        input_obj['screencap_im_bgr'] = self.device_controller.get_device_action(target_system, 'screenshot')()
+                    except ScreenshotFailedError as e:
+                        # Every action here that needs this device's screenshot
+                        # fails with it; ScriptExecutor.execute_action records
+                        # each one when it reaches it. A screenshot per action
+                        # would wait out the same failure again for each (30s
+                        # apiece on a PiKVM with no video signal).
+                        system_inputs[target_system] = e
+                        self.screenshot_failures[parallel_action["actionGroup"]] = e
+                        continue
                     _screenshot_s = time.monotonic() - _screenshot_start
                     if _screenshot_s >= 3.0:
                         script_logger.log(

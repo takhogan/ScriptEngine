@@ -24,6 +24,7 @@ import shlex
 from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_storage
 from ScriptEngine.common.script_engine_utils import state_eval
 from ScriptEngine.common.enums import ScriptExecutionState
+from ScriptEngine.common.screenshot_failures import ScreenshotFailedError
 from typing import Tuple, Callable, List, Dict
 script_logger = ScriptLogger()
 
@@ -43,6 +44,24 @@ class ScriptActionExecutor:
         self.system_host_controller = None
         self.screen_plan_server_attached = screen_plan_server_attached
     def execute_action(self, action, state, context, run_queue, lazy_eval=False) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
+        try:
+            return self._execute_action(action, state, context, run_queue, lazy_eval=lazy_eval)
+        except ScreenshotFailedError as screenshot_error:
+            return self.screenshot_failed(action, state, context, run_queue, screenshot_error)
+
+    @staticmethod
+    def screenshot_failed(action, state, context, run_queue, screenshot_error : ScreenshotFailedError) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List]:
+        """The action needed a screenshot (a detect, a colour compare, a click that
+        had to initialize its device) and none could be taken: it fails, the same as
+        a detect that found nothing, so firstMatch goes on to the next child."""
+        script_logger.log(
+            '{}-{}: {}'.format(action["actionName"], action["actionGroup"], screenshot_error),
+            level='error'
+        )
+        script_logger.get_action_log().set_summary(str(screenshot_error))
+        return action, ScriptExecutionState.FAILURE, state, context, run_queue, []
+
+    def _execute_action(self, action, state, context, run_queue, lazy_eval=False) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List] | Tuple[Callable, Tuple]:
         if action["actionData"]["targetSystem"] == "none":
             if self.system_host_controller is None:
                 from .system_script_action_executor import SystemScriptActionExecutor
@@ -121,7 +140,7 @@ class ScriptActionExecutor:
                         click_counts
                     )
                 else:
-                    delays = [0]
+                    delays = [0] * click_counts
                 click_func = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'click')
                 for click_count in range(0, click_counts):
                     click_func(*point_choice, action["actionData"]["mouseButton"])
@@ -622,7 +641,11 @@ class ScriptActionExecutor:
         # needs a new screenshot.
         base_bgr = ClickActionHelper.input_screenshot(log_point_list)
         if base_bgr is None:
-            base_bgr = self.device_controller.get_device_action(target_system, 'screenshot')()
+            try:
+                base_bgr = self.device_controller.get_device_action(target_system, 'screenshot')()
+            except ScreenshotFailedError as e:
+                thread_script_logger.log('skipping click log image,', e, level='debug')
+                return
         log_choice, log_candidates = ClickActionHelper.log_target(
             base_bgr,
             self.device_controller.get_device_attribute(target_system, 'width'),
@@ -655,7 +678,11 @@ class ScriptActionExecutor:
         if base_bgr is None:
             base_bgr = ClickActionHelper.input_screenshot(target[3])
         if base_bgr is None:
-            base_bgr = self.device_controller.get_device_action(target_system, 'screenshot')()
+            try:
+                base_bgr = self.device_controller.get_device_action(target_system, 'screenshot')()
+            except ScreenshotFailedError as e:
+                thread_script_logger.log('skipping drag log image,', e, level='debug')
+                return
         source_choice, source_candidates = ClickActionHelper.log_target(base_bgr, width, height, *source)
         target_choice, target_candidates = ClickActionHelper.log_target(base_bgr, width, height, *target)
 
