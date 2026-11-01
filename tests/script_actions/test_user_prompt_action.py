@@ -64,12 +64,11 @@ def make_action(**action_data):
     data = {
         'targetSystem': 'none',
         'promptMethod': 'web',
-        'promptMessage': 'Enter the code',
+        'promptMessage': "'Enter the code'",
         'promptType': 'text',
         'defaultValue': '',
         'timeoutSeconds': '600',
         'outputVarName': 'userResponse',
-        'inputExpression': '',
     }
     data.update(action_data)
     return {'actionName': 'userPromptAction', 'actionGroup': 7, 'actionData': data}
@@ -102,12 +101,12 @@ def test_text_answer_is_stored(logger):
     ])
     state = make_state()
     state['total'] = 42
-    status, state = run(api, make_action(inputExpression="'total is ' + str(total)"), state)
+    status, state = run(api, make_action(promptMessage="f'Is {total} right?'"), state)
     assert status == ScriptExecutionState.SUCCESS
     assert state['userResponse'] == '123456'
     created = api.requests[0].payload
-    assert created['message'] == 'Enter the code'
-    assert created['details'] == 'total is 42'
+    assert created['message'] == 'Is 42 right?'
+    assert 'details' not in created
     assert created['promptMethod'] == 'web'
     assert created['scriptId'] == 'script-1'
     assert created['scriptName'] == 'ChildScript'
@@ -204,6 +203,12 @@ def test_controller_refusing_the_prompt_fails(logger):
     status, state = run(api, make_action())
     assert status == ScriptExecutionState.FAILURE
     assert api.paths('GET') == []
+
+
+def test_an_empty_message_is_sent_empty(logger):
+    api = FakeControllerAPI([{'status': 'answered', 'response': {'accepted': True, 'value': 'x'}}])
+    run(api, make_action(promptMessage=''))
+    assert api.requests[0].payload['message'] == ''
 
 
 def test_unknown_prompt_method_fails(logger):
