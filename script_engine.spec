@@ -1,9 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
+import glob
 import os
 import sys
 import sysconfig
 from importlib.metadata import PackageNotFoundError
-from PyInstaller.utils.hooks import copy_metadata
+from PyInstaller.utils.hooks import collect_submodules, copy_metadata
 sys.path.append(os.path.join(os.getcwd(), 'ScriptEngine'))
 
 block_cipher = None
@@ -55,6 +56,13 @@ def package_metadata(*packages):
 # pymobiledevice3 reaches apple_compress through pyimg4, which it does not
 # declare as a dependency, so recursion from it alone does not find them.
 ios_metadata = package_metadata('pymobiledevice3', 'pyimg4', 'apple_compress', 'readchar')
+
+# tesserocr 2.10's Windows wheel vendors cysignals as tesserocr.cysignals, and the
+# compiled tesserocr module imports it at load time. PyInstaller cannot see an import
+# made from inside a .pyd, so without this the bundle ships tesserocr without it and
+# every imageToTextAction fails with "No module named 'tesserocr.cysignals'".
+# The filter drops cysignals-CSI-helper, a gdb script whose name is not importable.
+tesserocr_hiddenimports = collect_submodules('tesserocr', filter=lambda name: '-' not in name)
 
 # Inlined into every *.overlay.html log file; log_overlay.py reads it from
 # its own folder, so it ships next to that module.
@@ -119,12 +127,29 @@ script_manager_a = Analysis(
     datas=[overlay_renderer_data] + ios_metadata,
     hiddenimports=[
         'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
-    ],
+    ] + tesserocr_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
 )
+
+# Fail the build rather than ship an engine whose OCR cannot import. Every compiled
+# module in the installed tesserocr package has to be among script_manager's binaries;
+# the venv's own tests import tesserocr from site-packages and never see this gap.
+_tesserocr_dir = os.path.join(site_packages, 'tesserocr')
+_bundled = {os.path.normcase(os.path.normpath(dest)) for dest, _src, _kind in script_manager_a.binaries}
+_missing = [
+    path for path in glob.glob(os.path.join(_tesserocr_dir, '**', '*.pyd'), recursive=True)
+    + glob.glob(os.path.join(_tesserocr_dir, '**', '*.so'), recursive=True)
+    if os.path.normcase(os.path.relpath(path, site_packages)) not in _bundled
+]
+if _missing:
+    raise SystemExit(
+        "script_engine.spec: these tesserocr extension modules would be left out of the "
+        "bundle, so imageToTextAction would fail to import tesserocr:\n  %s"
+        % "\n  ".join(_missing)
+    )
 
 # The iOS tunnel server: its own executable because it is the one thing here
 # that runs as root (ScriptEngine/ios_tunnel_server.py explains why). Keeping it
