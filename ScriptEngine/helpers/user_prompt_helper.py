@@ -18,7 +18,8 @@ POLL_WAIT_MS = 5000
 # after this long.
 POLL_RETRY_SECONDS = 2
 
-# How a default value answers a Yes/No or OK/Cancel prompt.
+# How a default value that is a string answers a Yes/No or OK/Cancel prompt
+# (True and False answer it as themselves).
 AFFIRMATIVE_DEFAULTS = {'yes', 'y', 'ok', 'true', '1'}
 NEGATIVE_DEFAULTS = {'no', 'n', 'cancel', 'false', '0'}
 
@@ -49,7 +50,9 @@ class UserPromptHelper:
         prompt_method = action_data.get('promptMethod') or 'web'
         prompt_type = action_data.get('promptType') or 'text'
         output_var_name = (action_data.get('outputVarName') or '').strip()
-        default_value = action_data.get('defaultValue') or ''
+        # The default is a Python expression too; empty or None is no default.
+        default_expression = (action_data.get('defaultValue') or '').strip()
+        default_value = state_eval(default_expression, {}, state) if default_expression else None
         message_expression = (action_data.get('promptMessage') or '').strip()
         message = str(state_eval(message_expression, {}, state)) if message_expression else ''
         timeout_seconds = self._timeout_seconds(action_data, state)
@@ -72,7 +75,7 @@ class UserPromptHelper:
             'promptMethod': prompt_method,
             'promptType': prompt_type,
             'message': message,
-            'defaultValue': default_value,
+            'defaultValue': '' if default_value is None else str(default_value),
             'timeoutSeconds': timeout_seconds,
             'scriptName': script_name,
             'baseScriptName': script_context.get('base_script_name'),
@@ -179,14 +182,21 @@ class UserPromptHelper:
         return self._finish(state, output_var_name, value, status, log_lines, outcome)
 
     def _answer_with_default(self, state, output_var_name, prompt_type, default_value, log_lines, reason):
-        if default_value == '':
+        if default_value is None:
             return self._finish(state, output_var_name, None, ScriptExecutionState.FAILURE, log_lines, reason)
         if prompt_type == 'text':
-            return self._finish(state, output_var_name, default_value, ScriptExecutionState.SUCCESS, log_lines,
-                                '{}, used the default {!r}'.format(reason, default_value))
-        normalized = default_value.strip().lower()
-        if normalized in AFFIRMATIVE_DEFAULTS or normalized in NEGATIVE_DEFAULTS:
-            accepted = normalized in AFFIRMATIVE_DEFAULTS
+            # As a typed answer would be.
+            answer = str(default_value)
+            return self._finish(state, output_var_name, answer, ScriptExecutionState.SUCCESS, log_lines,
+                                '{}, used the default {!r}'.format(reason, answer))
+        if isinstance(default_value, bool):
+            accepted = default_value
+        else:
+            normalized = str(default_value).strip().lower()
+            accepted = (True if normalized in AFFIRMATIVE_DEFAULTS
+                        else False if normalized in NEGATIVE_DEFAULTS
+                        else None)
+        if accepted is not None:
             status = ScriptExecutionState.SUCCESS if accepted else ScriptExecutionState.FAILURE
             return self._finish(state, output_var_name, accepted, status, log_lines,
                                 '{}, used the default {}'.format(reason, _choice_label(prompt_type, accepted)))
