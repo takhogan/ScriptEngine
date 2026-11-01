@@ -2,6 +2,8 @@
 import os
 import sys
 import sysconfig
+from importlib.metadata import PackageNotFoundError
+from PyInstaller.utils.hooks import copy_metadata
 sys.path.append(os.path.join(os.getcwd(), 'ScriptEngine'))
 
 block_cipher = None
@@ -26,6 +28,33 @@ for _required in (torch_path, torch_lib_path):
             "Run this through runBuild.sh (macOS/Linux) or runBuild.cmd (Windows) so the "
             "venv is active, and make sure dependencies are installed." % _required
         )
+
+def package_metadata(*packages):
+    """dist-info for packages that read their own version at import time.
+
+    `apple_compress`, `pyimg4` and `readchar` all run
+    `__version__ = version(__package__)` in their __init__, which raises
+    PackageNotFoundError when the dist-info is not in the bundle. PyInstaller
+    copies modules, not metadata, so a frozen build imported them fine until the
+    first line of the module ran. That surfaced as
+    "ios_check_prerequisites failed: No package metadata was found for
+    apple_compress" - a working iPhone reported as not ready.
+
+    A missing package is skipped rather than failing the build: this spec also
+    builds on Windows, where pyimg4 pulls in lzfse instead of apple_compress.
+    """
+    collected = []
+    for package in packages:
+        try:
+            collected += copy_metadata(package, recursive=True)
+        except PackageNotFoundError:
+            pass
+    return collected
+
+
+# pymobiledevice3 reaches apple_compress through pyimg4, which it does not
+# declare as a dependency, so recursion from it alone does not find them.
+ios_metadata = package_metadata('pymobiledevice3', 'pyimg4', 'apple_compress', 'readchar')
 
 # Inlined into every *.overlay.html log file; log_overlay.py reads it from
 # its own folder, so it ships next to that module.
@@ -73,7 +102,7 @@ device_controller_a = Analysis(
     ['ScriptEngine/device_controller.py'],
     pathex=[],
     binaries=[],
-    datas=[overlay_renderer_data],
+    datas=[overlay_renderer_data] + ios_metadata,
     hiddenimports=[
         'PIL', 'numpy', 'ScriptEngine'
     ],
@@ -87,7 +116,7 @@ script_manager_a = Analysis(
     ['ScriptEngine/script_manager.py'],
     pathex=[],
     binaries=[],
-    datas=[overlay_renderer_data],
+    datas=[overlay_renderer_data] + ios_metadata,
     hiddenimports=[
         'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
     ],
@@ -110,7 +139,7 @@ ios_tunnel_server_a = Analysis(
     ['ScriptEngine/ios_tunnel_server.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=ios_metadata,
     hiddenimports=[
         # pymobiledevice3 reaches its tunnel transports through
         # remote/module_imports.py, inside a try/except ImportError, so
