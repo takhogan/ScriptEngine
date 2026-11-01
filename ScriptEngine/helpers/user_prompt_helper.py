@@ -50,9 +50,8 @@ class UserPromptHelper:
         prompt_type = action_data.get('promptType') or 'text'
         output_var_name = (action_data.get('outputVarName') or '').strip()
         default_value = action_data.get('defaultValue') or ''
-        message = action_data.get('promptMessage') or ''
-        details_expression = (action_data.get('inputExpression') or '').strip()
-        details = str(state_eval(details_expression, {}, state)) if details_expression else ''
+        message_expression = (action_data.get('promptMessage') or '').strip()
+        message = str(state_eval(message_expression, {}, state)) if message_expression else ''
         timeout_seconds = self._timeout_seconds(action_data, state)
         script_context = state.get('SCRIPT_CONTEXT', {})
         script_id = script_context.get('script_id')
@@ -63,8 +62,6 @@ class UserPromptHelper:
             'prompt type: {}'.format(prompt_type),
             'message: {}'.format(message),
         ]
-        if details:
-            log_lines.append('details: {}'.format(details))
         log_lines.append('timeout: {}s'.format(timeout_seconds))
 
         if prompt_method != 'web':
@@ -75,7 +72,6 @@ class UserPromptHelper:
             'promptMethod': prompt_method,
             'promptType': prompt_type,
             'message': message,
-            'details': details,
             'defaultValue': default_value,
             'timeoutSeconds': timeout_seconds,
             'scriptName': script_name,
