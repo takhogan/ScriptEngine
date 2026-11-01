@@ -482,7 +482,12 @@ class ScriptExecutor:
                 status = ScriptExecutionState.FAILURE
             else:
                 status = ScriptExecutionState.ERROR
-            context["status_detail"] = self.status_detail
+            # A script stopped by the run's end time or by a cancel did not fail,
+            # so its node says which instead of FAILURE. MAX_ATTEMPTS is a real
+            # failure and stays FAILURE.
+            if status != ScriptExecutionState.SUCCESS and ref_script_executor.status_detail in (
+                    ScriptExecutionStatusDetail.TIMED_OUT, ScriptExecutionStatusDetail.CANCELLED):
+                context["status_detail"] = ref_script_executor.status_detail.name
             script_logger.log(action["actionData"][
                       "scriptName"] + " returning with status " + ref_script_executor.status.name + "/" + status.name, level='error')
             return action, status, state, context, run_queue, []
