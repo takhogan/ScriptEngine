@@ -10,6 +10,7 @@ setup(
         'numpy>=1.26.3',
         'PyAutoGUI>=0.9.54',
         'pydirectinput-rgx',
+        'pymobiledevice3>=4.20.12',
         'pymongo>=4.6.1',
         'python-dateutil>=2.8.2',
         'scikit-image>=0.22.0',
