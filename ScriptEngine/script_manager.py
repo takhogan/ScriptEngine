@@ -150,7 +150,15 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
                 devices_config = json.load(devices_config_file)
                 if device_selection in devices_config:
                     device_params = devices_config[device_selection]
-                    device_params['script-engine-device-type'] = 'bluestacks'
+                    # The record's own type (avd, pikvm, ios, ...). This was
+                    # hard-coded 'bluestacks' for every configured device, so a
+                    # run against a PiKVM or an iPhone was labelled an emulator.
+                    # Only 'file' is ever compared against it, which is why it
+                    # went unnoticed; it is still what the run log shows. A
+                    # record from before `type` was stored has its id prefix.
+                    device_params['script-engine-device-type'] = (
+                        device_params.get('type') or device_selection.split(':')[0]
+                    )
                 else:
                     script_logger.log('SCRIPT MANAGER: device config for ', device_selection, ' not found! ', level='error')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params, level='info')
