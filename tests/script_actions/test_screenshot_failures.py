@@ -65,7 +65,7 @@ class FakePiKVM:
             raise Exception('Failed to initialize streamer')
         return Image.new('RGB', (30, 20))
 
-    def press(self, key):
+    def press(self, key, delay=0.05):
         self.pressed.append(key)
 
     def send_mouse_move_event(self, x, y):

@@ -27,6 +27,9 @@ from ScriptEngine.helpers.click_path_generator import ClickPathGenerator
 
 script_logger = ScriptLogger()
 
+KEY_HOLD_SECONDS = 0.1
+KEY_GAP_SECONDS = 0.1
+
 class PiKVMDeviceManager(DeviceManager):
     def __init__(self, hostname, username, password, input_source=None):
         self.instance = PiKVM(hostname, username, password)
@@ -93,7 +96,11 @@ class PiKVMDeviceManager(DeviceManager):
         return self.instance.keyUp(key)
     
     def key_press(self, key):
-        return self.instance.press(key)
+        # Back-to-back key events get dropped by a target in firmware (the
+        # BitLocker PIN prompt lost digits and its Enter), so hold each key
+        # and leave a gap before the next one.
+        self.instance.press(key, delay=KEY_HOLD_SECONDS)
+        time.sleep(KEY_GAP_SECONDS)
     
     def hotkey(self, *keys):
         return self.instance.hotkey(*keys)
