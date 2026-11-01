@@ -1,4 +1,5 @@
 import os
+import threading
 
 import numpy as np
 import cv2
@@ -6,6 +7,14 @@ import cv2
 from ScriptEngine.common.logging.script_logger import ScriptLogger, thread_local_storage
 from ScriptEngine.common.logging.log_overlay import log_image_file
 script_logger = ScriptLogger()
+
+# One Tesseract instance per process and language-data folder, kept for the run.
+# Building one reads the whole language model from disk (eng.traineddata is about
+# 23 MB in the Windows build), which was most of every OCR action, and on a host
+# whose disk was busy it was what stalled: single actions took 20-99 s on
+# DESKTOP-OJMDROM (2026-10-31) while a run-log upload was reading the same disk.
+_tesseract_apis = {}
+_tesseract_lock = threading.Lock()
 
 
 class ImageToTextActionHelper:
@@ -109,6 +118,18 @@ class ImageToTextActionHelper:
         return repo_tessdata if os.path.isdir(repo_tessdata) else None
 
     @staticmethod
+    def get_tesseract_api(tessdata_path):
+        """The process's Tesseract instance for this language data, built on first use.
+        Callers hold _tesseract_lock: an instance is not safe to share between threads."""
+        key = (tessdata_path, os.environ.get('TESSDATA_PREFIX'))
+        api = _tesseract_apis.get(key)
+        if api is None:
+            import tesserocr
+            api = tesserocr.PyTessBaseAPI(**({'path': tessdata_path} if tessdata_path else {}))
+            _tesseract_apis[key] = api
+        return api
+
+    @staticmethod
     def run_tesseract_ocr(action, image_to_text_input, is_image_to_text_debug_mode):
         TARGET_TYPE_TO_PSM = {
             'word': '8',
@@ -139,26 +160,27 @@ class ImageToTextActionHelper:
 
         outputs = []
         inputs_log = ''
-        import tesserocr
         from PIL import Image
         tessdata_path = ImageToTextActionHelper.get_tessdata_path()
-        api_kwargs = {'path': tessdata_path} if tessdata_path else {}
         for [psm_value, character_white_list] in tesseract_params:
-            with tesserocr.PyTessBaseAPI(**api_kwargs) as api:
+            with _tesseract_lock:
+                api = ImageToTextActionHelper.get_tesseract_api(tessdata_path)
                 api.SetImage(Image.fromarray(image_to_text_input))
                 api.SetPageSegMode(int(psm_value))
-                if len(character_white_list) > 0:
-                    api.SetVariable("tessedit_char_whitelist", character_white_list)
+                # Set on every call, empty included: the instance keeps the last
+                # action's whitelist, and an empty one allows every character.
+                api.SetVariable("tessedit_char_whitelist", character_white_list)
                 # may want to consider bgr to rgb conversion
                 output_text = api.GetUTF8Text().strip()
-                outputs.append(output_text)
-                input_result_log = 'Running with psm {} ({}) characterWhiteList {}'.format(
-                    psm_value,
-                    PSM_TO_TARGET_TYPE[psm_value],
-                    character_white_list if len(character_white_list) > 0 else 'none'
-                ) + ' and output was: {}'.format(output_text)
-                script_logger.log(input_result_log, level='debug')
-                inputs_log += input_result_log +'\n'
+                api.Clear()
+            outputs.append(output_text)
+            input_result_log = 'Running with psm {} ({}) characterWhiteList {}'.format(
+                psm_value,
+                PSM_TO_TARGET_TYPE[psm_value],
+                character_white_list if len(character_white_list) > 0 else 'none'
+            ) + ' and output was: {}'.format(output_text)
+            script_logger.log(input_result_log, level='debug')
+            inputs_log += input_result_log +'\n'
 
         post_log = ''
 
