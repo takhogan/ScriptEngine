@@ -293,6 +293,10 @@ def main():
     import traceback
     multiprocessing.freeze_support()
     multiprocessing.set_start_method('spawn')
+    if '--score-detects' in sys.argv:
+        # The controller's score_detects: no run, only the engine's detection on saved images.
+        from ScriptEngine.detect_scorer import main as score_detects_main
+        sys.exit(score_detects_main(sys.argv[1:]))
     try:
         import argparse
         parser = argparse.ArgumentParser(description='Script Manager CLI')
