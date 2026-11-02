@@ -17,6 +17,17 @@
 
 from .device_manager import DeviceManager
 from typing import List
+import os
+
+from ScriptEngine.common.constants.script_engine_constants import LOGS_FOLDER
+
+# pikvm_lib opens its log file when it is imported, at PIKVM_LIB_LOG_FILE or
+# else a cwd-relative pikvm.log. The packaged controller runs us from its
+# install folder (the directory containing the .app on macOS), so point it at
+# the logs folder before the import.
+if 'PIKVM_LIB_LOG_FILE' not in os.environ:
+    os.makedirs(LOGS_FOLDER, exist_ok=True)
+    os.environ['PIKVM_LIB_LOG_FILE'] = os.path.join(LOGS_FOLDER, 'pikvm.log')
 
 from pikvm_lib import PiKVM
 import cv2
