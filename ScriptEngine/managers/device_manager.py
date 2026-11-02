@@ -69,6 +69,12 @@ class DeviceManager(ABC):
     def click_and_drag(self):
         raise NotImplementedError(f"click_and_drag not implemented for {self.__class__.__name__}")
 
+    def live_drag(self, source_x, source_y, target_x, target_y, duration_ms):
+        """The editor's drag (helpers/live_input.py): a short path over about
+        duration_ms instead of a humanized one. A device type without its own
+        does a script drag."""
+        return self.click_and_drag(source_x, source_y, target_x, target_y)
+
     @abstractmethod
     def scroll(self):
         raise NotImplementedError(f"scroll not implemented for {self.__class__.__name__}")

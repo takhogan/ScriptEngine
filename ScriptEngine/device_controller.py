@@ -39,6 +39,7 @@ from ScriptEngine.common.script_engine_utils import DummyFile
 from ScriptEngine.common.screenshot_failures import ScreenshotFailureTracker, SCREENSHOT_FAILURE_LIMIT_SECONDS
 
 from ScriptEngine.helpers.device_action_interpreter import DeviceActionInterpreter
+from ScriptEngine.helpers.live_input import parse_live_drag_args
 
 
 from ScriptEngine.common.constants.script_engine_constants import DATA_ROOT, DEVICES_CONFIG_PATH, LOGS_FOLDER
@@ -48,8 +49,24 @@ formatted_today = str(datetime.datetime.now()).replace(':', '-').replace('.', '-
 response_lock = asyncio.Lock()
 
 # Per-device locks to ensure only one thread per device at a time
-device_locks: Dict[str, asyncio.Lock] = {}
+# Two lanes per device, so the editor's live view keeps getting screenshots
+# while a drag or a typed text runs on the same device: a capture lane
+# (screen_capture, check_status) and an input lane (everything else). Commands
+# in one lane run one at a time, as every command on a device used to; the two
+# lanes run side by side. A capture is a read (adb screencap, mss, a PiKVM
+# snapshot, a DVT screenshot) on a channel of its own, so it does not disturb
+# an input. What the two can share is setting the device up, and each guards
+# that itself: DeviceController.initialize_device creates a manager under a
+# lock, so two lanes never build two managers for one device, and
+# ADBDeviceManager runs (re)initialization under its own lock and waits for a
+# running input first, so a screencap timeout cannot restart adb under a drag.
+CAPTURE_LANE_ACTIONS = frozenset({'screen_capture', 'check_status'})
+device_locks: Dict[tuple, asyncio.Lock] = {}
 device_locks_lock = asyncio.Lock()  # Lock for accessing device_locks dict
+
+
+def device_lane(device_action):
+    return 'capture' if device_action in CAPTURE_LANE_ACTIONS else 'input'
 
 
 # Requests run in worker threads (asyncio.to_thread), so a device action that
@@ -189,6 +206,8 @@ class DeviceController:
         self.screenshot_failure_limit_s = screenshot_failure_limit_s
 
         self.devices: Dict[str, DeviceManager] = {}
+        # Reentrant: setting one device up may resolve another through here.
+        self._initialize_device_lock = threading.RLock()
         # Keyed like self.devices.
         self.screenshot_failures: Dict[str, ScreenshotFailureTracker] = {}
 
@@ -237,6 +256,12 @@ class DeviceController:
         return params
 
     def initialize_device(self, device_type, device_params=None):
+        # The device controller process calls this from both of a device's
+        # lanes at once; without the lock both could build a manager for it.
+        with self._initialize_device_lock:
+            return self._initialize_device_unlocked(device_type, device_params)
+
+    def _initialize_device_unlocked(self, device_type, device_params=None):
         if device_params is not None and device_params['deviceId'] in self.devices:
             return self.devices[device_params['deviceId']]
         elif device_type in self.devices:
@@ -429,9 +454,14 @@ class DeviceController:
             }
         elif device_action == "click_and_drag":
             # process_adb_host.get_screen_orientation()
-            self.get_device_action(device_type, 'click_and_drag', device_params)(
-                int(float(inputs[3])), int(float(inputs[4])), int(float(inputs[5])), int(float(inputs[6]))
-            )
+            coordinates = [int(float(value)) for value in inputs[3:7]]
+            # `live <durationMs>` after the coordinates is the editor's drag:
+            # a short path over the gesture's own time (helpers/live_input.py).
+            live_duration_ms = parse_live_drag_args(inputs[7:])
+            if live_duration_ms is None:
+                self.get_device_action(device_type, 'click_and_drag', device_params)(*coordinates)
+            else:
+                self.get_device_action(device_type, 'live_drag', device_params)(*coordinates, live_duration_ms)
             return {
                 "data" : "success"
             }
@@ -460,22 +490,24 @@ class DeviceController:
 
 
 
-async def get_device_lock(device_key: str) -> asyncio.Lock:
-    """Get or create a lock for a specific device."""
+async def get_device_lock(device_key: str, lane: str = 'input') -> asyncio.Lock:
+    """Get or create the lock for one lane of a device (see CAPTURE_LANE_ACTIONS)."""
     async with device_locks_lock:
-        if device_key not in device_locks:
-            device_locks[device_key] = asyncio.Lock()
-        return device_locks[device_key]
+        key = (device_key, lane)
+        if key not in device_locks:
+            device_locks[key] = asyncio.Lock()
+        return device_locks[key]
 
 async def process_input(device_controller: DeviceController, inputs: list):
     """Process a single input with per-device locking and global response locking."""
     device_key = inputs[1]
     request_id = inputs[0]
     
-    # Get the lock for this specific device
-    device_lock = await get_device_lock(device_key)
+    # Get the lock for this device's lane: captures wait only for captures,
+    # inputs only for inputs.
+    device_lock = await get_device_lock(device_key, device_lane(inputs[2]))
     
-    # Wait for this device to be available (only one thread per device)
+    # Wait for this lane of the device to be free
     async with device_lock:
         stall_watchdog = start_stall_watchdog(request_id, inputs)
         try:

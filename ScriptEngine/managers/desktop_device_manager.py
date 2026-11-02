@@ -25,6 +25,7 @@ import glob
 import platform
 import subprocess
 import threading
+import time
 from typing import List
 
 
@@ -42,6 +43,7 @@ else:
     _input_module = pyautogui
 
 from ..helpers.click_path_generator import ClickPathGenerator
+from ..helpers.live_input import clamp_live_duration_ms, live_drag_points
 from ..helpers.device_action_interpreter import DeviceActionInterpreter
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger
@@ -305,6 +307,36 @@ class DesktopDeviceManager(DeviceManager):
         if mouse_up:
             self.mouse_up(target_x, target_y, button='left')
         return delta_x, delta_y
+
+    def live_drag(self, source_x, source_y, target_x, target_y, duration_ms):
+        """The editor's drag (helpers/live_input.py): press at the start, a few
+        straight eased moves over duration_ms, release at the end, with none of
+        smooth_move's humanized path."""
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('PythonHostController: script in dummy mode, returning from live_drag')
+            return
+        duration_ms = clamp_live_duration_ms(duration_ms)
+        source_x = int(source_x * self.scale_factor)
+        source_y = int(source_y * self.scale_factor)
+        target_x = int(target_x * self.scale_factor)
+        target_y = int(target_y * self.scale_factor)
+        points = live_drag_points(source_x, source_y, target_x, target_y)
+        pause = duration_ms / 1000 / len(points)
+        # _pause=False: pyautogui otherwise sleeps PAUSE (0.1 s) after every
+        # call, which alone would stretch ten moves to a second.
+        _input_module.moveTo(source_x, source_y, _pause=False)
+        _input_module.mouseDown(x=source_x, y=source_y, button='left', _pause=False)
+        try:
+            for x, y in points:
+                if sys.platform == 'darwin':
+                    # macOS needs drag events while the button is held, as smooth_move does.
+                    _input_module.dragTo(x, y, button='left', mouseDownUp=False, _pause=False)
+                else:
+                    _input_module.moveTo(x, y, _pause=False)
+                time.sleep(pause)
+        finally:
+            _input_module.mouseUp(x=target_x, y=target_y, button='left', _pause=False)
     
     def start_application(self, application_name : str, args : List[str] | None):
         """

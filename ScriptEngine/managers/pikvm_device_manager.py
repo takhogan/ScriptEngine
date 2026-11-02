@@ -24,6 +24,7 @@ import numpy
 import time
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.helpers.click_path_generator import ClickPathGenerator
+from ScriptEngine.helpers.live_input import clamp_live_duration_ms, live_drag_points
 
 script_logger = ScriptLogger()
 
@@ -162,6 +163,23 @@ class PiKVMDeviceManager(DeviceManager):
         if mouse_up:
             self.mouse_up(x2, y2)
         return delta_x, delta_y
+
+    def live_drag(self, x1, y1, x2, y2, duration_ms):
+        """The editor's drag (helpers/live_input.py): button down at the start,
+        a few absolute moves over duration_ms, up at the end."""
+        if self.dummy_mode:
+            script_logger.log('PiKVM CONTROLLER: script running in dummy mode, live drag returning')
+            return
+        duration_ms = clamp_live_duration_ms(duration_ms)
+        points = live_drag_points(x1, y1, x2, y2)
+        pause = duration_ms / 1000 / len(points)
+        self.mouse_down(x1, y1)
+        try:
+            for x, y in points:
+                self.instance.send_mouse_move_event(x, y)
+                time.sleep(pause)
+        finally:
+            self.mouse_up(x2, y2)
     
     def scroll(self, delta):
         return self.instance.send_mouse_wheel_event(delta)

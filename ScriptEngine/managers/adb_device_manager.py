@@ -16,6 +16,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 import threading
+from contextlib import contextmanager
 import datetime
 import queue
 import subprocess
@@ -40,6 +41,7 @@ import pyautogui
 from .device_manager import DeviceManager
 from ..helpers.device_action_interpreter import DeviceActionInterpreter
 from ..helpers.click_path_generator import ClickPathGenerator
+from ..helpers.live_input import clamp_live_duration_ms, live_drag_points
 from ..helpers.search_pattern_helper import SearchPatternHelper
 from ..helpers.windows_device_helper import WindowsDeviceHelper
 from ScriptEngine.common.enums import ScriptExecutionState
@@ -178,6 +180,14 @@ class ADBDeviceManager(DeviceManager):
         # run cannot be cancelled (not attached to a controller).
         self.cancel_check = cancel_check
         self.device_restart_lock = threading.Lock()
+        # The device controller runs a device's captures and inputs side by
+        # side (device_controller.py, CAPTURE_LANE_ACTIONS). Setting the device
+        # up runs under device_init_lock, and a reinitialize (which restarts
+        # the adb server, killing any adb shell in flight) first waits for the
+        # inputs running now; an input that starts meanwhile waits for it.
+        self.device_init_lock = threading.RLock()
+        self._input_activity_condition = threading.Condition()
+        self._inputs_running = 0
         self.device_restart_count = 0
         self.stop_command_gather = False
         self.search_pattern_helper = SearchPatternHelper()
@@ -1091,7 +1101,33 @@ class ADBDeviceManager(DeviceManager):
         except Exception as e:
             script_logger.log('ADB CONTROLLER: start device failed during restart', e, level='error')
 
+    # How long a reinitialize waits for a running input before going ahead: a
+    # stuck adb shell must not keep the device from recovering.
+    REINITIALIZE_INPUT_WAIT_SECONDS = 30
+
+    @contextmanager
+    def _input_activity(self):
+        """Wraps an input's adb shell, so a reinitialize waits for it."""
+        with self.device_init_lock:
+            with self._input_activity_condition:
+                self._inputs_running += 1
+        try:
+            yield
+        finally:
+            with self._input_activity_condition:
+                self._inputs_running -= 1
+                self._input_activity_condition.notify_all()
+
     def _initialize_device(self, reinitialize=False):
+        with self.device_init_lock:
+            if reinitialize:
+                with self._input_activity_condition:
+                    self._input_activity_condition.wait_for(
+                        lambda: self._inputs_running == 0, timeout=self.REINITIALIZE_INPUT_WAIT_SECONDS
+                    )
+            return self._initialize_device_unlocked(reinitialize)
+
+    def _initialize_device_unlocked(self, reinitialize=False):
         script_logger = ScriptLogger.get_logger()
         if self.dummy_mode:
             script_logger.log('skipping adb init system. script running in mock mode')
@@ -1461,7 +1497,8 @@ class ADBDeviceManager(DeviceManager):
             return
         keycode = KEY_TO_KEYCODE[key]
         script_logger.log('ADB CONTROLLER: sending key event', keycode)
-        self.adb_popen(['shell', 'input', 'keyevent', keycode])
+        with self._input_activity():
+            self.adb_popen(['shell', 'input', 'keyevent', keycode])
 
     def hotkey(self, keys):
         script_logger.log('adb hotkey unimplemented! defaulting to pyautogui')
@@ -1617,24 +1654,25 @@ class ADBDeviceManager(DeviceManager):
         else:
             raise Exception('Unrecognized emulator type: ' + self.emulator_type)
 
-        shell_process = subprocess.Popen([
-            self.adb_path,
-            '-s',
-            self.full_ip,
-            'shell'
-        ], stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-        script_logger.log(
-            'ADB CONTROLLER : sending click command ',
-            [
-              self.adb_path,
-              '-s',
-              self.full_ip,
-              'shell'
-            ],
-            ''.join(click_command),
-            shell_process.communicate((''.join(click_command)).encode('utf-8'), timeout=15),
-            level='debug'
-        )
+        with self._input_activity():
+            shell_process = subprocess.Popen([
+                self.adb_path,
+                '-s',
+                self.full_ip,
+                'shell'
+            ], stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+            script_logger.log(
+                'ADB CONTROLLER : sending click command ',
+                [
+                  self.adb_path,
+                  '-s',
+                  self.full_ip,
+                  'shell'
+                ],
+                ''.join(click_command),
+                shell_process.communicate((''.join(click_command)).encode('utf-8'), timeout=15),
+                level='debug'
+            )
         # script_logger.log((''.join(click_command)).encode('utf-8'))
         self.event_counter += 1
 
@@ -1780,27 +1818,80 @@ class ADBDeviceManager(DeviceManager):
             # command_strings += self.delta_sequence_to_commands(x_pos,y_pos,delta_x,delta_y, unmap=True, split=False)
         else:
             raise Exception('Unrecognized emulator type ' + self.emulator_type)
-        shell_process = subprocess.Popen([
-            self.adb_path,
-            '-s',
-            self.full_ip,
-            'shell'
-        ], stdin=subprocess.PIPE)
-        script_logger.log(
-            'ADB CONTROLLER : sending click command ',
-            [
+        with self._input_activity():
+            shell_process = subprocess.Popen([
                 self.adb_path,
                 '-s',
                 self.full_ip,
                 'shell'
-            ],
-            ''.join(command_strings),
-            shell_process.communicate((''.join(command_strings)).encode('utf-8')),
-            level='debug'
-        )
+            ], stdin=subprocess.PIPE)
+            script_logger.log(
+                'ADB CONTROLLER : sending click command ',
+                [
+                    self.adb_path,
+                    '-s',
+                    self.full_ip,
+                    'shell'
+                ],
+                ''.join(command_strings),
+                shell_process.communicate((''.join(command_strings)).encode('utf-8')),
+                level='debug'
+            )
         self.event_counter += 1
         return delta_x, delta_y
     
+    def live_drag_commands(self, source_x, source_y, target_x, target_y, duration_ms):
+        """The adb shell input for the editor's drag (helpers/live_input.py):
+        down, a few eased moves spread over duration_ms, up."""
+        duration_ms = clamp_live_duration_ms(duration_ms)
+        if self.emulator_type == 'avd' or self.emulator_type == 'adb':
+            return ['input swipe {} {} {} {} {};'.format(source_x, source_y, target_x, target_y, duration_ms)]
+        if self.emulator_type != 'bluestacks':
+            raise Exception('Unrecognized emulator type ' + self.emulator_type)
+        mapped_source_x = int((source_x / self.width) * self.xmax)
+        mapped_source_y = int((source_y / self.height) * self.ymax)
+        mapped_target_x = int((target_x / self.width) * self.xmax)
+        mapped_target_y = int((target_y / self.height) * self.ymax)
+        points = live_drag_points(mapped_source_x, mapped_source_y, mapped_target_x, mapped_target_y)
+        # Each sendevent is a process on the device, so the moves take time of
+        # their own; the sleeps only stretch a fast device to the gesture's
+        # time, and a pause shorter than one sendevent is left out.
+        pause = duration_ms / 1000 / len(points)
+        pause_command = 'sleep {:.3f};'.format(pause) if pause >= 0.02 else ''
+        commands = []
+        if self.touch_slot_protocol:
+            if not self.touch_is_down:
+                commands += self.touch_down_commands(mapped_source_x, mapped_source_y)
+            for x_pos, y_pos in points:
+                commands += [pause_command] + self.touch_move_commands(x_pos, y_pos)
+            commands += self.touch_up_commands()
+        else:
+            for index, (x_pos, y_pos) in enumerate([(mapped_source_x, mapped_source_y)] + points):
+                commands += [
+                    pause_command if index > 0 else '',
+                    self.commands["x_command_func"](x_pos),
+                    self.commands["y_command_func"](y_pos),
+                    self.commands["syn_mt_report"],
+                    self.commands["action_terminate_command"]
+                ]
+            commands += [self.commands["syn_mt_report"], self.commands["action_terminate_command"]]
+        return [command for command in commands if command]
+
+    def live_drag(self, source_x, source_y, target_x, target_y, duration_ms):
+        self.ensure_device_initialized()
+        if self.dummy_mode:
+            script_logger.log('ADB CONTROLLER: script running in dummy mode, adb live drag returning')
+            return
+        commands = self.live_drag_commands(source_x, source_y, target_x, target_y, duration_ms)
+        script_logger.log('ADB CONTROLLER : sending live drag', ''.join(commands), level='debug')
+        with self._input_activity():
+            shell_process = subprocess.Popen(
+                [self.adb_path, '-s', self.full_ip, 'shell'],
+                stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE
+            )
+            shell_process.communicate(''.join(commands).encode('utf-8'), timeout=15 + duration_ms / 1000)
+        self.event_counter += 1
+
     def start_application(self, application_path : str, args : List[str] | None):
         """Start an application on Android device using adb am start"""
         self.ensure_device_initialized()
