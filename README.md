@@ -113,10 +113,60 @@ Options:
   --timeout INTEGER      Script timeout in seconds
   --device-details TEXT  Device configuration JSON
   --constants TEXT       Script constants JSON
+  --inputs-file PATH     A UTF-8 JSON object of {input name: value}: literal values,
+                         never evaluated; a name also in --constants takes the file's value
+  --approved-secrets [NAME ...]
+                         Turn on the secret gate: a getSecret for a secret not named
+                         stops the run with NEEDS_APPROVAL (no names: none may be read)
   --start-time TEXT      Script start time
   --system-script        Run as system script
   --screen-plan-server   Enable ScriptActions that require the ScreenPlan.io server
 ```
+
+`python -m ScriptEngine.script_manager --help` lists every option.
+
+### Run Inputs and Outputs
+
+`--constants name:value` takes a Python expression per input (the controller
+and ScriptScheduler pass `repr()`s). `--inputs-file` takes values instead: the
+file is a JSON object, its values are assigned to the run's inputs as they are,
+so a default input (`isDefault` in inputs.json) takes them like a caller's
+value, and nothing in them is ever run as Python. A file that is not a JSON
+object fails the run at start (exit code 1, the reason on stderr).
+
+Each script's log folder gets `outputs.txt` (for people) and `outputs.json`
+beside it, and the run's top-level folder (the one holding
+`00001-scriptReference-0-action-log.json`) gets an `outputs.json` with the
+outputs of the script that was run, however the run ended:
+
+```json
+{"version": 1, "outputs": {
+  "path": {"type": "json", "value": "C:\\Users\\x\\a.txt"},
+  "window": {"type": "repr", "value": "<Window 0x1a2b>"}
+}}
+```
+
+A value is `json` when `json.dumps` takes it as it is, else its `repr`. A user
+secret is never written as its value: it, and any list or dict holding one, is
+a `repr`, which redacts it. The top-level file leaves out names with no value
+(a run that stopped before its script returned has only what the top level
+held).
+
+### The Secret Gate
+
+Without `--approved-secrets` every `getSecret` reads its secret. With it, a
+`userSecretManagementAction` `getSecret` for a secret not on the list sends no
+request and stops the run: the action's node and the root
+`00001-scriptReference-0` node get status `NEEDS_APPROVAL`, the run folder gets
+`needs_approval.json`:
+
+```json
+{"status": "NEEDS_APPROVAL", "secret": "vdi_password", "script": "VDI_SignIn", "action": "userSecretManagementAction-12"}
+```
+
+and the engine exits with code 3, writing no `errors.txt` and nothing to
+stderr. Device passwords (a PiKVM's login) are not user secrets and are not
+gated.
 
 ### Script Structure
 
@@ -214,6 +264,11 @@ absent or `interfaceVersion < 21`.
   }
 }
 ```
+
+On a PiKVM, text is typed exactly or not at all: it may hold printable ASCII,
+tab and line breaks (`\r\n`, `\n` and a lone `\r` are each one Enter). A
+character the keyboard has no key for, such as `é`, fails the action before any
+key is sent, with the character and its position in the action's log.
 
 ## Development
 
