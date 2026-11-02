@@ -102,6 +102,22 @@ class PiKVMDeviceManager(DeviceManager):
         self.instance.press(key, delay=KEY_HOLD_SECONDS)
         time.sleep(KEY_GAP_SECONDS)
     
+    def hid_state(self):
+        """What kvmd reports of the keyboard it emulates (GET /api/hid):
+        whether the target has it online as a USB keyboard, and its LEDs, which
+        the target sets. A key sent while the keyboard is offline goes nowhere.
+        kvmd acknowledges no key event, so this is the only word from the target
+        side while there is no video."""
+        if self.dummy_mode:
+            return None
+        state = self.instance.get_endpoint_state('/api/hid')
+        keyboard = state.get('keyboard') or {}
+        return {
+            'online': state.get('online'),
+            'keyboard_online': keyboard.get('online'),
+            'leds': keyboard.get('leds') or {},
+        }
+
     def hotkey(self, *keys):
         return self.instance.hotkey(*keys)
     
