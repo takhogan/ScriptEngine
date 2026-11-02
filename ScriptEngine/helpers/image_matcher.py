@@ -293,6 +293,19 @@ class ImageMatcher:
         return matches, match_result
 
     @staticmethod
+    def best_candidate(match_result):
+        """The best scoring position of a template match, met the threshold or
+        not: `((x, y), score)` in the match result's own pixels, or None when it
+        has no finite score (a mask can make every position NaN or inf)."""
+        if match_result is None or match_result.size == 0:
+            return None
+        valid_matched_points = np.where(np.isinf(match_result) | np.isnan(match_result), -np.inf, match_result)
+        if np.max(valid_matched_points) == -np.inf:
+            return None
+        best_point_yx = np.unravel_index(np.argmax(valid_matched_points), valid_matched_points.shape)
+        return (int(best_point_yx[1]), int(best_point_yx[0])), float(match_result[best_point_yx])
+
+    @staticmethod
     def adjust_box_to_bounds(pt, box_width, box_height, screen_width, screen_height, box_thickness):
         x_overshoot = pt[0] + box_width + box_thickness - screen_width
         y_overshoot = pt[1] + box_height + box_thickness - screen_height
@@ -345,12 +358,9 @@ class ImageMatcher:
             else:
                 # Nothing met the threshold: show the template faintly at the
                 # best scoring point, boxed in red scaled by the score.
-                valid_matched_points = np.where(np.isinf(match_result) | np.isnan(match_result), -np.inf, match_result)
-                max_valid_point = np.max(valid_matched_points)
-                if max_valid_point != -np.inf:
-                    best_point_yx_relative = np.unravel_index(np.argmax(valid_matched_points), valid_matched_points.shape)
-                    best_point_score = float(match_result[best_point_yx_relative])
-                    best_point_xy_relative = (int(best_point_yx_relative[1]), int(best_point_yx_relative[0]))
+                best = ImageMatcher.best_candidate(match_result)
+                if best is not None:
+                    best_point_xy_relative, best_point_score = best
                     best_point_xy_absolute = [
                         best_point_xy_relative[0] + input_x,
                         best_point_xy_relative[1] + input_y
