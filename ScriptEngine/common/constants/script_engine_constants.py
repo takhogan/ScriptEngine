@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -108,6 +109,32 @@ SERVER_AUTH_HASH_PATH = (
     os.environ.get('SCREENPLAN_AUTH_HASH_PATH')
     or os.path.join(default_user_data_folder(), 'assets', 'server_auth_hash.json')
 )
+# The controller's server_config.json, pinned beside the token for the same
+# reason. `port` in it is where the controller serves its local API; the
+# controller passes the path in SCREENPLAN_SERVER_CONFIG_PATH.
+SERVER_CONFIG_PATH = (
+    os.environ.get('SCREENPLAN_SERVER_CONFIG_PATH')
+    or os.path.join(default_user_data_folder(), 'assets', 'server_config.json')
+)
+DEFAULT_CONTROLLER_PORT = 3849
+
+
+def controller_port(server_config_path=None):
+    """The port the controller serves its local API on.
+
+    Read from `port` in its server_config.json, so a controller moved off the
+    default port (several dev environments on one machine) is still found. A
+    missing file, key or usable value means the default, as it does for the
+    controller (readConfiguredPort in src/config.mjs).
+    """
+    try:
+        with open(server_config_path or SERVER_CONFIG_PATH, 'r') as server_config_file:
+            port = json.load(server_config_file).get('port')
+    except (OSError, ValueError, AttributeError):
+        return DEFAULT_CONTROLLER_PORT
+    if isinstance(port, int) and not isinstance(port, bool) and 0 < port < 65536:
+        return port
+    return DEFAULT_CONTROLLER_PORT
 DEVICES_CONFIG_PATH = data_path('assets', 'host_devices_config.json')
 LOGS_FOLDER = data_path('logs')
 SCRIPTS_FOLDER = data_path('scripts')
