@@ -67,6 +67,27 @@ def str_timeout_to_datetime_timeout(timeout, src=None):
     return timeout
 
 
+def parse_constants(raw_constants):
+    """Split each --constants argument into [name, value, False].
+
+    An argument is name:value, where value is a Python expression (the
+    controller and ScriptScheduler pass repr()s), so a value can hold colons
+    of its own (C:\\, https://) and meaningful whitespace: split on the first
+    colon only and strip only the name. Returns (constants, rejected), where
+    rejected are the arguments with no colon or no name, for the caller to log.
+    """
+    constants = []
+    rejected = []
+    for const in raw_constants or []:
+        name, colon, value = const.partition(':')
+        name = name.strip()
+        if not colon or not name:
+            rejected.append(const)
+            continue
+        constants.append([name, value, False])
+    return constants, rejected
+
+
 def format_env_outputs(env_dict):
     """
     Format environment variables in a cross-platform manner.
@@ -345,12 +366,7 @@ def main():
         device_details = None if (not args.device or args.device == '' or args.device == 'null') else args.device
         system_script = args.system_script
         
-        constants = []
-        if args.constants:
-            for const in args.constants:
-                key_value = const.strip().split(':')
-                if len(key_value) == 2:
-                    constants.append([key_value[0], key_value[1], False])
+        constants, rejected_constants = parse_constants(args.constants)
         
         log_folder = LOGS_FOLDER + '/' + str(0).zfill(5) + '-' +\
                     script_name + '-' + datetime_to_local_str(start_time, delim='-') + '/'
@@ -369,6 +385,8 @@ def main():
     script_logger.log(f'SCRIPT MANAGER: Process ID: {os.getpid()}', level='info')
     script_logger.log('SCRIPT MANAGER: host capabilities', describe_host_capabilities(), level='info')
     script_logger.log('SCRIPT MANAGER: parsed args ', sys.argv, level='debug')
+    for rejected in rejected_constants:
+        script_logger.log('SCRIPT MANAGER: ignoring constant with no name:value form', repr(rejected), level='error')
     script_logger.log('SCRIPT MANAGER: log_folder', log_folder, start_time, level='info')
 
     script_logger.log('SCRIPT MANAGER: loading script {} and running with log level {}'.format(
