@@ -151,6 +151,11 @@ class ScriptActionLog:
     def to_dict(self):
         _log_executor.submit(self._flush)
 
+    def flush_now(self):
+        """Writes the file and waits for it, after every write queued before:
+        for a status the controller must read once the process has exited."""
+        _log_executor.submit(self._flush).result()
+
     def set_pre_file(self, file_type, relative_path : str, log_header : bool =True, absolute_path : bool =False):
         if not self._capture_file('pre'):
             return

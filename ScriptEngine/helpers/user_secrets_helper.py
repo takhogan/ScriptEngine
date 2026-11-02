@@ -2,6 +2,7 @@ from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.clients.screenplan_api import ScreenPlanAPI, ScreenPlanAPIRequest
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.script_engine_utils import state_eval
+from ScriptEngine.common import secret_gate
 script_logger = ScriptLogger()
 
 class SecureSecret:
@@ -23,6 +24,19 @@ class UserSecretsHelper:
 
     def handle_action(self, action, state):
         if action["actionData"]["userSecretActionType"] == "getSecret":
+            # Before anything is sent: an unapproved secret stops the run here.
+            try:
+                secret_gate.check_get_secret(action)
+            except secret_gate.SecretApprovalRequired:
+                script_logger.log(
+                    'getSecret: secret {} is not approved for this run; stopping the run for approval'.format(
+                        action["actionData"]["secretName"]),
+                    level='error'
+                )
+                script_logger.get_action_log().set_summary(
+                    'needs approval: secret {}'.format(action["actionData"]["secretName"]))
+                script_logger.get_action_log().set_status(secret_gate.NEEDS_APPROVAL)
+                raise
             request = ScreenPlanAPIRequest(
                 request_id=None,
                 method='GET',
