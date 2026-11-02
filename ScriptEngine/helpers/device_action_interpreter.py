@@ -6,6 +6,7 @@ from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.common.script_engine_utils import state_eval
 from .user_secrets_helper import SecureSecret
+from .typeable_text import UntypeableTextError
 script_logger = ScriptLogger()
 
 KEYBOARD_KEYS = set(KEYBOARD_KEYS)
@@ -77,6 +78,24 @@ class DeviceActionInterpreter:
                 "keyPress": ('press', 'key_press'),
             }[action_type]
             keys, secret_flags = DeviceActionInterpreter.process_expression(keyboard_expression, state)
+            try:
+                # A device that can check its text first (a PiKVM) says what to
+                # send, or refuses text it cannot type exactly.
+                prepare = device_controller.get_device_attribute(target_system, 'prepare_typed_keys', device_params)
+            except AttributeError:
+                prepare = None
+            if prepare is not None:
+                try:
+                    keys, secret_flags = prepare(keys, secret_flags)
+                except UntypeableTextError as refused:
+                    script_logger.log('keyboardAction: {}'.format(refused), level='error')
+                    script_logger.get_action_log().append_post_file(
+                        'text',
+                        'keyboardAction-log.txt',
+                        'Refused: {}\n'.format(refused)
+                    )
+                    script_logger.get_action_log().set_summary('refused: {}'.format(refused))
+                    return ScriptExecutionState.FAILURE, state, context
             key_func = device_controller.get_device_action(target_system, device_action, device_params)
 
             for key, is_secret in zip(keys, secret_flags):

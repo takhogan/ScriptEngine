@@ -35,6 +35,7 @@ import numpy
 import time
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.helpers.click_path_generator import ClickPathGenerator
+from ScriptEngine.helpers.typeable_text import prepare_typed_keys
 
 script_logger = ScriptLogger()
 
@@ -106,6 +107,13 @@ class PiKVMDeviceManager(DeviceManager):
     def key_up(self, key):
         return self.instance.keyUp(key)
     
+    def prepare_typed_keys(self, keys, secret_flags):
+        """The keys of a keyboard action as they are to be sent, or
+        UntypeableTextError when its text holds a character this keyboard has
+        no key for (typeable_text). The engine's own check: an older pikvm_lib
+        would drop such a character, or type a CRLF as two Enters."""
+        return prepare_typed_keys(keys, secret_flags)
+
     def key_press(self, key):
         # Back-to-back key events get dropped by a target in firmware (the
         # BitLocker PIN prompt lost digits and its Enter), so hold each key
