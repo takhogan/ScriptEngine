@@ -70,6 +70,18 @@ def fixed_object_score(target_im, compare_im, masked_pixel_count):
     normalised_diff = min(1.0, mean_diff / FIXED_OBJECT_MAX_MEAN_DIFF)
     return 1 - normalised_diff ** FIXED_OBJECT_SCORE_EXPONENT
 
+def crop_to_mask_location(img_bgr, mask_location):
+    """Crops a match's image to the area its template encloses. `mask_location`
+    is the action's maskLocation, [[left, top], [right, bottom]] from the
+    template's top left with right and bottom inclusive, so both ends are
+    sliced one past them. A template that encloses nothing has
+    [[width, height], [0, 0]], which crops to an empty image."""
+    (left, top), (right, bottom) = (
+        (int(mask_location[0][0]), int(mask_location[0][1])),
+        (int(mask_location[1][0]), int(mask_location[1][1])),
+    )
+    return img_bgr[top:bottom + 1, left:right + 1]
+
 def apply_output_mask(screencap_im_bgr, location_val, output_mask_bgr, output_cropping=None):
     object_h, object_w = output_mask_bgr.shape[0], output_mask_bgr.shape[1]
     match_img_bgr = screencap_im_bgr[location_val[1]:location_val[1] + object_h, 
@@ -83,12 +95,7 @@ def apply_output_mask(screencap_im_bgr, location_val, output_mask_bgr, output_cr
     match_img_bgr = cv2.bitwise_and(match_img_bgr, output_mask_bgr)
     
     if output_cropping is not None:
-        output_cropping = (
-            (int(output_cropping[0][0]), int(output_cropping[0][1])),
-            (int(output_cropping[1][0]), int(output_cropping[1][1])),
-        )
-        match_img_bgr = match_img_bgr[output_cropping[0][1]:output_cropping[1][1],
-                                      output_cropping[0][0]:output_cropping[1][0]]
+        match_img_bgr = crop_to_mask_location(match_img_bgr, output_cropping)
         crop_log = 'Cropping masked output'
         script_logger.log(crop_log, level='debug')
     

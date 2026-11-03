@@ -20,6 +20,7 @@ import numpy as np
 import random
 from ScriptEngine.common.script_engine_utils import dist
 from ScriptEngine.common.types import ScreenPlanImage, TemplateMatch
+from ScriptEngine.helpers.detect_scene_helper import crop_to_mask_location
 
 MINIMUM_MATCH_PIXEL_SPACING = 15
 from ScriptEngine.common.logging.script_logger import ScriptLogger
@@ -226,11 +227,6 @@ class ImageMatcher:
         if thresholded_match_results is None:
             script_logger.log('image matching failed as thresholded_match_results is None, check inputExpression of action', level='error')
             exit(1)
-        if output_cropping is not None:
-            output_cropping = (
-                (int(output_cropping[0][0]), int(output_cropping[0][1])),
-                (int(output_cropping[1][0]), int(output_cropping[1][1])),
-            )
         unpacked_results = list(zip(*thresholded_match_results[::-1]))
         initial_matches = len(unpacked_results)
         for pt in unpacked_results:
@@ -239,10 +235,7 @@ class ImageMatcher:
             match_img_bgr = cv2.bitwise_and(screencap_im_bgr[pt[1]:pt[1] + h, pt[0]:pt[0] + w].copy(),
                                             screencap_outputmask_bgr)
             if output_cropping is not None:
-                match_img_bgr = match_img_bgr[
-                                    output_cropping[0][1]:output_cropping[1][1],
-                                    output_cropping[0][0]:output_cropping[1][0]
-                                ].copy()
+                match_img_bgr = crop_to_mask_location(match_img_bgr, output_cropping).copy()
             if match_score == np.inf:
                 continue
             adjusted_pt_x = pt[0] * width_translation
