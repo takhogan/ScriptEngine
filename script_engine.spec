@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 import glob
 import os
+import subprocess
 import sys
 import sysconfig
 from importlib.metadata import PackageNotFoundError
@@ -29,6 +30,24 @@ for _required in (torch_path, torch_lib_path):
             "Run this through runBuild.sh (macOS/Linux) or runBuild.cmd (Windows) so the "
             "venv is active, and make sure dependencies are installed." % _required
         )
+
+# easyocr imports torchvision, and torchvision registers its operators from a compiled
+# library at import time. When torch and torchvision are not a matching pair that
+# library does not load, and `import easyocr` fails with "operator torchvision::nms
+# does not exist". Checked in a child interpreter so torch is never loaded into the
+# build process, and before the analyses so a broken venv fails in seconds.
+_nms_check = subprocess.run(
+    [sys.executable, '-c',
+     'import torch; from torchvision.ops import nms; nms(torch.zeros((1, 4)), torch.ones(1), 0.5)'],
+    capture_output=True, text=True,
+)
+if _nms_check.returncode != 0:
+    raise SystemExit(
+        "script_engine.spec: torchvision's compiled ops do not work in the build venv, so "
+        "every easyOCR action would fail to import easyocr. torch and torchvision are "
+        "probably not a matching pair; install both from the same index URL.\n%s"
+        % _nms_check.stderr.strip().splitlines()[-1]
+    )
 
 def package_metadata(*packages):
     """dist-info for packages that read their own version at import time.
@@ -63,6 +82,29 @@ ios_metadata = package_metadata('pymobiledevice3', 'pyimg4', 'apple_compress', '
 # every imageToTextAction fails with "No module named 'tesserocr.cysignals'".
 # The filter drops cysignals-CSI-helper, a gdb script whose name is not importable.
 tesserocr_hiddenimports = collect_submodules('tesserocr', filter=lambda name: '-' not in name)
+
+
+def compiled_extensions(package):
+    """Paths of every compiled extension module in an installed package."""
+    package_dir = os.path.join(site_packages, package)
+    return (glob.glob(os.path.join(package_dir, '**', '*.pyd'), recursive=True)
+            + glob.glob(os.path.join(package_dir, '**', '*.so'), recursive=True))
+
+
+def extension_module_name(path):
+    """site-packages/torchvision/_C_stable.pyd -> torchvision._C_stable, minus any ABI tag."""
+    folder, filename = os.path.split(os.path.relpath(path, site_packages))
+    return '.'.join(folder.split(os.sep) + [filename.split('.')[0]])
+
+
+# torchvision loads its compiled ops with torch.ops.load_library on a path it works out
+# itself, so PyInstaller never sees the import. pyinstaller-hooks-contrib asks for
+# torchvision._C, but torchvision 0.29 renamed it _C_stable (and image to image_stable),
+# so the hook matched nothing and the bundle shipped with no ops library: every easyOCR
+# action then failed in `import easyocr` with "operator torchvision::nms does not
+# exist". Naming the extensions the installed torchvision has, rather than a fixed
+# list, survives the next rename.
+torchvision_hiddenimports = [extension_module_name(path) for path in compiled_extensions('torchvision')]
 
 # Inlined into every *.overlay.html log file; log_overlay.py reads it from
 # its own folder, so it ships next to that module.
@@ -127,7 +169,7 @@ script_manager_a = Analysis(
     datas=[overlay_renderer_data] + ios_metadata,
     hiddenimports=[
         'torch', 'torchvision', 'easyocr', 'PIL', 'skimage', 'numpy', 'scipy', 'ScriptEngine'
-    ] + tesserocr_hiddenimports,
+    ] + tesserocr_hiddenimports + torchvision_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -135,20 +177,31 @@ script_manager_a = Analysis(
 )
 
 # Fail the build rather than ship an engine whose OCR cannot import. Every compiled
-# module in the installed tesserocr package has to be among script_manager's binaries;
-# the venv's own tests import tesserocr from site-packages and never see this gap.
-_tesserocr_dir = os.path.join(site_packages, 'tesserocr')
+# module in the installed tesserocr and torchvision packages has to be among
+# script_manager's binaries; the venv's own tests import them from site-packages and
+# never see this gap.
 _bundled = {os.path.normcase(os.path.normpath(dest)) for dest, _src, _kind in script_manager_a.binaries}
-_missing = [
-    path for path in glob.glob(os.path.join(_tesserocr_dir, '**', '*.pyd'), recursive=True)
-    + glob.glob(os.path.join(_tesserocr_dir, '**', '*.so'), recursive=True)
-    if os.path.normcase(os.path.relpath(path, site_packages)) not in _bundled
-]
-if _missing:
+for _package, _consequence in (
+    ('tesserocr', 'imageToTextAction would fail to import tesserocr'),
+    ('torchvision', 'every easyOCR action would fail to import easyocr'),
+):
+    _missing = [
+        path for path in compiled_extensions(_package)
+        if os.path.normcase(os.path.relpath(path, site_packages)) not in _bundled
+    ]
+    if _missing:
+        raise SystemExit(
+            "script_engine.spec: these %s extension modules would be left out of the "
+            "bundle, so %s:\n  %s" % (_package, _consequence, "\n  ".join(_missing))
+        )
+
+# The check above passes on a torchvision with no extensions at all, so also require
+# its ops library (_C, or _C_stable from 0.29 on) by name.
+_torchvision_ops = os.path.normcase(os.path.join('torchvision', '_C'))
+if not any(dest.startswith(_torchvision_ops) for dest in _bundled):
     raise SystemExit(
-        "script_engine.spec: these tesserocr extension modules would be left out of the "
-        "bundle, so imageToTextAction would fail to import tesserocr:\n  %s"
-        % "\n  ".join(_missing)
+        "script_engine.spec: no torchvision\\_C extension (.pyd/.so) is among "
+        "script_manager's binaries, so every easyOCR action would fail to import easyocr."
     )
 
 # The iOS tunnel server: its own executable because it is the one thing here
