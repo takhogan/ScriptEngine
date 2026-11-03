@@ -319,12 +319,15 @@ class StateEvaluator:
 
         try:
             return builtins.eval(statement, env_globals, local_scope)
-        except KeyError:
+        # A variable the script never set is a KeyError when read by key and a
+        # NameError when read by name (an output named after it). A script that
+        # failed or was stopped by its end time can leave either unset.
+        except (KeyError, NameError) as error:
             script_logger.log(
-                'ERROR: key error while parsing eval, keys present in state: ' + ', '.join(list(env_globals)), level='error'
+                'ERROR: {} while parsing eval, keys present in state: '.format(type(error).__name__) + ', '.join(list(env_globals)), level='error'
             )
             if not crashonerror:
-                script_logger.log('script finished with failure, ignoring key error', level='error')
+                script_logger.log('script finished with failure, ignoring {}'.format(type(error).__name__), level='error')
                 return None
             raise
 
@@ -345,12 +348,12 @@ class StateEvaluator:
 
         try:
             builtins.exec(code, env, env)
-        except KeyError:
+        except (KeyError, NameError) as error:
             script_logger.log(
-                'ERROR: key error while parsing exec, keys present in state: ' + ', '.join(list(env)), level='error'
+                'ERROR: {} while parsing exec, keys present in state: '.format(type(error).__name__) + ', '.join(list(env)), level='error'
             )
             if not crashonerror:
-                script_logger.log('script finished with failure, ignoring key error', level='error')
+                script_logger.log('script finished with failure, ignoring {}'.format(type(error).__name__), level='error')
                 return None
             raise
 

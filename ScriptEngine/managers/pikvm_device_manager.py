@@ -17,6 +17,17 @@
 
 from .device_manager import DeviceManager
 from typing import List
+import os
+
+from ScriptEngine.common.constants.script_engine_constants import LOGS_FOLDER
+
+# pikvm_lib opens its log file when it is imported, at PIKVM_LIB_LOG_FILE or
+# else a cwd-relative pikvm.log. The packaged controller runs us from its
+# install folder (the directory containing the .app on macOS), so point it at
+# the logs folder before the import.
+if 'PIKVM_LIB_LOG_FILE' not in os.environ:
+    os.makedirs(LOGS_FOLDER, exist_ok=True)
+    os.environ['PIKVM_LIB_LOG_FILE'] = os.path.join(LOGS_FOLDER, 'pikvm.log')
 
 from pikvm_lib import PiKVM
 import cv2
@@ -25,6 +36,7 @@ import time
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.helpers.click_path_generator import ClickPathGenerator
 from ScriptEngine.helpers.live_input import clamp_live_duration_ms, live_drag_points
+from ScriptEngine.helpers.typeable_text import prepare_typed_keys
 
 script_logger = ScriptLogger()
 
@@ -96,6 +108,13 @@ class PiKVMDeviceManager(DeviceManager):
     def key_up(self, key):
         return self.instance.keyUp(key)
     
+    def prepare_typed_keys(self, keys, secret_flags):
+        """The keys of a keyboard action as they are to be sent, or
+        UntypeableTextError when its text holds a character this keyboard has
+        no key for (typeable_text). The engine's own check: an older pikvm_lib
+        would drop such a character, or type a CRLF as two Enters."""
+        return prepare_typed_keys(keys, secret_flags)
+
     def key_press(self, key):
         # Back-to-back key events get dropped by a target in firmware (the
         # BitLocker PIN prompt lost digits and its Enter), so hold each key

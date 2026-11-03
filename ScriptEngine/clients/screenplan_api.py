@@ -92,7 +92,7 @@ class ScreenPlanAPIRequest:
 class ScreenPlanAPI:
     def __init__(self):
         self.server_token = None
-        self.base_url = "https://localhost:3849/api"
+        self.base_url = 'https://localhost:{}/api'.format(controller_port())
         self.get_server_token()
 
     def get_server_token(self):
