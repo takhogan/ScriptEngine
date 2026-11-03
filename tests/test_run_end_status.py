@@ -28,6 +28,9 @@ class RecordingActionLog:
     def set_script_log_folder(self, path):
         return None
 
+    def set_post_file(self, *args, **kwargs):
+        return None
+
 
 class FakeLogger:
     def __init__(self):
@@ -223,3 +226,46 @@ def test_script_that_finished_a_branch_before_its_end_time_is_a_success(monkeypa
 def test_status_detail_values_are_the_contract_strings():
     assert ScriptExecutionStatusDetail.TIMED_OUT.name == 'TIMED_OUT'
     assert ScriptExecutionStatusDetail.CANCELLED.name == 'CANCELLED'
+
+
+# A child stopped by the run's end time can stop before the action that sets
+# one of its outputs. On DESKTOP-OJMDROM (2026-11-02, Windows_DoHourlyTasksForAccount)
+# BlueStacks_ExampleGame_LandView_CountFreeMarches was stopped just before it assigned
+# N_FREE_MARCHES, and reading that output raised a NameError that ended the run
+# as ERROR instead of TIMED_OUT.
+
+
+def child_with_outputs(monkeypatch, status, state):
+    import ScriptEngine.common.script_engine_utils as script_engine_utils_mod
+    logger = FakeLogger()
+    monkeypatch.setattr(script_executor_mod, 'script_logger', logger)
+    monkeypatch.setattr(script_engine_utils_mod, 'script_logger', logger)
+    child = ScriptExecutor.__new__(ScriptExecutor)
+    child.props = {'script_name': 'BlueStacks_ExampleGame_LandView_CountFreeMarches'}
+    child.outputs = [
+        ['N_FREE_MARCHES', 'N_FREE_MARCHES', False],
+        ['SHOW_MORE_MARCHES_COMPLETED', 'SHOW_MORE_MARCHES_COMPLETED', False],
+    ]
+    child.state = state
+    child.status = status
+    return child
+
+
+def test_output_a_failed_child_never_set_is_none(monkeypatch, tmp_path):
+    child = child_with_outputs(
+        monkeypatch, ScriptExecutionState.FINISHED_FAILURE, {'SHOW_MORE_MARCHES_COMPLETED': True}
+    )
+    parent_state = {}
+
+    child.parse_outputs(parent_state, str(tmp_path / 'outputs.txt'))
+
+    assert parent_state == {'N_FREE_MARCHES': None, 'SHOW_MORE_MARCHES_COMPLETED': True}
+
+
+def test_output_a_finished_child_never_set_still_raises(monkeypatch, tmp_path):
+    child = child_with_outputs(
+        monkeypatch, ScriptExecutionState.FINISHED, {'SHOW_MORE_MARCHES_COMPLETED': True}
+    )
+
+    with pytest.raises(NameError):
+        child.parse_outputs({}, str(tmp_path / 'outputs.txt'))
