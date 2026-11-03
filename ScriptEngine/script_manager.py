@@ -88,6 +88,61 @@ def parse_constants(raw_constants):
     return constants, rejected
 
 
+class InputsFileError(ValueError):
+    """--inputs-file names a file that is not a UTF-8 JSON object."""
+
+
+def load_inputs_file(path):
+    """Reads --inputs-file: a UTF-8 JSON object of {input name: value}.
+
+    The values are literals (an agent tool call's inputs): they are assigned to
+    the run's inputs as they are and never evaluated, so nothing in them can run
+    as Python. Raises InputsFileError for a file that cannot be read or is not
+    a JSON object.
+    """
+    import json
+    try:
+        # utf-8-sig: a byte order mark, as some Windows editors write, is not text.
+        with open(path, 'r', encoding='utf-8-sig') as inputs_file:
+            inputs = json.load(inputs_file)
+    except (OSError, UnicodeDecodeError, ValueError) as e:
+        raise InputsFileError('--inputs-file {}: cannot read it as UTF-8 JSON: {}'.format(path, e)) from None
+    if not isinstance(inputs, dict):
+        raise InputsFileError('--inputs-file {}: must hold a JSON object of input names to values, not {}'.format(
+            path, type(inputs).__name__))
+    return {name.strip(): value for name, value in inputs.items()}
+
+
+def merge_literal_inputs(constants, literal_inputs):
+    """The top-level run's input rows: one per --inputs-file value, then the
+    --constants not named in the file (the file wins).
+
+    A file value's row is [name, '', True]: like a caller's value for a default
+    input, parse_inputs takes it from the input state as it is, without eval.
+    The values themselves go in the input state (see load_and_run).
+    """
+    literal_inputs = literal_inputs or {}
+    rows = [[name, '', True] for name in literal_inputs]
+    rows += [constant for constant in (constants or []) if constant[0] not in literal_inputs]
+    return rows
+
+
+def write_root_outputs(run_folder, run_record):
+    """{run folder}/outputs.json: the outputs of the script that was run, the
+    names its outputs.json defines with the values the top-level executor's
+    state holds for them when the run ends, however it ends. Names with no value
+    are left out; a run that never loaded its script has none."""
+    import os
+    from ScriptEngine.common.run_outputs import OUTPUTS_JSON_FILENAME, outputs_from_state, write_outputs_json
+    main_script = run_record.get('main_script')
+    state = main_script.state if main_script is not None else {}
+    outputs = outputs_from_state(run_record.get('output_names') or [], state)
+    try:
+        write_outputs_json(os.path.join(run_folder, OUTPUTS_JSON_FILENAME), outputs)
+    except Exception as e:
+        script_logger.log('SCRIPT MANAGER: could not write the run\'s outputs.json', e, level='error')
+
+
 def format_env_outputs(env_dict):
     """
     Format environment variables in a cross-platform manner.
@@ -123,7 +178,49 @@ async def close_threads_and_processes(io_executor, process_executor, timeout=30)
     import asyncio
     await asyncio.gather(io_executor.soft_shutdown(script_logger, timeout), process_executor.soft_shutdown(script_logger, timeout))
 
-def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False, read_env=False, write_env=False, workspace="Default", restart_device_on_crash=False):
+def load_and_run(script_name, script_id, timeout, constants=None, start_time=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False, read_env=False, write_env=False, workspace="Default", restart_device_on_crash=False, literal_inputs=None, approved_secrets=None):
+    """Runs the script. literal_inputs are --inputs-file's values; approved_secrets
+    is --approved-secrets (None: no secret gate). However the run ends, the run
+    folder gets an outputs.json (write_root_outputs)."""
+    from ScriptEngine.common import secret_gate
+    run_folder = script_logger.get_log_folder()
+    secret_gate.configure(approved_secrets)
+    run_record = {}
+    try:
+        _load_and_run(
+            script_name, script_id, timeout, constants=constants, start_time=start_time,
+            start_time_str=start_time_str, device_details=device_details, system_script=system_script,
+            screen_plan_server_attached=screen_plan_server_attached, read_env=read_env, write_env=write_env,
+            workspace=workspace, restart_device_on_crash=restart_device_on_crash,
+            literal_inputs=literal_inputs, run_record=run_record
+        )
+    finally:
+        write_root_outputs(run_folder, run_record)
+
+
+def end_run_for_approval(approval, run_folder, root_action_log):
+    """The run reached a secret it is not approved to read (secret_gate). Says
+    so where the controller looks: needs_approval.json, and NEEDS_APPROVAL as
+    the root action log's status, written before this returns. No errors.txt
+    and nothing on stderr, either of which would make the run an ERROR."""
+    import json
+    import os
+    from ScriptEngine.common import secret_gate
+    script_logger.log(
+        'SCRIPT MANAGER: run stopped for approval: secret {} in {} ({})'.format(
+            approval.secret, approval.script, approval.action),
+        level='error'
+    )
+    with open(os.path.join(run_folder, secret_gate.NEEDS_APPROVAL_FILENAME), 'w', encoding='utf-8') as needs_approval_file:
+        json.dump(approval.to_dict(), needs_approval_file)
+    if root_action_log is not None:
+        root_action_log.add_supporting_file_reference('text', secret_gate.NEEDS_APPROVAL_FILENAME, log_header=False, force=True)
+        root_action_log.set_summary('needs approval: secret {}'.format(approval.secret))
+        root_action_log.set_status(secret_gate.NEEDS_APPROVAL)
+        root_action_log.flush_now()
+
+
+def _load_and_run(script_name, script_id, timeout, constants=None, start_time=None, start_time_str : str=None, device_details=None, system_script=False, screen_plan_server_attached=False, read_env=False, write_env=False, workspace="Default", restart_device_on_crash=False, literal_inputs=None, run_record=None):
     import os
     import json
     import datetime
@@ -137,12 +234,20 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
     import numpy as np
     np.set_printoptions(threshold=3, edgeitems=0, linewidth=80, precision=2, suppress=True)
     script_logger.log('constants : ', constants, level='info')
+    if literal_inputs:
+        # The values go to inputs.txt; a value can be 100 KB of file content.
+        script_logger.log('inputs from --inputs-file : ', sorted(literal_inputs), level='info')
+    from ScriptEngine.common.secret_gate import SecretApprovalRequired, NEEDS_APPROVAL_EXIT_CODE
+    run_folder = script_logger.get_log_folder()
+    run_record = {} if run_record is None else run_record
     # Runs off the main thread; ScriptExecutor.check_if_done raises between
     # actions once it finds 2 GB or less free, which lands in the except below.
     from ScriptEngine.common import disk_space_monitor
     disk_space_stop = disk_space_monitor.start(script_logger.get_log_folder())
     from ScriptEngine.script_loader import parse_script
     script_object = parse_script(script_name, system_script, workspace)
+    from ScriptEngine.common.run_outputs import script_output_names
+    run_record['output_names'] = script_output_names(script_object)
     device_params = {}
     # '' and the literal 'null' are how "nothing attached" arrives from the
     # controller; collapse them to None once so the run has a single answer to
@@ -184,6 +289,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
                     script_logger.log('SCRIPT MANAGER: device config for ', device_selection, ' not found! ', level='error')
     script_logger.log('SCRIPT MANAGER: loading adb_args', device_params, level='info')
     errored = False
+    needs_approval = False
+    root_action_log = None
     from ScriptEngine.device_controller import DeviceController
     from ScriptEngine.script_executor import ScriptExecutor
     from ScriptEngine.engine_manager import EngineManager
@@ -214,7 +321,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         # logger.setLevel(multiprocessing.SUBDEBUG)
 
         base_script_object = script_object.copy()
-        base_script_object['inputs'] = constants
+        base_script_object['inputs'] = merge_literal_inputs(constants, literal_inputs)
         base_include_scripts = script_object['include']
 
         # action logger for the script running the scriptReference
@@ -236,6 +343,7 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
             workspace=workspace,
             system_script=system_script
         )
+        run_record['main_script'] = main_script
 
         try:
             # Prepare input state - include environment variables if read-env is enabled
@@ -243,7 +351,10 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
             if read_env:
                 import os
                 input_state.update(os.environ)
-            
+            # Literal values, never evaluated; they win over --constants and
+            # the environment (merge_literal_inputs).
+            input_state.update(literal_inputs or {})
+
             main_script.parse_inputs(input_state)
             # action logger for the scriptReference
             main_script.context["script_counter"] += 1
@@ -252,6 +363,9 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
                 main_script.context["script_counter"],
                 script_logger.get_action_log()
             )
+            # The run's root node, 00001-scriptReference-0: the controller takes
+            # the run's status from it.
+            root_action_log = script_logger.get_action_log()
             # force keeps the global run log as a supporting file even at error
             # level, where supporting artifacts are otherwise dropped.
             script_logger.get_action_log().add_supporting_file_reference('text', 'global-stdout.txt', log_header=False, force=True)
@@ -267,6 +381,10 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
                 main_script.handle_action(
                     script_object['props']['scriptReference']
                 )
+        except SecretApprovalRequired as approval:
+            asyncio.run(close_threads_and_processes(io_executor, process_executor))
+            end_run_for_approval(approval, run_folder, root_action_log)
+            needs_approval = True
         except:
             script_logger.log('Script Execution interrupted by exception', level='error')
             asyncio.run(close_threads_and_processes(io_executor, process_executor))
@@ -298,6 +416,8 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
     disk_space_stop.set()
     log_run_summary(locals().get('process_executor'))
     script_logger.log('Script Manager process completed', level='error')
+    if needs_approval:
+        sys.exit(NEEDS_APPROVAL_EXIT_CODE)
     if errored:
         sys.exit(1)
     # script_logger.log('completed script ', script_name, datetime.datetime.now())
@@ -334,6 +454,14 @@ def main():
         parser.add_argument('--workspace', '-w', default='Default', help='Workspace name (defaults to "Default"). Only used for library scripts.')
         parser.add_argument('--screen-plan-server-attached', '-spsa', action='store_true', help='Whether a screenplan client server is attached')
         parser.add_argument('--constants', '-c', nargs='*', help='Constants in format key:value')
+        parser.add_argument('--inputs-file',
+                            help='A UTF-8 JSON object of {input name: value}: literal values for the run\'s inputs, '
+                                 'assigned as they are, never evaluated. A name also given in --constants takes '
+                                 'the value from this file.')
+        parser.add_argument('--approved-secrets', nargs='*', metavar='NAME',
+                            help='Turns on the secret gate: a getSecret for a secret not named here reads nothing '
+                                 'and stops the run with status NEEDS_APPROVAL (needs_approval.json, exit code 3). '
+                                 'Given with no names, no secret may be read. Absent, every secret is read as before.')
         parser.add_argument('--read-env', action='store_true', help='Read environment variables and pass them to parse_inputs')
         parser.add_argument('--restart-device-on-crash', '-rdc', action='store_true',
                             help='When reconnecting to the device fails, stop the device, wait a few seconds, '
@@ -389,6 +517,16 @@ def main():
         script_logger.log('SCRIPT MANAGER: ignoring constant with no name:value form', repr(rejected), level='error')
     script_logger.log('SCRIPT MANAGER: log_folder', log_folder, start_time, level='info')
 
+    literal_inputs = None
+    if args.inputs_file is not None:
+        try:
+            literal_inputs = load_inputs_file(args.inputs_file)
+        except InputsFileError as e:
+            script_logger.log('SCRIPT MANAGER: ' + str(e), level='error')
+            print(str(e), file=sys.stderr, flush=True)
+            write_root_outputs(log_folder, {})
+            sys.exit(1)
+
     script_logger.log('SCRIPT MANAGER: loading script {} and running with log level {}'.format(
         script_name, script_logger.get_log_level()), level='error'
     )
@@ -414,7 +552,9 @@ def main():
         screen_plan_server_attached=args.screen_plan_server_attached,
         read_env=args.read_env,
         workspace=args.workspace,
-        restart_device_on_crash=args.restart_device_on_crash
+        restart_device_on_crash=args.restart_device_on_crash,
+        literal_inputs=literal_inputs,
+        approved_secrets=args.approved_secrets
         # write_env=args.write_env
     )
 

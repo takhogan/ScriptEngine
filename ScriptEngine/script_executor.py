@@ -28,6 +28,8 @@ from .parallelized_script_executor import ParallelizedScriptExecutor
 from .script_action_executor import ScriptActionExecutor
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.enums import ScriptExecutionState, ScriptExecutionStatusDetail
+from ScriptEngine.common.run_outputs import outputs_json_path_beside, write_outputs_json
+from ScriptEngine.common.secret_gate import SecretApprovalRequired, NEEDS_APPROVAL
 from ScriptEngine.common.script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str, state_eval
 from .script_loader import parse_zip
 from .system_script_handler import SystemScriptHandler
@@ -261,6 +263,19 @@ class ScriptExecutor:
         )
 
     def parse_outputs(self, outputState, outputs_log_file_path):
+        # What this call parsed, for outputs.json beside outputs.txt; written
+        # even when a later output's expression raises, with what came before it.
+        parsed_outputs = {}
+        try:
+            self._parse_outputs(outputState, outputs_log_file_path, parsed_outputs)
+        finally:
+            outputs_json_path = outputs_json_path_beside(outputs_log_file_path)
+            try:
+                write_outputs_json(outputs_json_path, parsed_outputs)
+            except Exception as e:
+                script_logger.log(self.props['script_name'] + ' CONTROL FLOW: could not write ' + outputs_json_path, e, level='error')
+
+    def _parse_outputs(self, outputState, outputs_log_file_path, parsed_outputs):
         with open(outputs_log_file_path, 'w', encoding='utf-8', errors='replace') as outputs_log_file:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: parsing outputs ', self.outputs, level='info')
             for [var_name, input_expression, default_value] in self.outputs:
@@ -284,6 +299,7 @@ class ScriptExecutor:
                                       " Value: ", outputState[var_name] if var_name in outputState else 'None'
                     , level='info')
                     outputs_log_file.write(str(type(outputState[var_name])) + ' ' + str(var_name) + ': ' + str(outputState[var_name]) + '\n')
+                    parsed_outputs[var_name] = outputState[var_name]
                     continue
                 script_logger.log(self.props['script_name'], ' CONTROL FLOW: Parsing Output: ', var_name,
                                   " Default Parameter? ", default_value,
@@ -296,6 +312,7 @@ class ScriptExecutor:
                 outputs_log_file.write(
                     str(type(outputState[var_name])) + ' ' + str(var_name) + ': ' + str(outputState[var_name]) + '\n'
                 )
+                parsed_outputs[var_name] = eval_result
         script_logger.get_action_log().set_post_file(
             'text',
             outputs_log_file_path,
@@ -327,7 +344,13 @@ class ScriptExecutor:
         if action["actionData"]["targetSystem"] == "none" and action["actionName"] == "scriptReference":
             handle_action_result = self.handle_script_reference(action, self.state, self.context, self.run_queue)
         else:
-            handle_action_result = self.script_action_executor.execute_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
+            try:
+                handle_action_result = self.script_action_executor.execute_action(action, self.state, self.context, self.run_queue, lazy_eval=lazy_eval)
+            except SecretApprovalRequired as approval:
+                # The action does not know which script holds it; this executor does.
+                if approval.script is None:
+                    approval.script = self.props['script_name']
+                raise
 
         if not lazy_eval:
             _, status, _, context, _, _ = handle_action_result
@@ -450,12 +473,18 @@ class ScriptExecutor:
             ref_script_executor.set_log_paths()
 
 
-            if action["actionData"]["runMode"] == "run":
-                ref_script_executor.run()
-            elif action["actionData"]["runMode"] == "runOne":
-                ref_script_executor.run_one()
-            elif action["actionData"]["runMode"] == "runToFailure":
-                ref_script_executor.run_to_failure()
+            try:
+                if action["actionData"]["runMode"] == "run":
+                    ref_script_executor.run()
+                elif action["actionData"]["runMode"] == "runOne":
+                    ref_script_executor.run_one()
+                elif action["actionData"]["runMode"] == "runToFailure":
+                    ref_script_executor.run_to_failure()
+            except SecretApprovalRequired:
+                # The run stops here; each script node on the way up says why.
+                self.script_action_log.set_summary('needs approval')
+                self.script_action_log.set_status(NEEDS_APPROVAL)
+                raise
 
 
             self.set_log_paths()
