@@ -286,12 +286,20 @@ pyz4 = PYZ(ios_tunnel_server_a.pure, ios_tunnel_server_a.zipped_data, cipher=blo
 pyz5 = PYZ(agent_tools_a.pure, agent_tools_a.zipped_data, cipher=block_cipher)
 
 # Create EXEs
-exe0 = EXE(pyz0, device_secrets_manager_a.scripts, [], exclude_binaries=True, name='device_secrets_manager', debug=False, strip=False, upx=True, console=True)
-exe1 = EXE(pyz1, log_preview_a.scripts, [], exclude_binaries=True, name='script_log_preview_generator', debug=False, strip=False, upx=True, console=True)
-exe2 = EXE(pyz2, device_controller_a.scripts, [], exclude_binaries=True, name='device_controller', debug=False, strip=False, upx=True, console=True)
-exe3 = EXE(pyz3, script_manager_a.scripts, [], exclude_binaries=True, name='script_manager', debug=False, strip=False, upx=True, console=True)
-exe4 = EXE(pyz4, ios_tunnel_server_a.scripts, [], exclude_binaries=True, name='ios_tunnel_server', debug=False, strip=False, upx=True, console=True)
-exe5 = EXE(pyz5, agent_tools_a.scripts, [], exclude_binaries=True, name='agent_tools', debug=False, strip=False, upx=True, console=True)
+# Python's UTF-8 mode, built into each executable. The controller sets
+# PYTHONUTF8=1 when it starts the engine, but a PyInstaller executable runs an
+# isolated interpreter that ignores PYTHON* variables, so on Windows every
+# open() without an encoding, stdout and stderr stayed in cp1252 (checked
+# with PyInstaller 6.22: utf8_mode 0 under PYTHONUTF8=1, 1 with this option).
+# The spelling is 'X utf8': PyInstaller silently ignores 'X utf8_mode=1'.
+UTF8_MODE = [('X utf8', None, 'OPTION')]
+
+exe0 = EXE(pyz0, device_secrets_manager_a.scripts, UTF8_MODE, exclude_binaries=True, name='device_secrets_manager', debug=False, strip=False, upx=True, console=True)
+exe1 = EXE(pyz1, log_preview_a.scripts, UTF8_MODE, exclude_binaries=True, name='script_log_preview_generator', debug=False, strip=False, upx=True, console=True)
+exe2 = EXE(pyz2, device_controller_a.scripts, UTF8_MODE, exclude_binaries=True, name='device_controller', debug=False, strip=False, upx=True, console=True)
+exe3 = EXE(pyz3, script_manager_a.scripts, UTF8_MODE, exclude_binaries=True, name='script_manager', debug=False, strip=False, upx=True, console=True)
+exe4 = EXE(pyz4, ios_tunnel_server_a.scripts, UTF8_MODE, exclude_binaries=True, name='ios_tunnel_server', debug=False, strip=False, upx=True, console=True)
+exe5 = EXE(pyz5, agent_tools_a.scripts, UTF8_MODE, exclude_binaries=True, name='agent_tools', debug=False, strip=False, upx=True, console=True)
 
 # COLLECT everything into one directory
 COLLECT(
