@@ -538,12 +538,11 @@ class ADBDeviceManager(DeviceManager):
                 device_id = line.split('\t')[0]
                 if device_id.startswith('emulator'):
                     # For this specific case, we need to use a different device ID
-                    result = safe_subprocess_run([self.adb_path, '-s', device_id, 'emu', 'avd', 'name'],
-                                            stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE,
-                                            text=True)
-                    if result.returncode == 0:
-                        result = result.stdout.split('\n')[0]
+                    # safe_subprocess_run captures the output itself: passing
+                    # stdout or stderr as well makes subprocess.run refuse.
+                    result = safe_subprocess_run([self.adb_path, '-s', device_id, 'emu', 'avd', 'name'])
+                    if result is not None and result.returncode == 0:
+                        result = result.stdout.decode().strip().split('\n')[0].strip()
                         script_logger.log('device name matched', result)
                         devices[result] = device_id
                     else:
