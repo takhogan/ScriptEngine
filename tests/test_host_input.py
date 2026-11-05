@@ -1,5 +1,6 @@
 """Typing on Windows goes through pydirectinput, one press per character, with
-Shift held around the characters a US keyboard types with Shift."""
+Shift held around the characters a US keyboard types with Shift; and the ADB
+device's host-keyboard keys go through the same module."""
 import sys
 from pathlib import Path
 
@@ -179,3 +180,14 @@ def test_desktop_key_press_failure_log_never_names_a_character(monkeypatch):
         'PythonHostController: a key press was not sent (f5)',
     ]
 
+
+def test_adb_host_keys_go_through_the_input_module(monkeypatch):
+    from ScriptEngine.managers import adb_device_manager as adm
+    fake = FakeDirectInput()
+    monkeypatch.setattr(host_input, 'input_module', fake)
+    monkeypatch.setattr(adm.script_logger, 'log', lambda *a, **k: None)
+    device = adm.ADBDeviceManager.__new__(adm.ADBDeviceManager)
+    device.key_down('shift')
+    device.key_up('shift')
+    device.hotkey(['ctrl', 'c'])
+    assert fake.events == [('down', 'shift'), ('up', 'shift'), ('hotkey', ('ctrl', 'c'))]
