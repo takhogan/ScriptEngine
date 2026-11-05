@@ -14,11 +14,14 @@ from ScriptEngine.helpers import host_input
 class FakeDirectInput:
     """pydirectinput's key functions, recording what they were asked to send."""
 
-    # The names this test types; the real map has about 230.
-    KEYBOARD_MAPPING = {name: 0 for name in (
-        list('abcdefghijklmnopqrstuvwxyz0123456789`-=[]\\;\',./ \n\t')
-        + ['enter', 'tab', 'shift', 'ctrl', 'f5', 'backspace']
-    )}
+    # The names this test types, with their US scan codes; the real map has
+    # about 230.
+    KEYBOARD_MAPPING = dict(zip(
+        list('1234567890-=') + ['backspace', 'tab'] + list('qwertyuiop[]') + ['enter', 'ctrl']
+        + list('asdfghjkl;\'`') + ['shift'] + list('\\zxcvbnm,./'),
+        range(0x02, 0x36),
+    ))
+    KEYBOARD_MAPPING.update({' ': 0x39, 'space': 0x39, '\n': 0x1C, '\t': 0x0F, 'f5': 0x3F})
 
     def __init__(self, sent=True):
         self.events = []
@@ -45,9 +48,62 @@ class FakeDirectInput:
         self.events.append(('hotkey', keys))
 
 
+class FakeUser32:
+    """The user32 calls the dead-key check makes, for one keyboard layout.
+    `dead` holds (scan code, shifted) for the layout's dead keys."""
+
+    def __init__(self, layout, dead=()):
+        self.layout = layout
+        self.dead = set(dead)
+        self.lookups = []
+
+    def GetForegroundWindow(self):
+        return 0x1234
+
+    def GetWindowThreadProcessId(self, hwnd, process_id):
+        assert hwnd == 0x1234
+        return 77
+
+    def GetKeyboardLayout(self, thread_id):
+        assert thread_id == 77
+        return self.layout
+
+    def MapVirtualKeyExW(self, code, map_type, layout):
+        assert map_type == host_input._MAPVK_VSC_TO_VK and layout == self.layout
+        return 0x100 + code  # any virtual key; ToUnicodeEx gets the scan code too
+
+    def ToUnicodeEx(self, vk, scancode, key_state, buffer, size, flags, layout):
+        assert flags == host_input._TOUNICODE_KEEP_STATE and layout == self.layout
+        if vk == host_input._VK_SPACE:
+            return 1
+        assert vk == 0x100 + scancode
+        shifted = bool(key_state[host_input._VK_SHIFT] & 0x80)
+        self.lookups.append((scancode, shifted))
+        return -1 if (scancode, shifted) in self.dead else 1
+
+
+# US-International (00020409): ' and " on one key, ` and ~ on another, ^ on 6.
+US_INTERNATIONAL_DEAD = {(0x28, False), (0x28, True), (0x29, False), (0x29, True), (0x07, True)}
+US_INTERNATIONAL = 0x4090409 | 0x20000
+US = 0x4090409
+
+
 @pytest.fixture(autouse=True)
 def no_typing_pause(monkeypatch):
     monkeypatch.setattr(host_input.time, 'sleep', lambda s: None)
+
+
+@pytest.fixture(autouse=True)
+def layout(monkeypatch):
+    """No layout by default (off Windows, no key is dead); a test sets one with
+    layout(FakeUser32(...))."""
+    monkeypatch.setattr(host_input, '_dead_key_cache', {})
+    monkeypatch.setattr(host_input, '_user32', None)
+
+    def use(user32):
+        monkeypatch.setattr(host_input, '_user32', user32)
+        return user32
+    return use
 
 
 def type_text(text):
@@ -146,6 +202,96 @@ def test_off_windows_pyautogui_presses_the_key_as_before(monkeypatch):
     monkeypatch.setattr(host_input.pyautogui, 'press', pressed.append)
     assert host_input.press_key('A', module=host_input.pyautogui) is True
     assert pressed == ['A']
+
+
+# --- dead keys ----------------------------------------------------------------
+
+def test_each_dead_key_of_us_international_is_followed_by_space(layout):
+    layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+    assert type_text("'") == [('press', "'"), ('press', 'space')]
+    assert type_text('"') == [('down', 'shift'), ('press', "'"), ('up', 'shift'), ('press', 'space')]
+    assert type_text('`') == [('press', '`'), ('press', 'space')]
+    assert type_text('~') == [('down', 'shift'), ('press', '`'), ('up', 'shift'), ('press', 'space')]
+    assert type_text('^') == [('down', 'shift'), ('press', '6'), ('up', 'shift'), ('press', 'space')]
+
+
+def test_the_letter_after_a_dead_key_is_typed_by_itself(layout):
+    layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+    assert type_text("'a ~n") == [
+        ('press', "'"), ('press', 'space'), ('press', 'a'),
+        ('press', ' '),
+        ('down', 'shift'), ('press', '`'), ('up', 'shift'), ('press', 'space'), ('press', 'n'),
+    ]
+
+
+def test_a_dead_key_before_a_space_still_gets_its_own_space(layout):
+    # ' then Space types ' alone, so the text's own space needs a second one.
+    layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+    assert type_text("' x") == [
+        ('press', "'"), ('press', 'space'), ('press', ' '), ('press', 'x'),
+    ]
+
+
+def test_the_unshifted_key_under_a_shifted_dead_key_is_not_dead(layout):
+    # On US-International ^ (Shift+6) is dead but 6 is not.
+    layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+    assert type_text('6^') == [
+        ('press', '6'),
+        ('down', 'shift'), ('press', '6'), ('up', 'shift'), ('press', 'space'),
+    ]
+
+
+def test_a_layout_without_dead_keys_types_them_as_one_press(layout):
+    layout(FakeUser32(US))
+    assert type_text('\'"`~^') == [
+        ('press', "'"),
+        ('down', 'shift'), ('press', "'"), ('up', 'shift'),
+        ('press', '`'),
+        ('down', 'shift'), ('press', '`'), ('up', 'shift'),
+        ('down', 'shift'), ('press', '6'), ('up', 'shift'),
+    ]
+
+
+def test_the_probe_text_types_every_character_literally(layout):
+    layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+    text = "'a \"e ~n ^o `u ' x"
+    events = type_text(text)
+    presses = [event[1] for event in events if event[0] == 'press']
+    assert presses.count('space') == 6
+    assert len(presses) == len(text) + 6
+
+
+def test_letters_digits_and_keys_names_are_never_dead_checked_twice(layout):
+    user32 = layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+    type_text("aa''")
+    host_input.press_key('enter', module=FakeDirectInput())
+    host_input.press_key('f5', module=FakeDirectInput())
+    # One lookup per (layout, key, Shift); key names are not characters.
+    assert user32.lookups == [(0x1E, False), (0x28, False)]
+
+
+def test_switching_layout_is_seen_on_the_next_key(layout):
+    user32 = layout(FakeUser32(US))
+    assert type_text("'") == [('press', "'")]
+    user32.layout = US_INTERNATIONAL
+    user32.dead = US_INTERNATIONAL_DEAD
+    assert type_text("'") == [('press', "'"), ('press', 'space')]
+
+
+def test_no_space_follows_a_dead_key_that_was_not_sent(layout):
+    layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+    fake = FakeDirectInput(sent=False)
+    assert host_input.press_key("'", module=fake) is False
+    assert fake.events == [('press', "'")]
+
+
+def test_a_failing_layout_check_types_as_if_no_key_were_dead(layout):
+    user32 = layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+
+    def broken(*args):
+        raise OSError('no layout')
+    user32.GetKeyboardLayout = broken
+    assert type_text("'") == [('press', "'")]
 
 
 # --- the devices --------------------------------------------------------------
