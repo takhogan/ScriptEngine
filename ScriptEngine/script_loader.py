@@ -12,6 +12,34 @@ from ScriptEngine.common.logging.script_logger import ScriptLogger
 script_logger = ScriptLogger()
 
 
+# Script files are UTF-8, whatever the host's code page: the editor and the
+# controller write them so, and an action's text (a conditional's icon, a typed
+# string, a variable's value) can hold any character. Opened without an
+# encoding, Python on Windows reads them as cp1252, which has no character for
+# the bytes 0x81, 0x8D, 0x8F, 0x90 and 0x9D: a script holding 🔐 or ⌨️ then
+# stopped with "'charmap' codec can't decode byte 0x90". The frozen engine
+# runs in an isolated interpreter that ignores the controller's PYTHONUTF8, so
+# the encoding is given here. utf-8-sig also takes a file saved with a BOM, as
+# json.loads already does for the bytes of a zipped script.
+def _open_script_json(path):
+    return open(path, 'r', encoding='utf-8-sig')
+
+
+def _not_utf8(path, error):
+    return ValueError(
+        "SCRIPT LOAD: %s is not UTF-8 text: byte 0x%02x at offset %d cannot be read. "
+        "A script saved by the editor or write_script is always UTF-8; this file was changed "
+        "or damaged outside them. Save the script again from the editor."
+        % (path, error.object[error.start], error.start))
+
+
+def _load_json(file_obj):
+    try:
+        return json.load(file_obj)
+    except UnicodeDecodeError as e:
+        raise _not_utf8(getattr(file_obj, 'name', '<script file>'), e) from e
+
+
 def _set_by_path(root, path, value):
     """Write a value at a dot-path inside `root` (mirrors the writer-side
     helper). Numeric segments traverse arrays; everything else is treated as
@@ -43,10 +71,13 @@ def _read_asset_payload(asset_path, asset_type, dir_path, script_zip, script_pat
             return None
         with script_zip.open(zip_path, 'r') as f:
             blob = f.read()
-        if asset_type in json_types:
-            return json.loads(blob.decode('utf-8'))
-        if asset_type in text_types:
-            return blob.decode('utf-8')
+        try:
+            if asset_type in json_types:
+                return json.loads(blob.decode('utf-8'))
+            if asset_type in text_types:
+                return blob.decode('utf-8')
+        except UnicodeDecodeError as e:
+            raise _not_utf8(zip_path, e) from e
         # default: image bytes → ndarray via cv2.imdecode
         arr = np.frombuffer(blob, dtype=np.uint8)
         return cv2.imdecode(arr, cv2.IMREAD_COLOR)
@@ -55,11 +86,14 @@ def _read_asset_payload(asset_path, asset_type, dir_path, script_zip, script_pat
     if not os.path.exists(full_path):
         return None
     if asset_type in json_types:
-        with open(full_path, 'r') as f:
-            return json.load(f)
+        with _open_script_json(full_path) as f:
+            return _load_json(f)
     if asset_type in text_types:
-        with open(full_path, 'r') as f:
-            return f.read()
+        with open(full_path, 'r', encoding='utf-8') as f:
+            try:
+                return f.read()
+            except UnicodeDecodeError as e:
+                raise _not_utf8(full_path, e) from e
     return cv2.imread(full_path)
 
 
@@ -165,7 +199,7 @@ def parse_script_file(
         script_path_in_zip=None):
     script_logger.log('SCRIPT LOAD: loading script ', script_name)
     with action_rows_file_obj as action_rows_file:
-        action_rows = json.load(action_rows_file)
+        action_rows = _load_json(action_rows_file)
     script_logger.log(script_to_string(script_name, action_rows), level='info')
     for action_row in action_rows:
         for action in action_row["actions"]:
@@ -193,13 +227,13 @@ def parse_script_file(
                         set_output_mask(positive_example, '', include_contained_area, exclude_matched_area)
 
     with props_file_obj as props_file:
-        props = json.load(props_file)
+        props = _load_json(props_file)
 
     with inputs_file_obj as inputs_file:
-        inputs = json.load(inputs_file)
+        inputs = _load_json(inputs_file)
 
     with outputs_file_obj as outputs_file:
-        outputs = json.load(outputs_file)
+        outputs = _load_json(outputs_file)
 
     return {
         'actionRows': action_rows,
@@ -292,10 +326,10 @@ def parse_script(script_name, system_script=False, workspace="Default"):
                 include_scripts[include_script_name] = include_script_obj
     else:
         script_path = script_file_path
-        action_rows_file_obj = open(script_path + '/actionRows.json', 'r')
-        props_file_obj = open(script_path + '/props.json', 'r')
-        inputs_file_obj = open(script_path + '/inputs.json', 'r')
-        outputs_file_obj = open(script_path + '/outputs.json', 'r')
+        action_rows_file_obj = _open_script_json(script_path + '/actionRows.json')
+        props_file_obj = _open_script_json(script_path + '/props.json')
+        inputs_file_obj = _open_script_json(script_path + '/inputs.json')
+        outputs_file_obj = _open_script_json(script_path + '/outputs.json')
         script_name = script_path.split('/')[-1]
         script_obj = parse_script_file(
             script_name,
@@ -320,10 +354,10 @@ def parse_script(script_name, system_script=False, workspace="Default"):
             include_script_name = include_file_path.split('/')[-1]
             include_parse_file_path = _resolve_library_script_path(os.path.basename(include_file_path), system_script, workspace) \
                 if use_library_scripts else include_file_path
-            action_rows_file_obj = open(include_parse_file_path + '/actionRows.json', 'r')
-            props_file_obj = open(include_parse_file_path + '/props.json', 'r')
-            inputs_file_obj = open(include_parse_file_path + '/inputs.json', 'r')
-            outputs_file_obj = open(include_parse_file_path + '/outputs.json', 'r')
+            action_rows_file_obj = _open_script_json(include_parse_file_path + '/actionRows.json')
+            props_file_obj = _open_script_json(include_parse_file_path + '/props.json')
+            inputs_file_obj = _open_script_json(include_parse_file_path + '/inputs.json')
+            outputs_file_obj = _open_script_json(include_parse_file_path + '/outputs.json')
             include_dir_path = include_file_path
             include_script_obj = parse_script_file(
                 include_script_name,

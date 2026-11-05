@@ -40,6 +40,7 @@ from ScriptEngine.common.script_engine_utils import is_null, safe_subprocess_run
 import pyautogui 
 from .device_manager import DeviceManager
 from ..helpers.device_action_interpreter import DeviceActionInterpreter
+from ..helpers import host_input
 from ..helpers.click_path_generator import ClickPathGenerator
 from ..helpers.live_input import clamp_live_duration_ms, live_drag_points
 from ..helpers.search_pattern_helper import SearchPatternHelper
@@ -1481,13 +1482,16 @@ class ADBDeviceManager(DeviceManager):
                 raise Exception('ADB connection failed')
         return source_im
 
+    # adb has no key hold or hotkey, so these go to the host's own keyboard
+    # (BlueStacks has the focus): pydirectinput on Windows, as for the desktop
+    # device; see helpers/host_input.py.
     def key_up(self, key):
-        script_logger.log('adb keypress and hold unimplemented! defaulting to pyautogui')
-        pyautogui.keyUp(key)
+        script_logger.log('adb keypress and hold unimplemented! sending it to the host keyboard')
+        host_input.input_module.keyUp(key)
 
     def key_down(self, key):
-        script_logger.log('adb keypress and hold unimplemented! defaulting to pyautogui')
-        pyautogui.keyDown(key)
+        script_logger.log('adb keypress and hold unimplemented! sending it to the host keyboard')
+        host_input.input_module.keyDown(key)
 
     def key_press(self, key):
         self.ensure_device_initialized()
@@ -1500,8 +1504,8 @@ class ADBDeviceManager(DeviceManager):
             self.adb_popen(['shell', 'input', 'keyevent', keycode])
 
     def hotkey(self, keys):
-        script_logger.log('adb hotkey unimplemented! defaulting to pyautogui')
-        pyautogui.hotkey(keys)
+        script_logger.log('adb hotkey unimplemented! sending it to the host keyboard')
+        host_input.input_module.hotkey(*keys)
 
     def save_screenshot(self, save_name):
         pass

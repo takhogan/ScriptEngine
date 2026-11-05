@@ -35,13 +35,10 @@ import cv2
 from ScriptEngine.common.constants.script_engine_constants import DATA_ROOT, LOGS_FOLDER
 from ScriptEngine.common.script_engine_utils import is_null, DummyFile
 
-# On Windows use pydirectinput_rgx for input (better DirectX/game compatibility); use pyautogui only for screenshot.
-# See https://github.com/reggx/pydirectinput_rgx
-if platform.system() == 'Windows':
-    import pydirectinput as _input_module  # type: ignore[import-not-found]
-else:
-    _input_module = pyautogui
-
+# On Windows input goes through pydirectinput_rgx, elsewhere pyautogui; pyautogui
+# only takes screenshots here. See helpers/host_input.py.
+from ..helpers import host_input
+from ..helpers.host_input import input_module as _input_module
 from ..helpers.click_path_generator import ClickPathGenerator
 from ..helpers.live_input import clamp_live_duration_ms, live_drag_points
 from ..helpers.device_action_interpreter import DeviceActionInterpreter
@@ -169,7 +166,10 @@ class DesktopDeviceManager(DeviceManager):
         self._ensure_initialized_for_keyboard()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from press')
-        pyautogui.press(key)
+        if not host_input.press_key(key):
+            # Not the key itself: it may be a character of a secret.
+            script_logger.log('PythonHostController: a key press was not sent{}'.format(
+                ' ({})'.format(key) if len(key) > 1 else ''), level='error')
 
     def hotkey(self, keys):
         self._ensure_initialized_for_keyboard()
