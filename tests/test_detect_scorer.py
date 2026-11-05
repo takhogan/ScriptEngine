@@ -181,3 +181,93 @@ def test_the_entry_point_runs_as_a_module(tmp_path):
     )
     assert done.returncode == agent_tools.EXIT_UNKNOWN_TOOL
     assert 'unknown tool no-such-tool' in done.stderr
+
+
+# firstMatch's `within`: a child detect searches inside its parent's match, as in a run.
+
+def _patch_q():
+    """A gradient block, distinct from the square, that a parent detect looks for."""
+    q = np.zeros((30, 36, 3), dtype=np.uint8)
+    q[:, :, 0] = np.linspace(0, 255, 36, dtype=np.uint8)[None, :]
+    q[:, :, 2] = np.linspace(255, 0, 30, dtype=np.uint8)[:, None]
+    q[12:18, :] = (0, 255, 255)
+    return q
+
+
+def _detect_of(group, template, threshold, output, input_expression=''):
+    """A floatingObject bestMatch detect for `template`, cut from a 160x120 screen."""
+    action = _detect(group, threshold, input_expression=input_expression)
+    floating = {
+        'img': template,
+        'mask': np.full(template.shape, 255, dtype=np.uint8),
+        'mask_single_channel': np.full(template.shape[:2], 255, dtype=np.uint8),
+        'sourceScreenWidth': 160,
+        'sourceScreenHeight': 120,
+    }
+    script_loader_mod.set_output_mask(floating, '', False, False)
+    action['actionData']['positiveExamples'][0]['floatingObject'] = floating
+    action['actionData']['outputVarName'] = output
+    return action
+
+
+def _within_script(parent, child):
+    return {'props': {'scriptMode': 'train'}, 'actionRows': [{'actions': [parent]}, {'actions': [child]}]}
+
+
+def _score(monkeypatch, tmp_path, script, images, actions, within):
+    monkeypatch.setattr(script_loader_mod, 'parse_script', lambda name, workspace='Default', **_: script)
+    paths = []
+    for name, image in images.items():
+        file = tmp_path / '{}.png'.format(name)
+        cv2.imwrite(str(file), image)
+        paths.append({'id': name, 'path': str(file)})
+    return detect_scorer.score_detects({'workspace': 'W', 'scriptName': 'S', 'actions': actions, 'within': within, 'images': paths})
+
+
+def test_within_a_parents_match_the_child_searches_only_inside_it(tmp_path, monkeypatch):
+    screen = _screen()
+    parent = _detect_of(1, screen[20:60, 30:80].copy(), 0.9, 'panel')
+    child = _detect(2, 0.9, input_expression='panel')
+    result = _score(monkeypatch, tmp_path, _within_script(parent, child), {'s': screen}, ['detectObject-2'], ['detectObject-1'])
+    assert result['within'] == ['detectObject-1']
+    assert result['withinResults'][0]['matched'] is True
+    [out] = result['results']
+    assert out['matched'] is True
+    assert out['input']['source'] == 'expression'
+    assert out['input']['area'] == {'x': 30, 'y': 20, 'width': 50, 'height': 40}
+    assert 'searched' not in out
+    # The location is on the screen, not in the parent's match.
+    assert (out['location']['x'], out['location']['y']) == (40, 30)
+
+
+def test_a_child_whose_template_is_outside_its_parents_match_misses_though_the_screen_has_it(tmp_path, monkeypatch):
+    screen = _screen()
+    screen[70:100, 100:136] = _patch_q()
+    parent = _detect_of(1, _patch_q(), 0.9, 'panel')
+    child = _detect(2, 0.9, input_expression='panel')
+    result = _score(monkeypatch, tmp_path, _within_script(parent, child), {'s': screen}, ['detectObject-2'], ['detectObject-1'])
+    [out] = result['results']
+    assert out['input']['source'] == 'expression'
+    assert out['matched'] is False
+    assert out['location']['x'] >= 100 and out['location']['y'] >= 70
+    # On its own, on the whole screen, it matches.
+    assert detect_scorer.score_one(child, screen, 'train')['matched'] is True
+
+
+def test_where_the_parent_finds_nothing_the_child_is_not_reached(tmp_path, monkeypatch):
+    parent = _detect_of(1, _patch_q(), 0.9, 'panel')
+    child = _detect(2, 0.9, input_expression='panel')
+    result = _score(monkeypatch, tmp_path, _within_script(parent, child), {'s': _screen()}, ['detectObject-2'], ['detectObject-1'])
+    assert result['withinResults'][0]['matched'] is False
+    assert result['results'] == [{'action': 'detectObject-2', 'image': 's', 'reached': False, 'stoppedAt': 'detectObject-1'}]
+
+
+def test_a_child_without_an_input_searches_the_whole_screen_within_a_chain(tmp_path, monkeypatch):
+    screen = _screen()
+    screen[70:100, 100:136] = _patch_q()
+    parent = _detect_of(1, _patch_q(), 0.9, 'panel')
+    child = _detect(2, 0.9)
+    result = _score(monkeypatch, tmp_path, _within_script(parent, child), {'s': screen}, ['detectObject-2'], ['detectObject-1'])
+    [out] = result['results']
+    assert out['matched'] is True
+    assert out['input'] == {'source': 'screenshot', 'expression': None}
