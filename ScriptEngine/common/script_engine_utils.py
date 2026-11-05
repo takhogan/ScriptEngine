@@ -251,7 +251,7 @@ def safe_subprocess_run(args, timeout=5, capture_output=True, cwd="/", retry_on_
         except subprocess.TimeoutExpired as e:
             script_logger.log(f'safe_subprocess_run: command timed out after {timeout}s: {" ".join(args)}', level='error')
             if retry_on_timeout:
-                safe_subprocess_run(args, timeout=timeout, capture_output=capture_output, cwd=cwd, retry_on_timeout=False, **kwargs)
+                return safe_subprocess_run(args, timeout=timeout, capture_output=capture_output, cwd=cwd, retry_on_timeout=False, **kwargs)
             else:
                 raise e
         except Exception as e:
