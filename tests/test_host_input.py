@@ -49,13 +49,19 @@ class FakeDirectInput:
 
 
 class FakeUser32:
-    """The user32 calls the dead-key check makes, for one keyboard layout.
-    `dead` holds (scan code, shifted) for the layout's dead keys."""
+    """The user32 calls the dead-key check makes, for one keyboard layout, and
+    the session's one pending dead key, which ToUnicodeEx reads as Windows
+    does. `dead` holds (scan code, shifted) for the layout's dead keys. With a
+    FakeTarget, the keys sent reach a window at once and it composes them as
+    the layout would, into `typed`: the worst case for a check made after a
+    key is sent."""
 
     def __init__(self, layout, dead=()):
         self.layout = layout
         self.dead = set(dead)
+        self.pending = None  # the dead key the session holds, if any
         self.lookups = []
+        self.typed = ''
 
     def GetForegroundWindow(self):
         return 0x1234
@@ -74,18 +80,60 @@ class FakeUser32:
 
     def ToUnicodeEx(self, vk, scancode, key_state, buffer, size, flags, layout):
         assert flags == host_input._TOUNICODE_KEEP_STATE and layout == self.layout
+        shifted = bool(key_state[host_input._VK_SHIFT] & 0x80)
         if vk == host_input._VK_SPACE:
+            buffer.value = self.pending[2] if self.pending else ' '
             return 1
         assert vk == 0x100 + scancode
-        shifted = bool(key_state[host_input._VK_SHIFT] & 0x80)
         self.lookups.append((scancode, shifted))
-        return -1 if (scancode, shifted) in self.dead else 1
+        if (scancode, shifted) in self.dead:
+            return 2 if self.pending else -1  # two dead keys give both characters
+        buffer.value = 'x'
+        return 1
+
+    def receive(self, scancode, shifted, char):
+        """The target window gets a key: what it types."""
+        if self.pending:
+            dead_char = self.pending[2]
+            self.pending = None
+            self.typed += dead_char if char == ' ' else '[%s%s]' % (dead_char, char)
+        elif (scancode, shifted) in self.dead:
+            self.pending = (scancode, shifted, char)
+        else:
+            self.typed += char
+
+
+class FakeTarget(FakeDirectInput):
+    """FakeDirectInput whose keys reach `user32`'s target window."""
+
+    SHIFTED = {base: shifted for shifted, base in host_input.SHIFTED_KEYS.items()}
+
+    def __init__(self, user32):
+        super().__init__()
+        self.user32 = user32
+        self.shift = False
+
+    def keyDown(self, key, **kwargs):
+        self.shift = self.shift or key == 'shift'
+        return super().keyDown(key, **kwargs)
+
+    def keyUp(self, key, **kwargs):
+        self.shift = self.shift and key != 'shift'
+        return super().keyUp(key, **kwargs)
+
+    def press(self, key, **kwargs):
+        char = ' ' if key == 'space' else key
+        if self.shift:
+            char = self.SHIFTED[key]
+        self.user32.receive(self.KEYBOARD_MAPPING[key], self.shift, char)
+        return super().press(key, **kwargs)
 
 
 # US-International (00020409): ' and " on one key, ` and ~ on another, ^ on 6.
 US_INTERNATIONAL_DEAD = {(0x28, False), (0x28, True), (0x29, False), (0x29, True), (0x07, True)}
 US_INTERNATIONAL = 0x4090409 | 0x20000
 US = 0x4090409
+PROBE_TEXT = "'a \"e ~n ^o `u ' x"
 
 
 @pytest.fixture(autouse=True)
@@ -97,7 +145,7 @@ def no_typing_pause(monkeypatch):
 def layout(monkeypatch):
     """No layout by default (off Windows, no key is dead); a test sets one with
     layout(FakeUser32(...))."""
-    monkeypatch.setattr(host_input, '_dead_key_cache', {})
+    monkeypatch.setattr(host_input, '_dead_keys_by_layout', {})
     monkeypatch.setattr(host_input, '_user32', None)
 
     def use(user32):
@@ -253,21 +301,59 @@ def test_a_layout_without_dead_keys_types_them_as_one_press(layout):
 
 
 def test_the_probe_text_types_every_character_literally(layout):
-    layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
-    text = "'a \"e ~n ^o `u ' x"
-    events = type_text(text)
-    presses = [event[1] for event in events if event[0] == 'press']
-    assert presses.count('space') == 6
-    assert len(presses) == len(text) + 6
-
-
-def test_letters_digits_and_keys_names_are_never_dead_checked_twice(layout):
     user32 = layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
-    type_text("aa''")
-    host_input.press_key('enter', module=FakeDirectInput())
-    host_input.press_key('f5', module=FakeDirectInput())
-    # One lookup per (layout, key, Shift); key names are not characters.
-    assert user32.lookups == [(0x1E, False), (0x28, False)]
+    target = FakeTarget(user32)
+    for char in PROBE_TEXT:
+        assert host_input.press_key(char, module=target) is True
+    assert user32.typed == PROBE_TEXT
+    assert user32.pending is None
+    presses = [event[1] for event in target.events if event[0] == 'press']
+    assert presses.count('space') == 6 and len(presses) == len(PROBE_TEXT) + 6
+
+
+def test_without_the_spaces_the_target_composes_the_dead_keys(layout):
+    # What the probe saw on host 01 before the fix: the fake target is faithful.
+    user32 = layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+    target = FakeTarget(user32)
+    host_input._dead_keys_by_layout[US_INTERNATIONAL] = frozenset()
+    for char in PROBE_TEXT:
+        host_input.press_key(char, module=target)
+    assert user32.typed == "['a] [\"e] [~n] [^o] [`u] 'x"
+
+
+def test_the_table_is_built_once_per_layout_before_the_first_key_goes_out(layout):
+    user32 = layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+    target = FakeTarget(user32)
+    lookups_at_first_press = []
+    press = target.press
+
+    def recording_press(key, **kwargs):
+        if not lookups_at_first_press:
+            lookups_at_first_press.append(len(user32.lookups))
+        return press(key, **kwargs)
+    target.press = recording_press
+    for char in "''aa\"~":
+        host_input.press_key(char, module=target)
+    host_input.press_key('enter', module=target)
+    # Every printable key, unshifted and shifted, asked once, all before the
+    # first key was sent.
+    assert len(user32.lookups) == 2 * 47 == len(set(user32.lookups))
+    assert lookups_at_first_press == [94]
+
+
+def test_no_table_is_built_while_the_session_holds_a_dead_key(layout):
+    user32 = layout(FakeUser32(US_INTERNATIONAL, US_INTERNATIONAL_DEAD))
+    user32.pending = (0x28, False, "'")  # left by someone else
+    target = FakeTarget(user32)
+    host_input.press_key("'", module=target)
+    # Not known to be dead: sent alone, and it combines with the pending one.
+    assert target.events == [('press', "'")]
+    assert user32.lookups == [] and host_input._dead_keys_by_layout == {}
+    assert user32.typed == "['']" and user32.pending is None
+    # Nothing is pending now: the next key builds the table and is released.
+    host_input.press_key("'", module=target)
+    assert target.events[1:] == [('press', "'"), ('press', 'space')]
+    assert user32.typed == "['']'"
 
 
 def test_switching_layout_is_seen_on_the_next_key(layout):
