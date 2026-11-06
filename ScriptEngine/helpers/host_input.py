@@ -86,8 +86,11 @@ try:
 except Exception:  # an unusual Windows: type as if no key were dead
     _user32 = None
 
-# (layout, scan code, shifted) -> whether that key is dead in that layout.
-_dead_key_cache = {}
+# The keys a character is typed with: every printable key of a US keyboard.
+CHARACTER_KEYS = frozenset(SHIFTED_KEYS.values())
+
+# layout -> the (scan code, shifted) pairs that are dead keys in it.
+_dead_keys_by_layout = {}
 
 
 def _active_keyboard_layout():
@@ -98,39 +101,58 @@ def _active_keyboard_layout():
     return _user32.GetKeyboardLayout(thread_id)
 
 
-def _is_dead_key(scancode, shifted):
-    """Whether the key at `scancode`, with Shift held when `shifted`, is a dead
-    key in the active keyboard layout. False off Windows, for a key the layout
-    does not map, and whenever Windows cannot say."""
-    if _user32 is None or not isinstance(scancode, int) or not 0 < scancode < 0x80:
+def _is_dead_key(module, key, shifted):
+    """Whether `key` (a key name of `module`), with Shift held when `shifted`,
+    is a dead key in the active keyboard layout. False off Windows, for a key
+    that types no character, and whenever Windows cannot say."""
+    if _user32 is None or key not in CHARACTER_KEYS:
         return False
     try:
-        layout = _active_keyboard_layout()
-        cache_key = (layout, scancode, shifted)
-        if cache_key not in _dead_key_cache:
-            _dead_key_cache[cache_key] = _layout_key_is_dead(layout, scancode, shifted)
-        return _dead_key_cache[cache_key]
+        dead_keys = _layout_dead_keys(module, _active_keyboard_layout())
+        return dead_keys is not None and (module.KEYBOARD_MAPPING.get(key), shifted) in dead_keys
     except Exception:
         return False
 
 
-def _layout_key_is_dead(layout, scancode, shifted):
-    vk = _user32.MapVirtualKeyExW(scancode, _MAPVK_VSC_TO_VK, layout)
-    if not vk:
-        return False
+def _layout_dead_keys(module, layout):
+    """The layout's dead keys, worked out once per layout and before a key of
+    the text is sent. Windows keeps one pending dead key for the session and
+    ToUnicodeEx reads it: asked about a dead key while the target still holds
+    one (the key just sent, say), it answers the two combined. So the table is
+    built only while nothing is pending, which a Space showing as a space
+    proves; otherwise None, and the next key asks again."""
+    if layout in _dead_keys_by_layout:
+        return _dead_keys_by_layout[layout]
+    if _to_unicode(layout, _VK_SPACE, 0x39, False) != (1, ' '):
+        return None
+    dead_keys = set()
+    for key in CHARACTER_KEYS:
+        scancode = module.KEYBOARD_MAPPING.get(key)
+        if not isinstance(scancode, int) or not 0 < scancode < 0x80:
+            continue
+        vk = _user32.MapVirtualKeyExW(scancode, _MAPVK_VSC_TO_VK, layout)
+        if not vk:
+            continue
+        for shifted in (False, True):
+            if _to_unicode(layout, vk, scancode, shifted)[0] < 0:
+                dead_keys.add((scancode, shifted))
+                # Before Windows 10 1607 the keep-state flag is ignored and the
+                # dead key is left pending: a Space clears it.
+                _to_unicode(layout, _VK_SPACE, 0x39, False)
+    _dead_keys_by_layout[layout] = frozenset(dead_keys)
+    return _dead_keys_by_layout[layout]
+
+
+def _to_unicode(layout, vk, scancode, shifted):
+    """ToUnicodeEx for one key, without changing the keyboard state: (its
+    result, the characters it gives)."""
     key_state = (ctypes.c_ubyte * 256)()
     if shifted:
         key_state[_VK_SHIFT] = 0x80
     buffer = ctypes.create_unicode_buffer(8)
     result = _user32.ToUnicodeEx(vk, scancode, key_state, buffer, len(buffer),
                                  _TOUNICODE_KEEP_STATE, layout)
-    if result < 0:
-        # Before Windows 10 1607 the dead key stays pending in this thread's
-        # (not the target's) keyboard state: clear it with a Space.
-        _user32.ToUnicodeEx(_VK_SPACE, 0x39, (ctypes.c_ubyte * 256)(), buffer,
-                            len(buffer), _TOUNICODE_KEEP_STATE, layout)
-        return True
-    return False
+    return result, buffer.value[:max(result, 0)]
 
 
 def press_key(key, module=None):
@@ -152,15 +174,18 @@ def _press_scancode_key(module, key):
         key = key.lower()
     base_key = SHIFTED_KEYS.get(key)
     if base_key is not None:
+        # Asked before the key goes out: see _layout_dead_keys.
+        dead = _is_dead_key(module, base_key, True)
         module.keyDown('shift', _pause=False)
         try:
             sent = bool(module.press(base_key, _pause=False))
         finally:
             module.keyUp('shift', _pause=False)
-        return _release_dead_key(module, base_key, True, sent)
+        return _release_dead_key(module, dead, sent)
     if key in module.KEYBOARD_MAPPING:
+        dead = _is_dead_key(module, key, False)
         sent = bool(module.press(key, _pause=False))
-        return _release_dead_key(module, key, False, sent) if len(key) == 1 else sent
+        return _release_dead_key(module, dead, sent)
     if len(key) == 1:
         # Not on a US keyboard (an accented letter, say): send the character
         # itself. A remote viewer may not pass these on.
@@ -168,10 +193,10 @@ def _press_scancode_key(module, key):
     return False
 
 
-def _release_dead_key(module, key, shifted, sent):
+def _release_dead_key(module, dead, sent):
     """After a character's key: if that key is dead in the active layout, press
     Space so the character is typed by itself instead of combining with the
     next one. Answers whether the character went out."""
-    if sent and _is_dead_key(module.KEYBOARD_MAPPING.get(key), shifted):
+    if sent and dead:
         return bool(module.press(DEAD_KEY_RELEASE, _pause=False))
     return sent
