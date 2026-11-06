@@ -48,6 +48,21 @@ def test_image_to_text_action_easyocr(system_executor, base_context, run_queue, 
     assert isinstance(state["ocr_out"], str)
 
 
+def test_easyocr_keeps_low_confidence_fragments():
+    """No confidence cut: a fragment easyOCR is unsure of stays in the output instead of vanishing."""
+    from ScriptEngine.helpers.image_to_text_action_helper import ImageToTextActionHelper
+
+    class _Reader:
+        def readtext(self, _image):
+            box = [[0, 0], [10, 0], [10, 10], [0, 10]]
+            return [(box, "Deep", 0.98), (box, "Lode", 0.31), (box, "x10", 0.04)]
+
+    action = _image_to_text_action("easyOCR")
+    outputs, inputs_log, _, _ = ImageToTextActionHelper.run_easy_ocr(action, np.zeros((10, 10), np.uint8), _Reader())
+    assert outputs[0] == "Deep Lode x10"
+    assert inputs_log.endswith("output was Deep Lode x10\n")
+
+
 def test_image_to_text_action_tesseract(system_executor, base_context, run_queue, monkeypatch):
     _require_module("PIL")
     tessdata_dir = Path("/opt/homebrew/share/tessdata")

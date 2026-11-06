@@ -211,9 +211,10 @@ class ImageToTextActionHelper:
 
         outputs = [[]]
 
+        # Every fragment is kept, whatever its confidence. A cut (this was 0.75) dropped whole words without a trace:
+        # on 368 test crops it dropped 137 of 800 correct fragments, raised the character error rate from 11% to 46%,
+        # and removed no junk, because easyOCR's detector returned nothing on crops with no text at all.
         for bbox, text, confidence in results:
-            if confidence < 0.75:
-                continue
             script_logger.log(f"Detected word: {text}", level='debug')
             script_logger.log(f"Bounding box: {bbox}", level='debug')
             script_logger.log(f"Confidence: {confidence}\n", level='debug')
