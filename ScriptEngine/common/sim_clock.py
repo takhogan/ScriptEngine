@@ -21,12 +21,13 @@ The time a script can see goes through here: sleepStatement, the timer of
 countToThresholdAction, timeAction, the delays between repeated clicks and
 after a random-variable action, and the script's own timeout. On a real
 device these are time.time() and time.sleep(). A simulated device
-(managers/simulated_device_manager.py) makes the clock virtual: the time is
-the wall clock plus an offset, a sleep adds to the offset instead of waiting,
-and the device adds what a screenshot would have taken. Work the engine does
-for real (a detect, OCR) still takes its real time, so a run on the sim keeps
-the order of events it would have on the device, without the waiting
-(UI_MAPPER.md §4, "Time").
+(managers/simulated_device_manager.py) makes the clock virtual: it starts at
+the wall clock's time and then moves only when told to, by a sleep (which
+does not wait), by what a screenshot would have taken on the device, and by
+a fixed ACTION_S for every action the executor runs, so a loop with neither
+still moves on. The work the engine does for real (a detect, OCR) takes no
+run time, so a simulated run on one seed replays exactly, however busy the
+machine is (UI_MAPPER.md §4, "Time" and "Determinism").
 
 Sleeps in parallel branches add up rather than overlap, so a simulated run
 can be later on its clock than the device would be; a time a script computes
@@ -39,11 +40,16 @@ import time as _time
 _lock = threading.Lock()
 _virtual = False
 _offset = 0.0
+_virtual_now = None
+ACTION_S = 0.05
 
 
 def make_virtual():
-    global _virtual
-    _virtual = True
+    global _virtual, _virtual_now
+    with _lock:
+        if not _virtual:
+            _virtual_now = _time.time() + _offset
+        _virtual = True
 
 
 def is_virtual():
@@ -52,13 +58,20 @@ def is_virtual():
 
 def advance(seconds):
     """Moves a virtual clock forward; nothing on the wall clock."""
-    global _offset
-    if seconds and seconds > 0:
+    global _virtual_now
+    if seconds and seconds > 0 and _virtual:
         with _lock:
-            _offset += float(seconds)
+            _virtual_now += float(seconds)
+
+
+def tick():
+    """One action's worth of run time on a virtual clock; nothing otherwise."""
+    advance(ACTION_S)
 
 
 def time():
+    if _virtual:
+        return _virtual_now
     return _time.time() + _offset
 
 
@@ -81,7 +94,8 @@ def utcnow():
 
 def reset():
     """Back to the wall clock (tests)."""
-    global _virtual, _offset
+    global _virtual, _offset, _virtual_now
     with _lock:
         _virtual = False
         _offset = 0.0
+        _virtual_now = None

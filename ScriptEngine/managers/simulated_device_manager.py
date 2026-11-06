@@ -44,6 +44,7 @@ replays exactly. Not yet: hit models for points the logs never clicked,
 fault injection, experiences (§4).
 """
 import bisect
+import hashlib
 import json
 import os
 import random
@@ -61,6 +62,16 @@ script_logger = ScriptLogger()
 
 PACK_FILE = 'sim-pack.json'
 FOLDER_RE = re.compile(r'^\d+-(.+)-\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$')
+
+
+def seed_engine(seed):
+    """Seeds the engine's own randomness for a run on the sim: where in a
+    matched box a click lands, a drag's path, a random-variable action. Left
+    unseeded, a click lands a few pixels elsewhere on each run, inside other
+    recorded clicks' boxes, and the same seed takes another path."""
+    import numpy as np
+    random.seed(int(seed))
+    np.random.seed(int(seed) % (2 ** 32))
 
 
 def _plain(o):
@@ -143,6 +154,7 @@ class SimulatedDeviceManager(DeviceManager):
                     self.visits[state].append((ri, start, ft[m]))
                 k = m
         self._shown_state, self._state_since = None, None
+        self._draws = defaultdict(int)
 
         # The run folder (script_manager passes it); else the logger's folder.
         folder = params.get('log_folder')
@@ -262,6 +274,16 @@ class SimulatedDeviceManager(DeviceManager):
         except Exception:
             return None, None, None
 
+    def _draw(self, n, *what):
+        """A choice of n, drawn from the seed and what is being decided (the
+        n-th time it is), not from one running stream: a change to a script
+        that shifts its timing, or adds an action elsewhere, leaves the draws
+        of the decisions it did not change as they were, so two versions of a
+        script on one seed differ only where the change made them."""
+        self._draws[what] += 1
+        key = json.dumps([self.seed, list(what), self._draws[what]], default=str).encode()
+        return int.from_bytes(hashlib.sha256(key).digest()[:8], 'big') % n
+
     # ---- inputs ---------------------------------------------------------
 
     def _point_ok(self, inp, x, y):
@@ -306,7 +328,7 @@ class SimulatedDeviceManager(DeviceManager):
             pick = next(((rj, ij) for rj, ij, _ in tier if rj == ri and ij == own), None)
             how = 'continued'
             if pick is None:
-                rj, ij, _ = tier[self.rng.randrange(len(tier))]
+                rj, ij, _ = tier[self._draw(len(tier), 'input', kind, state, script, group)]
                 pick, how = (rj, ij), 'switched'
             rj, ij = pick
             inp = self.runs[rj]['inputs'][ij]
@@ -336,7 +358,7 @@ class SimulatedDeviceManager(DeviceManager):
                 self._log('no visit this long', run=self.runs[ri]['id'], frame=frame, state=state,
                           on_screen_s=round(on_screen, 3), visits=len(self.visits.get(state, [])))
             return
-        rj, start, end = pool[self.rng.randrange(len(pool))]
+        rj, start, end = pool[self._draw(len(pool), 'went on', state)]
         r = self.runs[rj]
         tf = start + on_screen
         self._at(rj, tf, bisect.bisect_right(r['_it'], tf) - 1)

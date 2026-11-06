@@ -87,6 +87,32 @@ def test_the_clock_is_the_wall_clock_until_a_sim_makes_it_virtual():
     assert time.time() - wall < 1
 
 
+def test_a_virtual_clock_moves_only_when_told():
+    sim_clock.make_virtual()
+    t = sim_clock.time()
+    time.sleep(0.05)                      # work takes no run time
+    assert sim_clock.time() == t
+    sim_clock.tick()
+    assert sim_clock.time() == pytest.approx(t + sim_clock.ACTION_S)
+
+
+def test_the_same_seed_makes_the_same_choices_whatever_came_between(pack):
+    # run-a's click and run-b's are both on the home screen at the icon; a
+    # choice between them is drawn from what is decided, so an unrelated
+    # extra screenshot before it does not change it.
+    picks = []
+    for extra in (0, 3):
+        sim_clock.reset()
+        d = sim(pack, start='HOST/run-b', seed=7)
+        d.click(20, 30)                   # run-b's own click: continued
+        for _ in range(extra):
+            d.screenshot()
+        sim_clock.sleep(30)
+        d.click(5, 5)                     # nowhere on run-b's city: low evidence
+        picks.append((d.ri, d.t0, dict(d.counts).get('low evidence')))
+    assert picks[0][:2] == picks[1][:2]
+
+
 def test_plays_the_recorded_run_and_waits_at_its_next_input(pack):
     d = sim(pack)
     assert sim_clock.is_virtual()

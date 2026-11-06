@@ -332,6 +332,8 @@ def _load_and_run(script_name, script_id, timeout, constants=None, start_time=No
         # The sim backs every slot, the host included (DeviceController.resolve).
         device_params = sim_device_params(all_slots_value, script_name, run_folder)
         script_logger.log('SCRIPT MANAGER: simulated device', device_params, level='info')
+        from ScriptEngine.managers.simulated_device_manager import seed_engine
+        seed_engine(device_params.get('seed', 0))
     errored = False
     needs_approval = False
     root_action_log = None

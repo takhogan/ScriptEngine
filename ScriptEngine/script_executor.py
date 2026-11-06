@@ -328,6 +328,7 @@ class ScriptExecutor:
             absolute_path=True
         )
     def log_action_details(self, action):
+        sim_clock.tick()
         now = sim_clock.now()
         elapsed = now - self.context['script_timer']
         self.context['script_timer'] = now
