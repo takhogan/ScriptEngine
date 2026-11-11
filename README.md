@@ -194,6 +194,41 @@ Legacy scripts saved before `interfaceVersion` 21 use the old nested
 folder name. Both readers fall back to the old layout when `actionAssets` is
 absent or `interfaceVersion < 21`.
 
+### Script data: scriptAssets
+
+Separate from the library folder, each script gets a data folder of its own in
+the controller's data root: `scriptAssets/{workspace}/{scriptName}/`. The
+engine creates it the first time a `dataPersistenceAction` (formerly
+`fileIOAction`, a name that still runs) of that script resolves a relative
+`filePath`: every relative path resolves under it, so a script finds the files
+it wrote on its next run wherever the engine was started. The folder belongs
+to the script that holds the action, not the one that called it, and an agent
+branch workspace (`.Workspace1.branch1`) gets its own, apart from its base
+workspace's. Absolute paths are used as given.
+
+`dataPersistenceAction` reads and writes `image`, `text`, `json` and `sqlite`
+files. For `sqlite`, `inputExpression` evaluates to the SQL to run (plain SQL
+that is not a Python expression is used as written), or to
+`{"query": ..., "params": ...}`; a write may also give
+`{"table": ..., "values": {...} | [{...}, ...]}`, which inserts the rows and
+creates the table, or adds a column it lacks, from their keys. A read stores
+its rows, a list of dicts, in `outputVarName`; a write stores
+`{"rowcount", "lastrowid"}`.
+
+```json
+{
+  "actionName": "dataPersistenceAction",
+  "actionData": {
+    "targetSystem": "none",
+    "fileType": "sqlite",
+    "fileActionType": "w",
+    "filePath": "'scores.db'",
+    "inputExpression": "{'table': 'scores', 'values': {'name': player, 'score': score}}",
+    "outputVarName": "scoreWrite"
+  }
+}
+```
+
 ### Example Script Actions
 
 #### Mouse Actions

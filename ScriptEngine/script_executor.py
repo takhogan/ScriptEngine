@@ -150,6 +150,12 @@ class ScriptExecutor:
         
         # Parse script object
         self.parse_script_obj(script_obj)
+        # Which script and workspace the running actions belong to: the action
+        # executor is shared with child scripts, so its own props name only the
+        # top script. dataPersistenceAction resolves relative paths under
+        # scriptAssets/{workspace}/{script_name}/.
+        self.context['script_name'] = self.props['script_name']
+        self.context['workspace'] = self.workspace
         
         
         # Set call stack

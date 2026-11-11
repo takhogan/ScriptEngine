@@ -747,30 +747,48 @@ class SystemScriptActionExecutor:
             else:
                 _do_code_block()
             status = ScriptExecutionState.SUCCESS
-        elif action["actionName"] == "fileIOAction":
-            pre_log = 'FileIOAction\n' + \
-                (
-                    'Writing to' if
-                    action["actionData"]["fileActionType"] in ["w", "wb", "a"]
-                    else 'Reading from'
-                ) + ' file: ' + action["actionData"]["filePath"] + '\n'
-            pre_log += 'Contents of type: ' + action["actionData"]["fileType"] +\
-                       ' with mode ' + action["actionData"]["fileActionType"] + '\n'
-            pre_log += 'Input expression: ' + action["actionData"]["inputExpression"] + '\n'
-            pre_log += 'Writing inputs to variable: ' + action["actionData"]["outputVarName"]
+        elif action["actionName"] in ("dataPersistenceAction", "fileIOAction"):
+            # fileIOAction is the action's former name: saved scripts still run.
+            from .helpers import data_persistence_helper
+            action_data = action["actionData"]
+            file_action_type = action_data["fileActionType"]
+            file_type = action_data["fileType"]
+            input_expression = action_data.get("inputExpression", "")
+            output_var_name = action_data.get("outputVarName", "")
+            run_async = action_data.get("async", False)
+            is_write = file_action_type in data_persistence_helper.WRITE_ACTION_TYPES
+            script_name = context.get('script_name') or self.props.get('script_name') or self.base_script_name
+            workspace = context.get('workspace') or 'Default'
+
+            pre_log = 'DataPersistenceAction\n' + \
+                ('Writing to' if is_write else 'Reading from') + ' file: ' + action_data["filePath"] + '\n'
+            pre_log += 'Contents of type: ' + file_type + ' with mode ' + file_action_type + '\n'
+            pre_log += 'Relative paths resolve under: ' + \
+                data_persistence_helper.script_assets_dir(workspace, script_name) + '\n'
+            pre_log += 'Input expression: ' + input_expression + '\n'
+            pre_log += 'Writing inputs to variable: ' + output_var_name
             script_logger.get_action_log().add_pre_file('text', 'inputs.txt', pre_log)
             script_logger.log(pre_log, level='debug')
 
-            file_path = state_eval(action["actionData"]["filePath"], {}, state)
-            output_var_name = action["actionData"]["outputVarName"]
-            file_action_type = action["actionData"]["fileActionType"]
-            file_type = action["actionData"]["fileType"]
-            input_expression = action["actionData"]["inputExpression"]
-            run_async = action["actionData"].get("async", False)
+            file_path = data_persistence_helper.resolve_data_path(
+                state_eval(action_data["filePath"], {}, state), workspace, script_name, for_write=is_write
+            )
 
-            def _do_file_io():
+            def _do_data_persistence():
                 file_properties = ''
-                if file_action_type in ["w", "wb", "a"]:
+                if file_type == "sqlite":
+                    query_value = data_persistence_helper.eval_sqlite_input(
+                        input_expression, lambda expression: state_eval(expression, {}, state)
+                    )
+                    if is_write:
+                        result = data_persistence_helper.sqlite_write(file_path, query_value)
+                        file_properties = 'rows changed: ' + str(result['rowcount'])
+                    else:
+                        result = data_persistence_helper.sqlite_read(file_path, query_value)
+                        file_properties = 'rows read: ' + str(len(result))
+                    if output_var_name:
+                        state[output_var_name] = result
+                elif is_write:
                     input_value = state_eval(input_expression, {}, state)
                     if file_type == "image":
                         file_properties = 'shape: ' + str(input_value["matched_area"].shape)
@@ -808,7 +826,7 @@ class SystemScriptActionExecutor:
                             state[output_var_name] = text_file.read()
                         file_properties = 'n characters:  ' + str(len(state[output_var_name]))
                 post_log = (
-                    'Wrote to' if file_action_type in ["w", "wb", "a"] else 'Read from'
+                    'Wrote to ' if is_write else 'Read from '
                 ) + file_path + '\n'
                 post_log += 'Contents of type: ' + file_type + ' with mode ' + file_action_type + '\n'
                 post_log += 'File properties: ' + file_properties + '\n'
@@ -817,9 +835,9 @@ class SystemScriptActionExecutor:
                 script_logger.get_action_log().add_post_file('text', 'post.txt', post_log)
 
             if run_async:
-                self.io_executor.submit(_do_file_io)
+                self.io_executor.submit(_do_data_persistence)
             else:
-                _do_file_io()
+                _do_data_persistence()
             status = ScriptExecutionState.SUCCESS
         #TODO : unsupported for now
         elif action["actionName"] == "databaseCRUD":
