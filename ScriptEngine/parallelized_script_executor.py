@@ -34,6 +34,10 @@ class ParallelizedScriptExecutor:
         self.device_controller = device_controller
         self.process_executor = process_executor
         self.processes = {}
+        # actionGroup -> the action dict submitted to the pool. The main
+        # process still holds its screenshot and templates, so the worker need
+        # not send them back; ScriptExecutor pops it when it takes the result.
+        self.sent_actions = {}
         # actionGroup -> ScreenshotFailedError, for the actions that were not
         # started because the screenshot they share could not be taken.
         self.screenshot_failures = {}
@@ -42,6 +46,7 @@ class ParallelizedScriptExecutor:
         for _, process in self.processes.items():
             process.cancel()
         self.processes = {}
+        self.sent_actions = {}
         self.screenshot_failures = {}
 
     def get_screenshot_failure(self, action_group):
@@ -55,6 +60,7 @@ class ParallelizedScriptExecutor:
 
     def start_processes(self, script_executor, parallel_actions):
         self.processes = {}
+        self.sent_actions = {}
         self.screenshot_failures = {}
         # Dispatch runs entirely on the main thread and mostly logs at debug, so
         # its cost (screenshot capture, blur, arg pickling, submit) is invisible
@@ -128,6 +134,7 @@ class ParallelizedScriptExecutor:
             script_logger.log('Parallel process submitted to pool for ' + str(parallel_action["actionGroup"]), level='debug')
 
             self.processes[parallel_action["actionGroup"]] = future
+            self.sent_actions[parallel_action["actionGroup"]] = parallel_action
 
         _dispatch_s = time.monotonic() - _dispatch_start
         if _dispatch_s >= 3.0:

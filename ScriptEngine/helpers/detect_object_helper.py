@@ -32,6 +32,45 @@ from .detect_scene_helper import DetectSceneHelper, apply_output_mask
 script_logger = ScriptLogger()
 # print(f"detect object imports took {time.time() - start_time:.2f} seconds")
 
+
+class SentImage:
+    """Placeholder in a parallel detect's log_objs for an image the main
+    process sent the worker: the screenshot or a template dict.
+
+    The worker leaves these out of its result and the main process puts its
+    own copies back (DetectObjectHelper.restore_sent_images), so they are not
+    pickled back through the pool. Pickles by name, so the main process gets
+    the module's SENT_IMAGE back and can test for it with `is`.
+    """
+    __slots__ = ()
+
+    def __reduce__(self):
+        return 'SENT_IMAGE'
+
+    def __repr__(self):
+        return 'SENT_IMAGE'
+
+
+SENT_IMAGE = SentImage()
+
+
+def _with_fresh_arrays(detect_obj):
+    """A copy of a template dict whose arrays are new objects.
+
+    LOG_IMAGE_STORE writes an array once per run, keyed by its identity, and
+    points later overlays at that first file. Before log_objs were restored on
+    the main side, every parallel detect's images were new arrays (unpickled
+    from the worker), so each detect wrote its own capture.png and
+    template.png; fresh arrays keep that.
+    """
+    if detect_obj is None:
+        return None
+    return {
+        key: value.copy() if isinstance(value, np.ndarray) else value
+        for key, value in detect_obj.items()
+    }
+
+
 class DetectObjectHelper:
     def __init__(self):
         pass
@@ -392,6 +431,71 @@ class DetectObjectHelper:
         script_logger.log('Completed handle detect object')
         return action, matches, log_objs
 
+    @staticmethod
+    def handle_parallel_detect_object(action, script_mode='train'):
+        """handle_detect_object in a process-pool worker.
+
+        Same result, except that log_objs leaves out the images the main
+        process sent (see log_objs_for_main): the main process puts them back
+        with restore_sent_images before it writes the log images.
+        """
+        action, matches, log_objs = DetectObjectHelper.handle_detect_object(action, script_mode=script_mode)
+        return action, matches, DetectObjectHelper.log_objs_for_main(log_objs)
+
+    @staticmethod
+    def log_objs_for_main(log_objs):
+        """log_objs as a worker sends them back to the main process.
+
+        log_objs only feed the log images, which are written at info and up:
+        below that the worker sends None. Otherwise the images the worker made
+        (the masked screenshot, the match score map) and the matches go back
+        as they are, and the ones it was only given (the screenshot copy in
+        'base', the floatingObject and fixedObject template dicts) become
+        SENT_IMAGE.
+        """
+        if not ScriptLogger.get_logger().should_log('info'):
+            return None
+        sent = dict(log_objs)
+        _, _, source_match_point = log_objs['base']
+        sent['base'] = (SENT_IMAGE, SENT_IMAGE, source_match_point)
+        if log_objs['fixedObject'] is not None:
+            matches, screencap_masked, _, needs_rescale = log_objs['fixedObject']
+            sent['fixedObject'] = (matches, screencap_masked, SENT_IMAGE, needs_rescale)
+        return sent
+
+    @staticmethod
+    def restore_sent_images(log_objs, sent_action):
+        """Put the images a worker left out of log_objs back, from the action
+        the main process sent it (its input_obj screenshot and its first
+        positive example's templates).
+
+        The screenshot is copied, as handle_detect_object does for 'base', and
+        so are the template arrays (_with_fresh_arrays): the log images written
+        are the same files, byte for byte, as when the worker sent its own
+        copies. log_objs without placeholders come back unchanged.
+        """
+        if log_objs is None:
+            return None
+        restored = dict(log_objs)
+        positive_examples = sent_action['actionData']['positiveExamples']
+        first = positive_examples[0] if positive_examples else {}
+
+        screencap_im_bgr, floating_detect_obj, source_match_point = log_objs['base']
+        if screencap_im_bgr is SENT_IMAGE:
+            sent_screenshot = sent_action['input_obj']['screencap_im_bgr']
+            screencap_im_bgr = sent_screenshot.copy() if sent_screenshot is not None else None
+        if floating_detect_obj is SENT_IMAGE:
+            floating_detect_obj = _with_fresh_arrays(first.get('floatingObject'))
+        restored['base'] = (screencap_im_bgr, floating_detect_obj, source_match_point)
+
+        if log_objs['fixedObject'] is not None:
+            matches, screencap_masked, fixed_detect_obj, needs_rescale = log_objs['fixedObject']
+            if fixed_detect_obj is SENT_IMAGE:
+                # Only written with cv2.imwrite, not through LOG_IMAGE_STORE.
+                fixed_detect_obj = first.get('fixedObject')
+            restored['fixedObject'] = (matches, screencap_masked, fixed_detect_obj, needs_rescale)
+        return restored
+
 
     @staticmethod
     def create_detect_action_log_images(thread_script_logger, action, log_obj):
@@ -481,7 +585,8 @@ class DetectObjectHelper:
 
         # post overlay images feed the log video, so build them at info+ but
         # skip the whole image thread at error level (no images at error).
-        if script_logger.should_log('info'):
+        # A parallel detect's worker sends no log_obj then.
+        if log_obj is not None and script_logger.should_log('info'):
             script_logger.log('DetectObjectHelper: starting detect object log thread', level='debug')
             thread_script_logger = script_logger.copy()
             io_executor.submit(
