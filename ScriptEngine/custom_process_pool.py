@@ -2,10 +2,16 @@ import threading
 import time
 from concurrent.futures import ProcessPoolExecutor, ALL_COMPLETED, wait
 
+from ScriptEngine.shared_memory_args import SharedArgSender, call_with_shared_args, sends_shared_memory
+
 
 class CustomProcessPool(ProcessPoolExecutor):
-    def __init__(self, max_workers=None):
-        super().__init__(max_workers)
+    def __init__(self, max_workers=None, mp_context=None, **kwargs):
+        super().__init__(max_workers, mp_context=mp_context, **kwargs)
+        # Large numpy arguments go to the workers through shared memory, once
+        # per array, instead of through the call queue's pipe once per task;
+        # see shared_memory_args. None where the start method rules it out.
+        self._shared_args = SharedArgSender() if sends_shared_memory(self._mp_context) else None
         self.active_tasks = []
         self.max_workers_configured = max_workers
         # Worker processes are created lazily on submit, under the 'spawn' start
@@ -23,8 +29,20 @@ class CustomProcessPool(ProcessPoolExecutor):
         with self._lifecycle_lock:
             if self._first_submit_at is None:
                 self._first_submit_at = submitted_at
+        blocks = ()
+        if self._shared_args is not None:
+            args, kwargs, blocks = self._shared_args.pack(args, kwargs)
         # Submit the task and track it
-        future = super().submit(fn, *args, **kwargs)
+        if blocks:
+            try:
+                future = super().submit(call_with_shared_args, fn, args, kwargs)
+            except BaseException:
+                self._shared_args.release(blocks)
+                raise
+            # Done covers a result, an exception, a cancel and a broken pool.
+            future.add_done_callback(lambda _f, blocks=blocks: self._shared_args.release(blocks))
+        else:
+            future = super().submit(fn, *args, **kwargs)
         self.active_tasks.append(future)
         self._note_worker_growth(submitted_at)
         # Add a callback to remove the task from active list once done
@@ -66,6 +84,13 @@ class CustomProcessPool(ProcessPoolExecutor):
     def _remove_task(self, future):
         # Remove the completed task from the active list
         self.active_tasks.remove(future)
+
+    def shutdown(self, wait=True, *, cancel_futures=False):
+        super().shutdown(wait=wait, cancel_futures=cancel_futures)
+        # With wait=False, blocks that unfinished tasks still use are unlinked
+        # as each of those tasks finishes.
+        if self._shared_args is not None:
+            self._shared_args.close()
 
     def get_active_tasks(self):
         # Return the list of currently active tasks
