@@ -23,6 +23,15 @@ from ScriptEngine.managers import adb_device_manager as adb_mod
 from ScriptEngine.managers.adb_device_manager import ADBDeviceManager
 
 
+@pytest.fixture(autouse=True)
+def host_input_allowed(monkeypatch):
+    """Input on the host's own screen counts as allowed: macOS denies it to a
+    test run started from an app without Accessibility, and the desktop driver
+    then refuses every click and key (test_host_input_accessibility.py)."""
+    from ScriptEngine.helpers import host_input
+    monkeypatch.setattr(host_input, '_accessibility_trusted', True)
+
+
 @pytest.fixture(autouse=True, scope='module')
 def logger_writes_somewhere(tmp_path_factory):
     """The shared ScriptLogger needs a file, or its writer thread prints a

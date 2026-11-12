@@ -14,6 +14,15 @@ import ScriptEngine.helpers.image_to_text_action_helper as image_to_text_action_
 import ScriptEngine.helpers.match_merge_helper as match_merge_helper_mod
 
 
+@pytest.fixture(autouse=True)
+def host_input_allowed(monkeypatch):
+    """Input on the host's own screen counts as allowed: macOS denies it to a
+    test run started from an app without Accessibility, and the desktop driver
+    then refuses every click and key (test_host_input_accessibility.py)."""
+    from ScriptEngine.helpers import host_input
+    monkeypatch.setattr(host_input, '_accessibility_trusted', True)
+
+
 class FakeActionLog:
     def __init__(self):
         self.summary = None
@@ -25,6 +34,9 @@ class FakeActionLog:
 
     def set_summary(self, summary):
         self.summary = summary
+
+    def set_status(self, status):
+        self.status = status
 
     def add_post_file(self, *args, **kwargs):
         return None

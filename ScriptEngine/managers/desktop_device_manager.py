@@ -69,7 +69,12 @@ class DesktopDeviceManager(DeviceManager):
             self.input_source = input_source
         else:
             self.dummy_mode = False
-        
+
+        if not self.dummy_mode and host_input.input_denied():
+            # Logged at error level so a run at any level shows it; every input
+            # on this screen raises HostInputDeniedError (_require_input).
+            script_logger.log('Warning: PythonHostController: ' + host_input.HOST_INPUT_DENIED_MESSAGE, level='error')
+
         self.scale_factor = 1
         # Initialize sct before list_applications() so ensure_device_initialized() can use it
         self.sct = mss.mss()
@@ -124,6 +129,20 @@ class DesktopDeviceManager(DeviceManager):
     def get_status(self):
         return "online"
 
+    def get_input_status(self):
+        """Whether this screen takes clicks and keys (host_input.input_status),
+        which check_status reports beside the status: a screen macOS denies
+        input to is still online, for screenshots and detects."""
+        if self.dummy_mode:
+            return {'input': 'ok'}
+        return host_input.input_status()
+
+    def _require_input(self):
+        """Raise HostInputDeniedError before input macOS would drop without a
+        sign: the process is not trusted for Accessibility."""
+        if not self.dummy_mode:
+            host_input.require_input()
+
     def screenshot(self):
         self.ensure_device_initialized()
         if self.dummy_mode:
@@ -154,18 +173,21 @@ class DesktopDeviceManager(DeviceManager):
         self._ensure_initialized_for_keyboard()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from keyUp')
+        self._require_input()
         _input_module.keyUp(key)
 
     def key_down(self, key):
         self._ensure_initialized_for_keyboard()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from keyDown')
+        self._require_input()
         _input_module.keyDown(key)
 
     def key_press(self, key):
         self._ensure_initialized_for_keyboard()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from press')
+        self._require_input()
         if not host_input.press_key(key):
             # Not the key itself: it may be a character of a secret.
             script_logger.log('PythonHostController: a key press was not sent{}'.format(
@@ -175,6 +197,7 @@ class DesktopDeviceManager(DeviceManager):
         self._ensure_initialized_for_keyboard()
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from hotKey')
+        self._require_input()
         _input_module.hotkey(*keys)
 
     def mouse_up(self, x, y, button='left'):
@@ -182,6 +205,7 @@ class DesktopDeviceManager(DeviceManager):
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from mouse_up')
             return
+        self._require_input()
         # if (self.width != self.props['width'] or self.height != self.props['height']):
         #     x = (self.width / self.props['width']) * x
         #     y = (self.height / self.props['height']) * y
@@ -200,6 +224,7 @@ class DesktopDeviceManager(DeviceManager):
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from mouse_down')
             return
+        self._require_input()
         # if (self.width != self.props['width'] or self.height != self.props['height']):
         #     x = (self.width / self.props['width']) * x
         #     y = (self.height / self.props['height']) * y
@@ -218,6 +243,7 @@ class DesktopDeviceManager(DeviceManager):
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from click')
             return
+        self._require_input()
         # if (self.width != self.props['width'] or self.height != self.props['height']):
         #     x = (self.width / self.props['width']) * x
         #     y = (self.height / self.props['height']) * y
@@ -238,6 +264,7 @@ class DesktopDeviceManager(DeviceManager):
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from click')
             return
+        self._require_input()
         # if (self.width != self.props['width'] or self.height != self.props['height']):
         #     x = (self.width / self.props['width']) * x
         #     y = (self.height / self.props['height']) * y
@@ -275,6 +302,7 @@ class DesktopDeviceManager(DeviceManager):
         if self.dummy_mode:
             script_logger.log('ADB CONTROLLER: script running in dummy mode, adb click and drag returning')
             return delta_x, delta_y
+        self._require_input()
 
         traverse_x = source_x
         traverse_y = source_y
@@ -294,6 +322,7 @@ class DesktopDeviceManager(DeviceManager):
 
     def click_and_drag(self, source_x, source_y, target_x, target_y, mouse_down=True, mouse_up=True):
         self.ensure_device_initialized()
+        self._require_input()
         script_logger.log('input size', _input_module.size(), level='debug')
         script_logger.log(
             'moving from initial position {} to click and drag start {}'.format(
@@ -316,6 +345,7 @@ class DesktopDeviceManager(DeviceManager):
         if self.dummy_mode:
             script_logger.log('PythonHostController: script in dummy mode, returning from live_drag')
             return
+        self._require_input()
         duration_ms = clamp_live_duration_ms(duration_ms)
         source_x = int(source_x * self.scale_factor)
         source_y = int(source_y * self.scale_factor)
@@ -562,6 +592,11 @@ async def read_input():
                 script_logger.log('PYTHON CONTROLLER: Response sent for {}'.format(inputs[0]), flush=True)
             except pyautogui.FailSafeException as e:
                 script_logger.log('PYTHON CONTROLLER PROCESS: fail safe exception triggered', e, level='error')
+            except host_input.HostInputDeniedError as e:
+                script_logger.log('PYTHON CONTROLLER PROCESS: input refused:', e, level='error')
+                script_logger.log('<--{}-->'.format(inputs[0]) + json.dumps({
+                    "data": None, "error": str(e), "code": e.code
+                }) + '<--{}-->'.format(inputs[0]), file=DummyFile(), flush=True)
 
 async def python_controller_main():
     await asyncio.gather(read_input())

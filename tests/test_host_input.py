@@ -11,6 +11,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ScriptEngine.helpers import host_input
 
 
+@pytest.fixture(autouse=True)
+def host_input_allowed(monkeypatch):
+    """Input on the host's own screen counts as allowed: macOS denies it to a
+    test run started from an app without Accessibility, and the desktop driver
+    then refuses every click and key (test_host_input_accessibility.py)."""
+    from ScriptEngine.helpers import host_input
+    monkeypatch.setattr(host_input, '_accessibility_trusted', True)
+
+
 class FakeDirectInput:
     """pydirectinput's key functions, recording what they were asked to send."""
 

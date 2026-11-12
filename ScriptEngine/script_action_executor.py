@@ -25,6 +25,7 @@ from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_
 from ScriptEngine.common.script_engine_utils import state_eval
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.screenshot_failures import ScreenshotFailedError
+from ScriptEngine.helpers.host_input import HostInputDeniedError
 from ScriptEngine.common.logging.capture_log import TAKEN_BY_LOGGER, note_input_sent
 from typing import Tuple, Callable, List, Dict
 script_logger = ScriptLogger()
@@ -49,6 +50,16 @@ class ScriptActionExecutor:
             return self._execute_action(action, state, context, run_queue, lazy_eval=lazy_eval)
         except ScreenshotFailedError as screenshot_error:
             return self.screenshot_failed(action, state, context, run_queue, screenshot_error)
+        except HostInputDeniedError as denied:
+            # Every input after this one would be dropped too, so the run ends
+            # here (errors.txt has the message) rather than failing the action
+            # and retrying it for minutes.
+            script_logger.log('{}-{}: {}'.format(action["actionName"], action["actionGroup"], denied), level='error')
+            script_logger.get_action_log().set_summary('input refused: {}'.format(denied))
+            # Not left RUNNING, which reads as a firstMatch sibling cancelled
+            # by the first match.
+            script_logger.get_action_log().set_status(ScriptExecutionState.ERROR.name)
+            raise
 
     @staticmethod
     def screenshot_failed(action, state, context, run_queue, screenshot_error : ScreenshotFailedError) -> Tuple[Dict, ScriptExecutionState, Dict, Dict, List, List]:
