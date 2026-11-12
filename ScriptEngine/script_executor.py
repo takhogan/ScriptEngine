@@ -25,6 +25,7 @@ from ScriptEngine.device_controller import DeviceController
 from .engine_manager import EngineManager
 from .helpers.detect_object_helper import DetectObjectHelper
 from .parallelized_script_executor import ParallelizedScriptExecutor
+from .helpers.parallelized_script_executor_helper import restore_parallel_result
 from .script_action_executor import ScriptActionExecutor
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.enums import ScriptExecutionState, ScriptExecutionStatusDetail
@@ -865,9 +866,13 @@ class ScriptExecutor:
             # and so it can be compared against the worker-side handler time
             # (PARALLEL WORKER) to separate genuine worker slowness from
             # IPC/pickle/queue overhead on large detection results.
+            # Popped before result() so that a worker exception or a
+            # cancelled future does not leave the sent screenshots behind.
+            sent_action = self.parallelized_executor.sent_actions.pop(action["actionGroup"], None)
             _result_wait_start = time.monotonic()
             handle_action_result = parallel_process.result()
             _result_wait_s = time.monotonic() - _result_wait_start
+            handle_action_result = restore_parallel_result(sent_action, handle_action_result)
             if _result_wait_s >= PARALLEL_RESULT_WAIT_LOG_THRESHOLD_S:
                 script_logger.log(
                     'PARALLEL WAIT: blocked {:.2f}s on result for action {}-{}'.format(
