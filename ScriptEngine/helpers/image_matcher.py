@@ -86,6 +86,29 @@ class ImageMatcher:
 
 
     @staticmethod
+    def template_match_mask(template, mask):
+        """The mask to give cv2.matchTemplate for this template, or None to match without one.
+
+        A mask that keeps every pixel (uniform and non-zero, the same size as the
+        template) gives the same TM_CCOEFF_NORMED scores as no mask, and OpenCV's
+        masked match does several times the work, so it is dropped. It is kept when
+        the template is flat (zero variance, one value per channel): there the
+        masked match scores inf/NaN, which never pass the threshold, while the
+        unmasked one scores 1.0 everywhere for a grey template.
+        """
+        if mask is None or mask.size == 0 or template is None or template.size == 0:
+            return mask
+        if mask.shape[:2] != template.shape[:2]:
+            return mask
+        mask_min, mask_max = mask.min(), mask.max()
+        if mask_min != mask_max or mask_max == 0:
+            return mask
+        channels = template.reshape(-1, template.shape[2] if template.ndim == 3 else 1)
+        if (channels.min(axis=0) == channels.max(axis=0)).all():
+            return mask
+        return None
+
+    @staticmethod
     def produce_template_matches(
             detectObject,
             screencap_im_bgr,
@@ -121,6 +144,17 @@ class ImageMatcher:
             str(screencap_mask_gray.shape)
         )
         script_logger.log(pre_log, level='debug')
+        # The template and mask are the same for the full-size and the resized match.
+        try:
+            search_template = cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr
+            match_mask = ImageMatcher.template_match_mask(search_template, screencap_mask_gray) if use_mask else None
+        except cv2.error:
+            # A template cvtColor rejects: matchTemplate(None) below raises cv2.error,
+            # handled there as before.
+            search_template = None
+            match_mask = None
+        if use_mask and match_mask is None:
+            script_logger.log('Mask keeps every pixel of the template: matching without it', level='debug')
         resized_search = False
         resized_im_log = ''
         if not use_resized_im_only:
@@ -128,9 +162,9 @@ class ImageMatcher:
                 script_logger.log('Starting match template', level='debug')
                 match_result = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr,
-                    cv2.cvtColor(screencap_search_bgr.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
+                    search_template,
                     cv2.TM_CCOEFF_NORMED,result=None,
-                    mask=screencap_mask_gray if use_mask else None
+                    mask=match_mask
                 )
                 script_logger.log('Finished match template', level='debug')
             except cv2.error as e:
@@ -166,10 +200,9 @@ class ImageMatcher:
                 script_logger.log('Starting match template', level='debug')
                 match_result_resized = cv2.matchTemplate(
                     cv2.cvtColor(screencap_im_bgr_resized.copy(), cv2.COLOR_BGR2GRAY) if not use_color else screencap_im_bgr_resized,
-                    cv2.cvtColor(screencap_search_bgr.copy(),
-                                 cv2.COLOR_BGR2GRAY) if not use_color else screencap_search_bgr,
+                    search_template,
                     cv2.TM_CCOEFF_NORMED, result=None,
-                    mask=screencap_mask_gray if use_mask else None
+                    mask=match_mask
                 )
                 script_logger.log('Finished match template', level='debug')
 
