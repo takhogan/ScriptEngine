@@ -873,6 +873,12 @@ class ScriptExecutor:
             handle_action_result = parallel_process.result()
             _result_wait_s = time.monotonic() - _result_wait_start
             handle_action_result = restore_parallel_result(sent_action, handle_action_result)
+            if sent_action is not None and sent_action["actionName"] == "detectObject":
+                # The worker left out the log images' screenshot and templates.
+                returned_action, matches, log_objs = handle_action_result
+                handle_action_result = (
+                    returned_action, matches, DetectObjectHelper.restore_sent_images(log_objs, sent_action)
+                )
             if _result_wait_s >= PARALLEL_RESULT_WAIT_LOG_THRESHOLD_S:
                 script_logger.log(
                     'PARALLEL WAIT: blocked {:.2f}s on result for action {}-{}'.format(

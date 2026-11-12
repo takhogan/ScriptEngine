@@ -88,7 +88,8 @@ class ScriptActionExecutor:
                 action["input_obj"] = input_obj
             script_mode = self.props["scriptMode"]
             if lazy_eval:
-                return DetectObjectHelper.handle_detect_object, (
+                # Runs in a pool worker (ParallelizedScriptExecutor).
+                return DetectObjectHelper.handle_parallel_detect_object, (
                     action,
                     script_mode
                 )

@@ -34,9 +34,11 @@ class ParallelizedScriptExecutor:
         self.device_controller = device_controller
         self.process_executor = process_executor
         self.processes = {}
-        # actionGroup -> the action dict submitted for it. The worker returns
-        # that action without its big arrays (slim_parallel_result) and
-        # ScriptExecutor.execute_action rebuilds it from this one, popping it.
+        # actionGroup -> the action dict submitted to the pool. The main
+        # process still holds its screenshot and templates, so the worker sends
+        # back neither its action's big arrays (slim_parallel_result) nor the
+        # log images' copies of them; ScriptExecutor.execute_action pops this
+        # entry and rebuilds both from it.
         self.sent_actions = {}
         # actionGroup -> ScreenshotFailedError, for the actions that were not
         # started because the screenshot they share could not be taken.
