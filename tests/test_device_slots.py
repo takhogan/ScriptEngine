@@ -157,6 +157,16 @@ def test_static_required_slots_follow_device_maps_into_children():
     assert static_required_slots(top2, lambda name: login)[0] == {}
 
 
+def test_static_required_slots_need_a_childs_default_mapped_slots():
+    # A parent whose own props list nothing yet (an older save) still needs the child's phone0 at run start.
+    child = script([act('detectObject', 1, targetSystem='desktop0'), act('detectObject', 2, targetSystem='phone0')],
+                   {'devices': [{'slot': 'desktop0'}, {'slot': 'phone0', 'description': 'the phone'}]})
+    top = script([act('scriptReference', 1, targetSystem='none', scriptName='Test_Slots_A')])
+    assert static_required_slots(top, lambda name: child)[0] == {'phone0': ['the phone']}
+    mapped = script([act('scriptReference', 1, targetSystem='none', scriptName='Test_Slots_A', deviceMap={'phone0': 'phone1'})])
+    assert static_required_slots(mapped, lambda name: child)[0] == {'phone1': ['the phone']}
+
+
 # ---------------------------------------------------------------------------
 # DeviceController
 
