@@ -9,6 +9,7 @@ import numpy as np
 
 from zipfile import ZipFile
 from ScriptEngine.common.logging.script_logger import ScriptLogger
+from ScriptEngine.common.device_slots import map_v22_script
 script_logger = ScriptLogger()
 
 
@@ -188,6 +189,18 @@ def script_to_string(script_name, action_rows):
         }, 0, set(), unpack_childLink=False)
     else:
         return "script-" + script_name
+def _read_interface_version(dir_path, script_zip=None, script_path_in_zip=None):
+    """interfaceVersion.txt as an int, or None when it is missing or unreadable."""
+    try:
+        if script_zip is not None:
+            with script_zip.open(script_path_in_zip + '/interfaceVersion.txt', 'r') as f:
+                return int(f.read().decode('utf-8').strip())
+        with open(os.path.join(dir_path, 'interfaceVersion.txt'), 'r', encoding='utf-8') as f:
+            return int(f.read().strip())
+    except Exception:
+        return None
+
+
 def parse_script_file(
         script_name,
         action_rows_file_obj,
@@ -228,6 +241,14 @@ def parse_script_file(
 
     with props_file_obj as props_file:
         props = _load_json(props_file)
+
+    # Device slots: a file still at interface version 22 (a rollback, or a
+    # deploy from before the bulk migration) has driver types for targets.
+    # Map them the way @screenplan/script-vcs migrateV22ToV23 does.
+    interface_version = _read_interface_version(dir_path, script_zip, script_path_in_zip)
+    if map_v22_script(action_rows, props, interface_version):
+        script_logger.log('SCRIPT LOAD: {} is at interface version {}: mapped its targets to device slots'.format(
+            script_name, interface_version), level='info')
 
     with inputs_file_obj as inputs_file:
         inputs = _load_json(inputs_file)

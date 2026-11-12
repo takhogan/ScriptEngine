@@ -198,6 +198,33 @@ def load_and_run(script_name, script_id, timeout, constants=None, start_time=Non
         write_root_outputs(run_folder, run_record)
 
 
+def check_run_bindings(device_controller, script_object, system_script, workspace):
+    """The run-start check (device slots): every slot the top script and its statically named
+    children list, other than device0 and desktop0, must be bound. Raises one error listing
+    each missing slot and its description; a kind mismatch is only a warning in stage 1."""
+    from ScriptEngine.common.device_slots import static_required_slots
+    from ScriptEngine.script_loader import parse_script
+    include_scripts = script_object.get('include') or {}
+
+    def load(name):
+        if name in include_scripts:
+            return include_scripts[name]
+        try:
+            child = parse_script(name, system_script, workspace)
+        except Exception as load_error:
+            script_logger.log('SCRIPT MANAGER: device check could not load', name, load_error, level='debug')
+            return None
+        include_scripts[name] = child
+        return child
+
+    required, adb_slots = static_required_slots(script_object, load)
+    errors, warnings = device_controller.check_bindings(required, adb_slots)
+    for warning in warnings:
+        script_logger.log(warning, level='error')
+    if errors:
+        raise Exception('\n'.join(errors))
+
+
 def end_run_for_approval(approval, run_folder, root_action_log):
     """The run reached a secret it is not approved to read (secret_gate). Says
     so where the controller looks: needs_approval.json, and NEEDS_APPROVAL as
@@ -248,46 +275,26 @@ def _load_and_run(script_name, script_id, timeout, constants=None, start_time=No
     script_object = parse_script(script_name, system_script, workspace)
     from ScriptEngine.common.run_outputs import script_output_names
     run_record['output_names'] = script_output_names(script_object)
+    # Device slots: the --device values are a binding list, slot=device, and
+    # a bare value binds its type's default slot (an adb or iOS device
+    # phone0, a PiKVM desktop0, file: every slot), which is all an older
+    # controller or an unmigrated event sends. The run-start check below
+    # needs every slot the scripts list, except device0 and desktop0.
+    from ScriptEngine.common.device_slots import parse_device_bindings
+    device_bindings, all_slots_value = parse_device_bindings(device_details)
     device_params = {}
-    # '' and the literal 'null' are how "nothing attached" arrives from the
-    # controller; collapse them to None once so the run has a single answer to
-    # "was a device selected?" — the branch below and the error a device-bound
-    # action raises when device_params stays empty both read it.
-    device_selection = None if device_details in (None, '', 'null') else device_details
-    if device_selection is not None:
-        if device_selection.startswith('file'):
-            file_path = ''.join(device_selection.split(':')[1:])
-            file_type = os.path.splitext(file_path)[1]
-            script_logger.log('SCRIPT MANAGER: loading input source', file_path, 'file exists', os.path.exists(file_path), level='info')
-            import cv2
-            if file_type[1:] in imageFileExtensions:
-                input_img = cv2.imread(file_path)
-                height,width,_ = input_img.shape
-                device_params = {
-                    'script-engine-device-type': 'file',
-                    'screenshot' : lambda: input_img,
-                    'width' : width,
-                    'height' : height,
-                }
-            else:
-                raise Exception('file type not supported "' + file_type + '"')
-        else:
-            with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
-                devices_config = json.load(devices_config_file)
-                if device_selection in devices_config:
-                    device_params = devices_config[device_selection]
-                    # The record's own type (avd, pikvm, ios, ...). This was
-                    # hard-coded 'bluestacks' for every configured device, so a
-                    # run against a PiKVM or an iPhone was labelled an emulator.
-                    # Only 'file' is ever compared against it, which is why it
-                    # went unnoticed; it is still what the run log shows. A
-                    # record from before `type` was stored has its id prefix.
-                    device_params['script-engine-device-type'] = (
-                        device_params.get('type') or device_selection.split(':')[0]
-                    )
-                else:
-                    script_logger.log('SCRIPT MANAGER: device config for ', device_selection, ' not found! ', level='error')
-    script_logger.log('SCRIPT MANAGER: loading adb_args', device_params, level='info')
+    device_selection = None if not device_bindings and all_slots_value is None else (
+        ', '.join('{}={}'.format(slot, value) for slot, value in sorted(device_bindings.items()))
+        or all_slots_value
+    )
+    script_logger.log('SCRIPT MANAGER: device bindings', device_bindings,
+                      'every slot: ' + all_slots_value if all_slots_value else '', level='info')
+    run_record['device_bindings'] = dict(device_bindings)
+    try:
+        with open(os.path.join(run_folder, 'device_bindings.json'), 'w', encoding='utf-8') as bindings_file:
+            json.dump({'bindings': device_bindings, 'allSlots': all_slots_value}, bindings_file)
+    except Exception as write_error:
+        script_logger.log('SCRIPT MANAGER: could not write device_bindings.json', write_error, level='error')
     errored = False
     needs_approval = False
     root_action_log = None
@@ -312,8 +319,12 @@ def _load_and_run(script_name, script_id, timeout, constants=None, start_time=No
         device_controller = DeviceController(
             script_object['props'], device_params, io_executor, secrets_manager, device_selection,
             restart_device_on_crash=restart_device_on_crash, restart_deadline=timeout,
-            cancel_check=functools.partial(is_script_cancelled, script_id) if screen_plan_server_attached else None
+            cancel_check=functools.partial(is_script_cancelled, script_id) if screen_plan_server_attached else None,
+            bindings=device_bindings, all_slots_value=all_slots_value
         )
+        # Each action log records the slot its target resolved to and the device there.
+        from ScriptEngine.common.logging.script_action_log import ScriptActionLog
+        ScriptActionLog.device_describer = device_controller.describe_target
         engine_manager = EngineManager(script_id, script_logger.get_log_folder())
         script_action_executor = ScriptActionExecutor(device_controller, io_executor, script_object['props'], screen_plan_server_attached)
         # TODO: might need fixing
@@ -355,6 +366,8 @@ def _load_and_run(script_name, script_id, timeout, constants=None, start_time=No
             # the environment (merge_literal_inputs).
             input_state.update(literal_inputs or {})
 
+            if not system_script:
+                check_run_bindings(device_controller, script_object, system_script, workspace)
             main_script.parse_inputs(input_state)
             # action logger for the scriptReference
             main_script.context["script_counter"] += 1
@@ -449,7 +462,11 @@ def main():
                                  'info = info/error logs + post files only (enough to render the log video); '
                                  'error = high-level logs only, no files, no video')
         parser.add_argument('--script-id', '-id', help='Script ID (UUID)')
-        parser.add_argument('--device', '-d', help='Device details')
+        parser.add_argument('--device', '-d', action='append',
+                            help='A device binding, slot=device (phone0=avd:Pixel_7, desktop0=pikvm:office-pc, '
+                                 'desktop0=host, phone0=file:<png>), repeatable, or a comma-separated list. A bare '
+                                 'device binds its type\'s default slot: adb and iOS devices phone0, a PiKVM '
+                                 'desktop0, file: every slot.')
         parser.add_argument('--system-script', '-sys', action='store_true', help='Whether this is a system script')
         parser.add_argument('--workspace', '-w', default='Default', help='Workspace name (defaults to "Default"). Only used for library scripts.')
         parser.add_argument('--screen-plan-server-attached', '-spsa', action='store_true', help='Whether a screenplan client server is attached')
@@ -491,7 +508,8 @@ def main():
         log_level = args.log_level
         import uuid
         script_id = args.script_id if args.script_id else uuid.uuid4()
-        device_details = None if (not args.device or args.device == '' or args.device == 'null') else args.device
+        # Every --device value, in order (parse_device_bindings reads them).
+        device_details = [value for value in (args.device or []) if value not in ('', 'null')] or None
         system_script = args.system_script
         
         constants, rejected_constants = parse_constants(args.constants)
@@ -537,7 +555,8 @@ def main():
         script_id=str(script_id),
         timeout=script_timeout,
         script_start_time=start_time,
-        device_details=device_details,
+        # Expressions read it as script.device_details: one string, as before slots.
+        device_details=','.join(device_details) if device_details else None,
     )
 
     load_and_run(

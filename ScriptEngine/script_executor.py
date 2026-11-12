@@ -479,7 +479,16 @@ class ScriptExecutor:
             ref_script_executor.set_log_paths()
 
 
+            # Device slots: the child's slots map onto this script's through
+            # the scriptReference's deviceMap while it runs. A slot the child
+            # needs and the run left unbound fails here, for a child named at
+            # run time or saved by an older studio without props.devices.
+            device_controller = self.device_controller
+            if device_controller is not None:
+                device_controller.push_slot_map(action['actionData'].get('deviceMap'))
             try:
+                if device_controller is not None:
+                    device_controller.check_child_slots(ref_script, script_name)
                 if action["actionData"]["runMode"] == "run":
                     ref_script_executor.run()
                 elif action["actionData"]["runMode"] == "runOne":
@@ -491,6 +500,9 @@ class ScriptExecutor:
                 self.script_action_log.set_summary('needs approval')
                 self.script_action_log.set_status(NEEDS_APPROVAL)
                 raise
+            finally:
+                if device_controller is not None:
+                    device_controller.pop_slot_map()
 
 
             self.set_log_paths()

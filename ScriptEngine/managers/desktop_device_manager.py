@@ -541,7 +541,7 @@ async def read_input():
                     'actionName' : 'configurationAction',
                     'actionGroup' : 0,
                     'actionData' : {
-                        'targetSystem': 'python'
+                        'targetSystem': 'host'
                     }
                 },
                 script_logger.get_log_folder(),

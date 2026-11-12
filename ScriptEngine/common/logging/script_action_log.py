@@ -27,6 +27,9 @@ _log_executor = ThreadPoolExecutor(max_workers=1)
 
 
 class ScriptActionLog:
+    # (target) -> (slot, device id): the run's DeviceController.describe_target.
+    device_describer = None
+
     def __init__(self, action, log_folder, log_header, script_counter):
         self.default_path_header = log_folder + log_header + '-'
         self.base_path = log_folder
@@ -43,6 +46,17 @@ class ScriptActionLog:
         self.sync_end_time = None
         self.script_log_folder = None
         self.target_system = action['actionData']['targetSystem']
+        # Device slots: the run-level slot the target resolved to (after the
+        # calling scripts' deviceMaps) and the device bound there. Set by the
+        # run's DeviceController through device_describer; None for an action
+        # that needs no device, and outside a run.
+        self.device_slot, self.device_id = None, None
+        describer = ScriptActionLog.device_describer
+        if describer is not None and self.target_system != 'none' and action["actionName"] != "scriptReference":
+            try:
+                self.device_slot, self.device_id = describer(self.target_system)
+            except Exception:
+                pass
         self.attributes = {}
         if action["actionName"] == "scriptReference":
             self.type = "script"
@@ -101,6 +115,8 @@ class ScriptActionLog:
                 'id' : self.id,
                 'name' : self.name,
                 'target_system' : self.target_system,
+                'device_slot' : self.device_slot,
+                'device_id' : self.device_id,
                 'script_name' : self.script_name,
                 'script_log_folder': relative_data_path(self.get_script_log_folder()),
                 'script_counter' : self.get_script_counter(),

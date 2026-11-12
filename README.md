@@ -111,7 +111,7 @@ Options:
   --script-name TEXT     Name of the script to execute
   --script-id TEXT       Unique identifier for the script execution
   --timeout INTEGER      Script timeout in seconds
-  --device-details TEXT  Device configuration JSON
+  --device TEXT          A device binding, slot=device; repeatable (see "Device slots")
   --constants TEXT       Script constants JSON
   --inputs-file PATH     A UTF-8 JSON object of {input name: value}: literal values,
                          never evaluated; a name also in --constants takes the file's value
@@ -229,6 +229,33 @@ its rows, a list of dicts, in `outputVarName`; a write stores
 }
 ```
 
+### Device slots
+
+From interface version 23 an action's `targetSystem` names a **device slot**:
+`device0`, `desktop0`, `phone0`, `tablet1`… (a kind and a number), `host`
+(always this machine's own screen) or `none` (no device). Blank means
+`device0`. A run binds slots to devices:
+
+```bash
+python -m ScriptEngine.script_manager -s my_script --device phone0=avd:Pixel_7 --device desktop0=pikvm:office-pc
+python -m ScriptEngine.script_manager -s my_script --device 'phone0=avd:Pixel_7,desktop0=host'
+```
+
+- A bare value binds its type's default slot: `avd:`, `bluestacks:`, `adb:`
+  and `ios:` devices `phone0`; `pikvm:` and `host` `desktop0`; `file:<png>`
+  every slot (a still image); anything else `device0`.
+- `device0` and `desktop0` left unbound are the host's own desktop. Every
+  other slot the script (or a child it names statically) lists in
+  `props.devices` must be bound, or the run fails at start naming each one.
+- A `scriptReference`'s `deviceMap` (`{"device0": "tablet0"}`) runs the
+  child's slots on the parent's.
+- A script still at interface version 22 has its driver types mapped at load
+  time (`python`/`kvm` → `desktop0`, `adb`/`ios` → `phone0`), as
+  `@screenplan/script-vcs`'s `migrateV22ToV23` does
+  (`ScriptEngine/common/device_slots.py`).
+- Each action log records `device_slot` and `device_id`; the run folder's
+  `device_bindings.json` holds the bindings.
+
 ### Example Script Actions
 
 #### Mouse Actions
@@ -236,7 +263,7 @@ its rows, a list of dicts, in `outputVarName`; a write stores
 {
   "actionName": "clickAction",
   "actionData": {
-    "targetSystem": "python",
+    "targetSystem": "desktop0",
     "inputExpression": "detectObject_0_output",
     "pointList": [],
     "clickCount": 1,
@@ -250,7 +277,7 @@ its rows, a list of dicts, in `outputVarName`; a write stores
 {
   "actionName": "detectObject",
   "actionData": {
-    "targetSystem": "adb",
+    "targetSystem": "phone0",
     "detectActionType": "floatingObject",
     "matchMode": "bestMatch",
     "threshold": "0.3",

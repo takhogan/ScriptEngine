@@ -79,8 +79,14 @@ class ParallelizedScriptExecutor:
             if input_obj['screencap_im_bgr'] is None:
                 script_logger.log('No input expression, using cached screenshot')
                 target_system = parallel_action['actionData']['targetSystem']
-                if target_system in system_inputs:
-                    input_obj = system_inputs[target_system]
+                # One screenshot per device, not per target string: device0
+                # (unbound), desktop0=host and host all read the host's screen.
+                try:
+                    device_key = self.device_controller.device_key(target_system)
+                except Exception:
+                    device_key = target_system
+                if device_key in system_inputs:
+                    input_obj = system_inputs[device_key]
                     if isinstance(input_obj, ScreenshotFailedError):
                         self.screenshot_failures[parallel_action["actionGroup"]] = input_obj
                         continue
@@ -94,7 +100,7 @@ class ParallelizedScriptExecutor:
                         # each one when it reaches it. A screenshot per action
                         # would wait out the same failure again for each (30s
                         # apiece on a PiKVM with no video signal).
-                        system_inputs[target_system] = e
+                        system_inputs[device_key] = e
                         self.screenshot_failures[parallel_action["actionGroup"]] = e
                         continue
                     _screenshot_s = time.monotonic() - _screenshot_start
@@ -112,7 +118,7 @@ class ParallelizedScriptExecutor:
                     input_obj['original_height'] = input_obj['screencap_im_bgr'].shape[0]
                     input_obj['original_width'] = input_obj['screencap_im_bgr'].shape[1]
                     input_obj['fixed_scale'] = False
-                    system_inputs[target_system] = input_obj
+                    system_inputs[device_key] = input_obj
                 
             script_logger.log('Generating parallel action handler for ' + str(parallel_action["actionGroup"]), level='debug')
             parallel_action["input_obj"] = input_obj
