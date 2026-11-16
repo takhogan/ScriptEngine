@@ -35,7 +35,9 @@ class ScriptLogPreviewGenerator:
                     'action_name': log_tree['name'],
                     'post_file': last_image['post_file'],
                     'caption' : log_tree.get('summary', '') or '',
-                    'start_time': log_tree.get('start_time', '')
+                    'start_time': log_tree.get('start_time', ''),
+                    'device_slot': last_image.get('device_slot'),
+                    'device_id': last_image.get('device_id')
                 })
                 # Update last_image to the newly added one (with new action_name)
                 last_image = image_list[-1]
@@ -50,7 +52,10 @@ class ScriptLogPreviewGenerator:
                     'action_name': log_tree['name'],
                     'post_file': log_tree['post_file']['file_path'],
                     'caption' : log_tree.get('summary', '') or '',
-                    'start_time': log_tree.get('start_time', '')
+                    'start_time': log_tree.get('start_time', ''),
+                    # Device slots: the slot the action ran on and the device bound there.
+                    'device_slot': log_tree.get('device_slot'),
+                    'device_id': log_tree.get('device_id')
                 })
                 # Update last_image to the newly added one
                 last_image = image_list[-1]
@@ -225,7 +230,7 @@ class ScriptLogPreviewGenerator:
                     continue
                 img = ScriptLogPreviewGenerator.resize_with_padding(img, width, height)
                 
-                ScriptLogPreviewGenerator.overlay_text(img, image_path['script_name'], (50, 50))
+                ScriptLogPreviewGenerator.overlay_text(img, ScriptLogPreviewGenerator.frame_title(image_path), (50, 50))
                 ScriptLogPreviewGenerator.overlay_text(img, image_path['action_name'], (50, 100))
                 # Wrap caption text at 80 characters per line
                 caption_text = image_path.get('caption', '') or ''
@@ -266,7 +271,7 @@ class ScriptLogPreviewGenerator:
                     continue
                 img = ScriptLogPreviewGenerator.resize_with_padding(img, width, height)
                 
-                ScriptLogPreviewGenerator.overlay_text(img, image_path['script_name'], (50, 50))
+                ScriptLogPreviewGenerator.overlay_text(img, ScriptLogPreviewGenerator.frame_title(image_path), (50, 50))
                 ScriptLogPreviewGenerator.overlay_text(img, image_path['action_name'], (50, 100))
                 # Wrap caption text at 80 characters per line
                 caption_text = image_path.get('caption', '') or ''
@@ -278,6 +283,42 @@ class ScriptLogPreviewGenerator:
         video.release()
 
     @staticmethod
+    def frame_title(image_path):
+        """The frame's first line: the script, and the slot it ran on (device slots)."""
+        slot = image_path.get('device_slot')
+        return '{} [{}]'.format(image_path['script_name'], slot) if slot else image_path['script_name']
+
+    @staticmethod
+    def split_by_device(image_list, output_path):
+        """[(output path, frames)]: one video per device the run used (device slots).
+
+        The device with the most frames keeps output_path, the file the
+        controller and the studio know; each other device gets
+        `{name}-{slot}{ext}`, its slot the one most of its frames ran on. A run
+        on one device (or from before slots) gives one video, as before.
+        """
+        groups = {}
+        for frame in image_list:
+            groups.setdefault(frame.get('device_id') or '', []).append(frame)
+        if len(groups) <= 1:
+            return [(output_path, image_list)]
+        ordered = sorted(groups.values(), key=len, reverse=True)
+        base, ext = os.path.splitext(output_path)
+        out = [(output_path, ordered[0])]
+        taken = {output_path}
+        for frames in ordered[1:]:
+            slots = [f.get('device_slot') for f in frames if f.get('device_slot')]
+            slot = max(set(slots), key=slots.count) if slots else 'device'
+            path = '{}-{}{}'.format(base, slot, ext)
+            n = 2
+            while path in taken:
+                path = '{}-{}-{}{}'.format(base, slot, n, ext)
+                n += 1
+            taken.add(path)
+            out.append((path, frames))
+        return out
+
+    @staticmethod
     def assemble_script_log_preview(action_log_path, output_path, realtime=False):
         log_tree = {
             'action_log_path': action_log_path
@@ -285,12 +326,14 @@ class ScriptLogPreviewGenerator:
         ScriptLogTreeGenerator.assemble_script_log_tree(log_tree)
         image_list = []
         ScriptLogPreviewGenerator.log_tree_to_image_list(log_tree, image_list)
-        if len(image_list) > 0:
+        for path, frames in ScriptLogPreviewGenerator.split_by_device(image_list, output_path):
+            if len(frames) == 0:
+                continue
             if realtime:
                 # For real-time mode, use higher FPS for smoother playback
-                ScriptLogPreviewGenerator.images_to_video(image_list, output_path, fps=30, realtime=True)
+                ScriptLogPreviewGenerator.images_to_video(frames, path, fps=30, realtime=True)
             else:
-                ScriptLogPreviewGenerator.images_to_video(image_list, output_path, fps=2)
+                ScriptLogPreviewGenerator.images_to_video(frames, path, fps=2)
 
 def main():
     import argparse

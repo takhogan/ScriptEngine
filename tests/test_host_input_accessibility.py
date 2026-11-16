@@ -227,6 +227,8 @@ def controller_with_host_screen(manager):
     controller = DeviceController.__new__(DeviceController)
     controller._initialize_device_lock = threading.Lock()
     controller.devices = {'host': manager}
+    # Device slots: a call that names its device resolves it with the run's input source (none here).
+    controller.input_source = None
     return controller
 
 
