@@ -1487,10 +1487,12 @@ class ADBDeviceManager(DeviceManager):
     # device; see helpers/host_input.py.
     def key_up(self, key):
         script_logger.log('adb keypress and hold unimplemented! sending it to the host keyboard')
+        host_input.require_input()
         host_input.input_module.keyUp(key)
 
     def key_down(self, key):
         script_logger.log('adb keypress and hold unimplemented! sending it to the host keyboard')
+        host_input.require_input()
         host_input.input_module.keyDown(key)
 
     def key_press(self, key):
@@ -1505,6 +1507,7 @@ class ADBDeviceManager(DeviceManager):
 
     def hotkey(self, keys):
         script_logger.log('adb hotkey unimplemented! sending it to the host keyboard')
+        host_input.require_input()
         host_input.input_module.hotkey(*keys)
 
     def save_screenshot(self, save_name):

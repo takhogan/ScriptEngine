@@ -17,15 +17,88 @@ by the remote session's layout: the fix holds there only while the two
 layouts agree on dead keys, which they do when the viewer syncs the client
 layout to the session (Citrix's keyboard layout sync).
 
+On macOS posted clicks and keys reach the screen only while the process is
+trusted for Accessibility, and macOS asks that of the app responsible for the
+process: the app that launched the controller, whose child this is. When it is
+not trusted (a controller started from Claude Code, say), macOS drops every
+event without an error, so input_denied() asks once and the desktop driver
+refuses input instead of reporting it done. Screenshots need Screen Recording,
+not Accessibility, and are unaffected.
+
 See https://github.com/reggx/pydirectinput_rgx
 """
 import ctypes
 import platform
+import sys
 import time
 
 import pyautogui
 
 IS_WINDOWS = platform.system() == 'Windows'
+IS_MAC = sys.platform == 'darwin'
+
+APPLICATION_SERVICES = '/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices'
+
+HOST_INPUT_DENIED_CODE = 'HOST_INPUT_DENIED'
+HOST_INPUT_DENIED_MESSAGE = (
+    'macOS denied Accessibility to the app that launched the controller, so it drops every click, '
+    'drag, scroll and key sent to this Mac\'s own screen. Start the controller from a terminal app '
+    'that has Accessibility, or grant it to the launching app in System Settings → Privacy & '
+    'Security → Accessibility and restart the controller. Screenshots and detects still work.'
+)
+
+
+class HostInputDeniedError(Exception):
+    """Input on the host's own screen that macOS would drop: the process is not
+    trusted for Accessibility. Ends a run, as every input after it would fail
+    too."""
+    code = HOST_INPUT_DENIED_CODE
+
+    def __init__(self, message=HOST_INPUT_DENIED_MESSAGE):
+        super().__init__(message)
+
+
+def accessibility_trusted():
+    """AXIsProcessTrusted() for this process: True off macOS, None when macOS
+    cannot be asked."""
+    if not IS_MAC:
+        return True
+    try:
+        application_services = ctypes.cdll.LoadLibrary(APPLICATION_SERVICES)
+        application_services.AXIsProcessTrusted.argtypes = []
+        application_services.AXIsProcessTrusted.restype = ctypes.c_bool
+        return bool(application_services.AXIsProcessTrusted())
+    except Exception:
+        return None
+
+
+_UNCHECKED = object()
+_accessibility_trusted = _UNCHECKED
+
+
+def input_denied():
+    """Whether macOS drops this process's clicks and keys. Asked once per
+    process: trust granted later reaches only a restarted controller. A Mac
+    that cannot be asked counts as allowing input, as before the check."""
+    global _accessibility_trusted
+    if _accessibility_trusted is _UNCHECKED:
+        _accessibility_trusted = accessibility_trusted()
+    return _accessibility_trusted is False
+
+
+def require_input():
+    """Raise HostInputDeniedError when input on this machine's screen would be
+    dropped."""
+    if input_denied():
+        raise HostInputDeniedError()
+
+
+def input_status():
+    """Whether the host's own screen takes input, for check_status:
+    {'input': 'ok'}, or 'denied' with the error and its code."""
+    if input_denied():
+        return {'input': 'denied', 'inputError': HOST_INPUT_DENIED_MESSAGE, 'inputErrorCode': HOST_INPUT_DENIED_CODE}
+    return {'input': 'ok'}
 
 if IS_WINDOWS:
     import pydirectinput as input_module  # type: ignore[import-not-found]

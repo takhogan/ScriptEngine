@@ -41,6 +41,7 @@ from ScriptEngine.common.logging.capture_log import CAPTURE_LOG, TAKEN_BY_ACTION
 
 from ScriptEngine.helpers.device_action_interpreter import DeviceActionInterpreter
 from ScriptEngine.helpers.live_input import parse_live_drag_args
+from ScriptEngine.helpers.host_input import HostInputDeniedError
 
 
 from ScriptEngine.common.constants.script_engine_constants import DATA_ROOT, DEVICES_CONFIG_PATH, LOGS_FOLDER
@@ -443,9 +444,19 @@ class DeviceController:
 
         if device_action == 'check_status':
             status = self.get_device_action(device_type, 'get_status', device_params)()
-            return {
+            output = {
                 "data": status
             }
+            # The host's own screen also says whether it takes input: macOS
+            # drops every click and key when the controller's launcher lacks
+            # Accessibility, while the screen stays online for captures.
+            try:
+                input_status = self.get_device_attribute(device_type, 'get_input_status', device_params)
+            except AttributeError:
+                input_status = None
+            if input_status is not None:
+                output.update(input_status())
+            return output
         elif device_action == 'screen_capture':
             screenshot = self.get_device_action(device_type, 'screenshot', device_params, taken_by=None)()
             from cv2 import imencode
@@ -522,6 +533,15 @@ async def process_input(device_controller: DeviceController, inputs: list):
         try:
             # Process the input in a thread pool (non-blocking for event loop)
             output = await asyncio.to_thread(device_controller.parse_inputs, inputs)
+        except HostInputDeniedError as e:
+            # No "data": the controller answers a request without it as failed,
+            # where "device controller error" would read as done.
+            script_logger.log('DEVICE CONTROLLER: input refused', inputs, e, level='error')
+            output = {
+                "data": None,
+                "error": str(e),
+                "code": e.code
+            }
         except Exception as e:
             script_logger.log('DEVICE CONTROLLER: error in parse_inputs', inputs, e, level='error')
             output = {
