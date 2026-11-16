@@ -253,6 +253,9 @@ def test_check_bindings_lists_missing_slots_and_warns_on_kinds(controller):
     c = controller({'phone0': 'avd:Pixel_7', 'desktop0': 'avd:Pixel_7'})
     errors, warnings = c.check_bindings({'phone0': [], 'tablet1': ['the tablet'], 'phone2': []}, {'phone0'})
     assert len(errors) == 1 and 'phone2' in errors[0] and 'tablet1: the tablet' in errors[0]
+    # How to bind it, for an MCP caller as well as the command line.
+    assert 'devices: {"tablet1": "<device id>"} in an MCP run_script or test_actions call' in errors[0]
+    assert '--device tablet1=<device> on the command line' in errors[0]
     assert warnings == ['DEVICE CONTROLLER: slot desktop0 is a desktop slot, bound to avd:Pixel_7 (a adb device); running it anyway']
     errors, _ = controller({'phone0': 'pikvm:x'}).check_bindings({}, {'phone0'})
     assert 'not an adb device' in errors[0]

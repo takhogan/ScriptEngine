@@ -218,6 +218,12 @@ def load_file_input(device_value):
     }
 
 
+def how_to_bind(slot):
+    """How a caller binds an unbound slot, for each way a run is started (the MCP tools, the studio, the command line)."""
+    return ('Bind each when starting the script: devices: {{"{0}": "<device id>"}} in an MCP run_script or test_actions call, '
+            'a device in the studio\'s device rows, or --device {0}=<device> on the command line.').format(slot)
+
+
 class DeviceController:
     def __init__(self, default_props, default_device_params, io_executor : CustomThreadPool, secrets_manager: DeviceSecretsManager, device_selection=None,
                  restart_device_on_crash=False, restart_deadline=None, cancel_check=None,
@@ -393,8 +399,7 @@ class DeviceController:
         if missing:
             raise Exception(
                 'DEVICE CONTROLLER: script {} needs device slots the run bound nothing to: {}. '
-                'Bind each when starting the script ({}=<device>).'.format(
-                    script_name, ', '.join(missing), missing[0].split(' ')[0].rstrip(':'))
+                '{}'.format(script_name, ', '.join(missing), how_to_bind(missing[0].split(' ')[0].rstrip(':')))
             )
 
     def describe_target(self, target):
@@ -426,7 +431,7 @@ class DeviceController:
             errors.append(
                 'DEVICE CONTROLLER: the script needs these device slots, and the run bound nothing to them:\n'
                 + '\n'.join(lines)
-                + '\nBind each when starting the script (--device {}=<device>).'.format(missing[0])
+                + '\n' + how_to_bind(missing[0])
             )
         for slot, value in sorted(self.bindings.items(), key=lambda kv: slot_sort_key(kv[0])):
             if value.startswith('file:') or value == HOST_SLOT:
