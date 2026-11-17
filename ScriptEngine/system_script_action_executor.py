@@ -37,6 +37,7 @@ from ScriptEngine.common.script_engine_utils import generate_context_switch_acti
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.common.logging.log_overlay import log_image_file
 from typing import Callable, Dict, List, Tuple
+from ScriptEngine.common import sim_clock
 script_logger = ScriptLogger()
 
 
@@ -222,12 +223,12 @@ class SystemScriptActionExecutor:
 
                 if timerVarName not in state:
                     # Start the timer
-                    state[timerVarName] = time.time()
+                    state[timerVarName] = sim_clock.time()
                     initial_timer_logs = 'Starting timer for {} at {}'.format(counterVarName, state[timerVarName])
                     script_logger.log(initial_timer_logs, level='debug')
                     pre_log += '\n' + initial_timer_logs
 
-                elapsed_time = time.time() - state[timerVarName]
+                elapsed_time = sim_clock.time() - state[timerVarName]
                 
                 if elapsed_time < threshold_seconds:
                     post_log = 'For timer {}'.format(counterVarName) +\
@@ -332,7 +333,7 @@ class SystemScriptActionExecutor:
                     'sleepStatement-begin-{:.2f}'.format(sleep_length).replace('.', '_') + '.txt',
                     pre_log + '\n' + mid_log
                 )
-                time.sleep(sleep_length)
+                sim_clock.sleep(sleep_length)
             # Create summary with proper singular/plural
             if sleep_length == 1:
                 summary = 'slept 1 second'
@@ -349,9 +350,9 @@ class SystemScriptActionExecutor:
         elif action["actionName"] == "timeAction":
             time_val = None
             if action["actionData"]["timezone"] == "local":
-                time_val = datetime.datetime.now()
+                time_val = sim_clock.now()
             elif action["actionData"]["timezone"] == "utc":
-                time_val = datetime.datetime.utcnow()
+                time_val = sim_clock.utcnow()
             state[action["actionData"]["outputVarName"]] = time_val
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "randomVariable":

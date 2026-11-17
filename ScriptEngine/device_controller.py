@@ -171,6 +171,8 @@ DEVICE_TYPES_REQUIRING_ATTACHMENT = ('adb', 'kvm', 'ios')
 # The key the host's own desktop is cached under (device slots: managers are
 # cached per device, so device0, desktop0 and host share one when unbound).
 HOST_DEVICE_KEY = 'host'
+# The run's simulated device (a bare --device sim:), whatever slot an action names.
+SIM_DEVICE_KEY = 'sim'
 
 # Actions about an iOS device that is not registered yet - discovery, and the
 # prerequisite checks and fixes behind the Add Device form's buttons. Named here
@@ -260,7 +262,11 @@ class DeviceController:
         # file:<path> (parse_device_bindings). A bare file: value is a still
         # image for every slot, the host included, as a file: run always was.
         self.bindings: Dict[str, str] = dict(bindings or {})
-        if all_slots_value is not None and self.input_source is None:
+        # A bare sim: value is a simulated device for every slot, the host
+        # included (UI_MAPPER.md §4): script_manager passes its params as the
+        # default device params, and resolve() sends every target to it.
+        self.simulated = (default_device_params or {}).get('script-engine-device-type') == 'sim'
+        if all_slots_value is not None and self.input_source is None and not self.simulated:
             self.input_source = load_file_input(all_slots_value)
         self._file_inputs: Dict[str, dict] = {}
         # One map per running script, child slot -> run-level slot, composed
@@ -308,6 +314,18 @@ class DeviceController:
     def _host(self, slot):
         return ResolvedDevice(slot, HOST_DEVICE_KEY, 'python', HOST_SLOT, None, self.input_source)
 
+    def _sim(self, target):
+        """The run's simulated device, for any target: one sim answers every slot, the host and the v22 types."""
+        if target in LEGACY_TARGET_SYSTEMS:
+            slot, device_type = target, target
+        else:
+            slot = self.run_slot(target)
+            # The type an action on this slot would have: a phone or tablet
+            # reads like an adb device, anything else like the desktop.
+            device_type = 'adb' if slot_kind(slot) in ('phone', 'tablet') else 'python'
+        params = self.default_device_params
+        return ResolvedDevice(slot, SIM_DEVICE_KEY, device_type, params.get('deviceId', 'sim'), params, None)
+
     def _file_device(self, slot, value):
         if value not in self._file_inputs:
             self._file_inputs[value] = load_file_input(value)
@@ -328,6 +346,8 @@ class DeviceController:
         """
         if target == NO_DEVICE:
             raise Exception("DEVICE CONTROLLER: an action with target 'none' needs no device")
+        if self.simulated:
+            return self._sim(target)
         if target in LEGACY_TARGET_SYSTEMS:
             return self._resolve_legacy(target)
         slot = self.run_slot(target)
@@ -390,7 +410,7 @@ class DeviceController:
 
     def check_child_slots(self, script_obj, script_name=''):
         """Raise when a child script about to run needs a slot that maps to an unbound required run slot."""
-        if self.input_source is not None:
+        if self.input_source is not None or self.simulated:
             return
         missing = []
         for slot, description in required_slots(script_obj.get('props'), script_obj.get('actionRows')).items():
@@ -424,7 +444,8 @@ class DeviceController:
     def check_bindings(self, required, adb_slots=()):
         """The run-start check: (errors, warnings). required: {slot: [descriptions]} (static_required_slots)."""
         errors, warnings = [], []
-        missing = [slot for slot in required if slot not in self.bindings and self.input_source is None]
+        whole_run = self.input_source is not None or self.simulated
+        missing = [slot for slot in required if slot not in self.bindings and not whole_run]
         if missing:
             lines = []
             for slot in missing:
@@ -519,7 +540,12 @@ class DeviceController:
             # The interactive controller names a configured device.
             params = self._resolve_device_params(device_params['deviceId'], device_type)
 
-        if device_type == 'python':
+        if resolved.key == SIM_DEVICE_KEY or device_type == 'sim' or str(resolved.key).startswith('sim:'):
+            # The run's sim (resolve), or a sim: device the interactive
+            # controller names, from its host_devices_config.json entry.
+            from ScriptEngine.managers.simulated_device_manager import SimulatedDeviceManager
+            manager = SimulatedDeviceManager(self.default_props.copy(), params)
+        elif device_type == 'python':
             from ScriptEngine.managers.desktop_device_manager import DesktopDeviceManager
             manager = DesktopDeviceManager(self.default_props.copy(), resolved.input_source)
         elif device_type == 'adb':
@@ -606,13 +632,15 @@ class DeviceController:
                 device_type = 'kvm'
             elif device_subtype == 'ios':
                 device_type = 'ios'
+            elif device_subtype == 'sim':
+                device_type = 'sim'
             else:
                 # Without this, an unrecognized prefix left device_type unbound and
                 # the request failed with UnboundLocalError, which names neither the
                 # device nor the prefix that was not understood.
                 raise Exception(
                     "DEVICE CONTROLLER: device '{}' has an unrecognized type prefix '{}'. Known "
-                    'prefixes are avd, bluestacks, adb, pikvm and ios.'.format(device_id, device_subtype)
+                    'prefixes are avd, bluestacks, adb, pikvm, ios and sim.'.format(device_id, device_subtype)
                 )
         return device_type
 

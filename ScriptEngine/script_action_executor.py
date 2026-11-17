@@ -37,6 +37,7 @@ from .helpers.device_action_interpreter import DeviceActionInterpreter
 from .helpers.random_variable_helper import RandomVariableHelper
 from .device_controller import DeviceController
 from .custom_thread_pool import CustomThreadPool
+from ScriptEngine.common import sim_clock
 
 class ScriptActionExecutor:
     def __init__(self, device_controller : DeviceController, io_executor : CustomThreadPool, props : Dict, screen_plan_server_attached : bool):
@@ -160,7 +161,7 @@ class ScriptActionExecutor:
                 note_input_sent(script_logger.get_action_log())
                 for click_count in range(0, click_counts):
                     click_func(*point_choice, action["actionData"]["mouseButton"])
-                    time.sleep(delays[click_count])
+                    sim_clock.sleep(delays[click_count])
 
             elif action["actionData"]["mouseActionType"] == "mouseUp":
                 if not context["mouse_down"]:
@@ -351,9 +352,9 @@ class ScriptActionExecutor:
         elif action["actionName"] == "timeAction":
             time_val = None
             if action["actionData"]["timezone"] == "local":
-                time_val = datetime.datetime.now()
+                time_val = sim_clock.now()
             elif action["actionData"]["timezone"] == "utc":
-                time_val = datetime.datetime.utcnow()
+                time_val = sim_clock.utcnow()
             state[action["actionData"]["outputVarName"]] = time_val
             status = ScriptExecutionState.SUCCESS
         elif action["actionName"] == "interactApplicationAction":

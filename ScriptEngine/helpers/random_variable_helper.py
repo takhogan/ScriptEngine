@@ -4,6 +4,7 @@ import time
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.common.script_engine_utils import state_eval
 from typing import List
+from ScriptEngine.common import sim_clock
 script_logger = ScriptLogger()
 class RandomVariableHelper:
 
@@ -18,7 +19,7 @@ class RandomVariableHelper:
         else:
             post_delay = int(state_eval(delayArg, {}, state))
         script_logger.log('post action sleep for ', post_delay, 'seconds')
-        time.sleep(post_delay)
+        sim_clock.sleep(post_delay)
 
     @staticmethod
     def get_rv_val(delayTypeData, repeats: int = None) -> List[float]:

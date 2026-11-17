@@ -48,6 +48,26 @@ def test_a_bare_file_value_is_a_still_image_for_every_slot():
         assert parse_device_bindings(nothing) == ({}, None)
 
 
+def test_a_bare_sim_value_is_a_simulated_device_for_every_slot():
+    value = 'sim:/packs/examplegame?seed=3&start=HOST/run-a'
+    assert parse_device_bindings(value) == ({}, value)
+    assert parse_device_bindings(['', value]) == ({}, value)
+    assert parse_device_bindings('sim:ExampleGame/examplegame') == ({}, 'sim:ExampleGame/examplegame')
+    assert ds.default_slot_for_device_id(value) == ds.ALL_SLOTS
+
+
+def test_a_sim_is_never_bound_to_one_slot_nor_beside_another_device():
+    with pytest.raises(DeviceBindingError, match=r'^--device phone0=sim:/p: a simulated device stands in for every slot: '
+                                                 r'pass it alone, as --device sim:/p$'):
+        parse_device_bindings('phone0=sim:/p')
+    with pytest.raises(DeviceBindingError, match=r'pass it alone, without desktop0=host, phone0=avd:A$'):
+        parse_device_bindings(['sim:/p', 'phone0=avd:A', 'desktop0=host'])
+    with pytest.raises(DeviceBindingError, match=r'given twice \(sim:/p and file:/tmp/a.png\)'):
+        parse_device_bindings(['sim:/p', 'file:/tmp/a.png'])
+    with pytest.raises(DeviceBindingError, match="'phone' is not a slot"):
+        parse_device_bindings('phone=sim:/p')
+
+
 @pytest.mark.parametrize('value, slot', [
     ('avd:Pixel_7', 'phone0'),
     ('bluestacks:Pie64', 'phone0'),

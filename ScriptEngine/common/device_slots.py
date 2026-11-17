@@ -22,8 +22,9 @@ phone1, ...), or `host` (always this machine's screen) or `none` (no device).
 The run binds slots to devices with `--device`. This module holds the pure
 parts, kept equal to @screenplan/script-vcs (src/slots.ts, migrate.ts):
 
-- parse_device_bindings: the `--device` values, each `slot=device` (or a
-  bare `file:` still image for every slot);
+- parse_device_bindings: the `--device` values, each `slot=device`, or one
+  bare whole-run device for every slot: a `file:` still image, or a `sim:`
+  simulated device (UI_MAPPER.md §4);
 - map_v22_script: the load-time copy of migrateV22ToV23, for files a host
   still holds at v22 (a rollback, a deploy before the bulk migration);
 - required_slots / static_required_slots: the run-start check.
@@ -41,6 +42,11 @@ HOST_DEFAULT_SLOTS = frozenset({'device0', 'desktop0'})
 LEGACY_TARGET_SYSTEMS = frozenset({'python', 'adb', 'kvm', 'ios'})
 # Every slot a bare file: value binds (what a file: run did before slots).
 ALL_SLOTS = '*'
+# The whole-run devices, the only bare --device values: a file: still image,
+# and a sim: simulated device, which replays one device's recorded runs on the
+# run's own clock and so stands in for every slot, the host included.
+SIM_PREFIX = 'sim:'
+WHOLE_RUN_PREFIXES = ('file:', SIM_PREFIX)
 DEVICES_INTERFACE_VERSION = 23
 
 # The device types a slot kind fits; stage 1 only warns on a mismatch.
@@ -54,6 +60,11 @@ KIND_DEVICE_TYPES = {
 
 class DeviceBindingError(Exception):
     """A --device value that cannot be read, or binds a slot twice."""
+
+
+def is_whole_run_device(value):
+    """A file: still image or a sim: simulated device: bound to every slot at once, never to one."""
+    return isinstance(value, str) and value.startswith(WHOLE_RUN_PREFIXES)
 
 
 def is_slot_name(value):
@@ -98,6 +109,8 @@ def device_type_of_id(device_id):
         return 'ios'
     if prefix == 'pikvm':
         return 'kvm'
+    if prefix == 'sim':
+        return 'sim'
     return None
 
 
@@ -110,7 +123,7 @@ def device_fits_slot(slot, device_id):
 
 
 def default_slot_for_device_id(device_id):
-    """A device type's default slot: adb/iOS phone0, PiKVM and host desktop0, file: every slot, else device0.
+    """A device type's default slot: adb/iOS phone0, PiKVM and host desktop0, file: and sim: every slot, else device0.
 
     The engine no longer binds a bare --device value to it; the error for
     one names this slot, and callers that store a bare device (the
@@ -118,7 +131,7 @@ def default_slot_for_device_id(device_id):
     """
     if device_id == HOST_SLOT:
         return 'desktop0'
-    if device_id.startswith('file:'):
+    if is_whole_run_device(device_id):
         return ALL_SLOTS
     prefix = device_id.split(':', 1)[0] if ':' in device_id else ''
     if prefix in ('avd', 'bluestacks', 'adb', 'ios'):
@@ -155,12 +168,15 @@ def parse_device_bindings(values):
     """The run's bindings from its --device values: (bindings, all_slots_value).
 
     `values` is a string, a list of strings (the repeated-flag form) or None.
-    Each entry is `slot=device`, split at the first `=` only. The one bare
-    value allowed is `file:<path>`, a still image for every slot, returned as
-    all_slots_value. Any other bare value is an error naming the slot to
-    write (its type's default slot, default_slot_for_device_id). Empty values
-    and 'null' bind nothing. Binding a slot twice, or the slots host and
-    none, is an error.
+    Each entry is `slot=device`, split at the first `=` only. The bare
+    values allowed are the whole-run devices, returned as all_slots_value:
+    `file:<path>`, a still image for every slot, and `sim:<pack>` (or a
+    host_devices_config `sim:` id), a simulated device for every slot. Any
+    other bare value is an error naming the slot to write (its type's default
+    slot, default_slot_for_device_id). Empty values and 'null' bind nothing.
+    Binding a slot twice, or the slots host and none, is an error. A sim:
+    is never bound to one slot, nor alongside another device: it replays one
+    device's runs on a run clock of its own, which a real device would share.
     """
     if values is None:
         return {}, None
@@ -186,17 +202,26 @@ def parse_device_bindings(values):
                         entry, slot, 'always this machine' if slot == HOST_SLOT else 'it means no device'))
             if device in ('', 'null'):
                 continue
+            if slot is not None and device.startswith(SIM_PREFIX):
+                raise DeviceBindingError(
+                    '--device {}: a simulated device stands in for every slot: pass it alone, as --device {}'.format(
+                        entry, device))
             if slot is None:
-                if not device.startswith('file:'):
+                if not is_whole_run_device(device):
                     raise _bare_value_error(entry)
                 if all_slots_value is not None:
-                    raise DeviceBindingError('--device {}: a still image for every slot is given twice'.format(entry))
+                    raise DeviceBindingError('--device {}: a device for every slot is given twice ({} and {})'.format(
+                        entry, all_slots_value, device))
                 all_slots_value = device
                 continue
             if slot in bindings:
                 raise DeviceBindingError(
                     "--device: slot {} is bound twice ({} and {})".format(slot, bindings[slot], device))
             bindings[slot] = device
+    if bindings and all_slots_value is not None and all_slots_value.startswith(SIM_PREFIX):
+        raise DeviceBindingError(
+            '--device {}: a simulated device stands in for every slot: pass it alone, without {}'.format(
+                all_slots_value, ', '.join('{}={}'.format(k, bindings[k]) for k in sorted(bindings, key=slot_sort_key))))
     return bindings, all_slots_value
 
 
