@@ -30,6 +30,7 @@ from .script_action_executor import ScriptActionExecutor
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.enums import ScriptExecutionState, ScriptExecutionStatusDetail
 from ScriptEngine.common.run_outputs import outputs_json_path_beside, write_outputs_json
+from ScriptEngine.common.device_slots import SlotInfo
 from ScriptEngine.common.secret_gate import SecretApprovalRequired, NEEDS_APPROVAL
 from ScriptEngine.common.script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str, state_eval
 from .script_loader import parse_zip
@@ -189,6 +190,24 @@ class ScriptExecutor:
         
         # Set hot swap version
         self.hot_swap_version = self.engine_manager.get_script_version(self.props['script_name'])
+
+        # Device slots as read-only state variables (phone0["type"] == "ios").
+        # A child script refreshes them once its deviceMap is in place.
+        self.set_device_state()
+
+    def set_device_state(self):
+        """Put each device slot in state as a read-only SlotInfo; a script variable of the same name keeps its value."""
+        if self.device_controller is None:
+            return
+        try:
+            infos = self.device_controller.slot_infos(self.props, self.action_rows)
+        except Exception as e:
+            script_logger.log(self.props['script_name'] + ' CONTROL FLOW: could not describe device slots', e, level='error')
+            return
+        for slot, info in infos.items():
+            if slot in self.state and not isinstance(self.state[slot], SlotInfo):
+                continue
+            self.state[slot] = info
 
     def parse_script_obj(self, script_obj):
         """Parse script object and initialize executor properties"""
@@ -490,6 +509,7 @@ class ScriptExecutor:
             try:
                 if device_controller is not None:
                     device_controller.check_child_slots(ref_script, script_name)
+                    ref_script_executor.set_device_state()
                 if action["actionData"]["runMode"] == "run":
                     ref_script_executor.run()
                 elif action["actionData"]["runMode"] == "runOne":

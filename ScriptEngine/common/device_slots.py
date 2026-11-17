@@ -396,3 +396,86 @@ def static_required_slots(script_obj, load_script):
     walk(script_obj, {}, '<top>')
     ordered = {slot: required[slot] for slot in sorted(required, key=slot_sort_key)}
     return ordered, adb_slots
+
+
+# ---------------------------------------------------------------------------
+# Slot objects in state: each slot name (device0, desktop0, phone0, ...) is a
+# variable in a script's state, a read-only dict describing the device bound
+# there, so a condition can branch on it: phone0["type"] == "ios".
+
+# The slots every script's state has, bound or not, so a condition naming one
+# never fails on a missing variable.
+STATE_DEFAULT_SLOTS = ('device0', 'desktop0', 'phone0', 'tablet0')
+
+# What a slot's "type" says for each engine device type; the host's desktop
+# says its operating system instead.
+DEVICE_TYPE_LABELS = {'adb': 'android', 'ios': 'ios', 'kvm': 'kvm'}
+
+
+def host_os_label(platform=None):
+    """This machine's operating system as a slot's "type": windows, macos or linux."""
+    import sys
+    platform = platform or sys.platform
+    if platform.startswith('win'):
+        return 'windows'
+    if platform == 'darwin':
+        return 'macos'
+    return 'linux'
+
+
+class SlotInfo(dict):
+    """A read-only dict: a slot's device as a state variable.
+
+    Writes raise, so a script cannot change what a slot is bound to by
+    assigning to it. Copies (state.copy(), deepcopy of saved states, the
+    process pool's pickling) keep the type; json.dump writes it as a dict.
+    """
+
+    def _read_only(self, *args, **kwargs):
+        raise TypeError('{} is read-only: it describes the device bound to that slot'.format(
+            dict.get(self, 'slot', 'a device slot')))
+
+    __setitem__ = __delitem__ = __ior__ = _read_only
+    clear = pop = popitem = setdefault = update = _read_only
+
+    def __reduce__(self):
+        return (SlotInfo, (dict(self),))
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
+
+
+def slot_info(slot, run_slot, device_id, platform=None):
+    """The state variable for one slot: device_id is what it resolves to ('host', a device id, 'file...') or None."""
+    if device_id is None:
+        device_type, label = None, None
+    elif device_id == HOST_SLOT:
+        device_type, label = 'python', host_os_label(platform)
+    elif device_id.startswith('file'):
+        device_type, label = 'file', 'file'
+    else:
+        device_type = device_type_of_id(device_id)
+        label = host_os_label(platform) if device_type == 'python' else DEVICE_TYPE_LABELS.get(device_type)
+    return SlotInfo({
+        'slot': slot,
+        'runSlot': run_slot,
+        'kind': slot_kind(slot),
+        'bound': device_id is not None,
+        'deviceId': device_id,
+        'driver': device_type,
+        'type': label,
+    })
+
+
+def state_slots(props, action_rows, bound_slots=()):
+    """The slot names a script's state holds: the defaults, the script's own slots and the run's bound ones."""
+    out = set(STATE_DEFAULT_SLOTS)
+    out.update(used_slots(action_rows))
+    for entry in (props or {}).get('devices') or []:
+        if isinstance(entry, dict) and is_slot_name(entry.get('slot')):
+            out.add(entry['slot'])
+    out.update(s for s in bound_slots if is_slot_name(s))
+    return sorted(out, key=slot_sort_key)
