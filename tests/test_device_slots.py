@@ -40,16 +40,46 @@ def script(actions, props=None):
 # ---------------------------------------------------------------------------
 # --device
 
-def test_bare_values_bind_their_types_default_slot():
-    assert parse_device_bindings('avd:Pixel_7') == ({'phone0': 'avd:Pixel_7'}, None)
-    assert parse_device_bindings('bluestacks:Pie64') == ({'phone0': 'bluestacks:Pie64'}, None)
-    assert parse_device_bindings('ios:00008110-ABC') == ({'phone0': 'ios:00008110-ABC'}, None)
-    assert parse_device_bindings('pikvm:office-pc') == ({'desktop0': 'pikvm:office-pc'}, None)
-    assert parse_device_bindings('host') == ({'desktop0': 'host'}, None)
+def test_a_bare_file_value_is_a_still_image_for_every_slot():
     assert parse_device_bindings('file:/tmp/a.png') == ({}, 'file:/tmp/a.png')
-    assert parse_device_bindings('something') == ({'device0': 'something'}, None)
-    for nothing in (None, '', 'null', [], ['', 'null']):
+    assert parse_device_bindings(['phone0=avd:Pixel_7', 'file:/tmp/a.png']) == (
+        {'phone0': 'avd:Pixel_7'}, 'file:/tmp/a.png')
+    for nothing in (None, '', 'null', [], ['', 'null'], 'phone0=', 'phone0=null'):
         assert parse_device_bindings(nothing) == ({}, None)
+
+
+@pytest.mark.parametrize('value, slot', [
+    ('avd:Pixel_7', 'phone0'),
+    ('bluestacks:Pie64', 'phone0'),
+    ('adb:10.0.0.5:5555', 'phone0'),
+    ('ios:00008110-ABC', 'phone0'),
+    ('pikvm:office-pc', 'desktop0'),
+    ('host', 'desktop0'),
+    ('MININT-X<>bluestacks:Rvc64', 'device0'),
+    ('something', 'device0'),
+])
+def test_any_other_bare_value_is_an_error_naming_its_slot(value, slot):
+    with pytest.raises(DeviceBindingError) as raised:
+        parse_device_bindings(value)
+    assert str(raised.value) == '--device {0}: name its slot, as --device {1}={0}'.format(value, slot)
+    # The same in a list beside slot entries, and in a comma-separated list.
+    with pytest.raises(DeviceBindingError, match='name its slot'):
+        parse_device_bindings(['desktop0=host', value])
+    if slot != 'phone0':
+        with pytest.raises(DeviceBindingError, match='name its slot'):
+            parse_device_bindings(value + ',phone0=avd:Pixel_7')
+
+
+def test_the_error_message_matches_the_spec_example():
+    with pytest.raises(DeviceBindingError, match=r'^--device avd:Pixel_7: name its slot, as --device phone0=avd:Pixel_7$'):
+        parse_device_bindings('avd:Pixel_7')
+
+
+def test_a_misspelt_slot_is_named_as_not_a_slot():
+    with pytest.raises(DeviceBindingError, match="'phone' is not a slot"):
+        parse_device_bindings('phone=avd:Pixel_7')
+    with pytest.raises(DeviceBindingError, match="'Phone0' is not a slot"):
+        parse_device_bindings('Phone0=avd:Pixel_7')
 
 
 def test_slot_entries_comma_and_repeated_forms():
@@ -59,12 +89,15 @@ def test_slot_entries_comma_and_repeated_forms():
     # Split at the first '=' only; a comma not followed by `<slot>=` stays in the value.
     assert parse_device_bindings('phone1=adb:10.0.0.5:5555,x=y')[0] == {'phone1': 'adb:10.0.0.5:5555,x=y'}
     assert parse_device_bindings('phone0=file:/tmp/a=b.png')[0] == {'phone0': 'file:/tmp/a=b.png'}
-    assert parse_device_bindings(['desktop0=host', 'avd:Pixel_7'])[0] == {'desktop0': 'host', 'phone0': 'avd:Pixel_7'}
+    assert parse_device_bindings(['desktop0=host', 'phone0=avd:Pixel_7'])[0] == {'desktop0': 'host', 'phone0': 'avd:Pixel_7'}
+    assert parse_device_bindings(' device0 = MININT-X<>bluestacks:Rvc64 ')[0] == {'device0': 'MININT-X<>bluestacks:Rvc64'}
 
 
 def test_binding_errors():
     with pytest.raises(DeviceBindingError, match='bound twice'):
-        parse_device_bindings(['phone0=avd:A', 'avd:B'])
+        parse_device_bindings(['phone0=avd:A', 'phone0=avd:B'])
+    with pytest.raises(DeviceBindingError, match='given twice'):
+        parse_device_bindings(['file:/tmp/a.png', 'file:/tmp/b.png'])
     with pytest.raises(DeviceBindingError, match="'host' cannot be bound"):
         parse_device_bindings('host=avd:A')
     with pytest.raises(DeviceBindingError, match="'none' cannot be bound"):
