@@ -44,7 +44,8 @@ from ScriptEngine.helpers.live_input import parse_live_drag_args
 from ScriptEngine.helpers.host_input import HostInputDeniedError
 from ScriptEngine.common.device_slots import (
     HOST_DEFAULT_SLOTS, HOST_SLOT, LEGACY_TARGET_SYSTEMS, NO_DEVICE, device_fits_slot, device_type_of_id,
-    is_required_slot, is_slot_name, map_child_slot, normalize_target, required_slots, slot_kind, slot_sort_key,
+    is_required_slot, is_slot_name, map_child_slot, normalize_target, required_slots, slot_info, slot_kind, slot_sort_key,
+    state_slots,
 )
 
 
@@ -416,6 +417,30 @@ class DeviceController:
                 return self.run_slot(target), None
             except Exception:
                 return None, None
+
+    def slot_device_id(self, slot):
+        """What a slot resolves to in the running script, without touching the device: 'host', a device id, 'file...' or None if unbound."""
+        run = self.run_slot(slot)
+        if run == HOST_SLOT:
+            return HOST_SLOT
+        value = self.bindings.get(run)
+        if value is not None:
+            return value
+        if self.input_source is not None:
+            return 'file'
+        if run in HOST_DEFAULT_SLOTS:
+            return HOST_SLOT
+        return None
+
+    def slot_infos(self, props, action_rows):
+        """{slot: SlotInfo} for a script's state, resolved through the running scripts' deviceMaps; never raises."""
+        out = {}
+        for slot in state_slots(props, action_rows, self.bindings.keys()):
+            try:
+                out[slot] = slot_info(slot, self.run_slot(slot), self.slot_device_id(slot))
+            except Exception as e:
+                script_logger.log('DEVICE CONTROLLER: could not describe slot', slot, e, level='error')
+        return out
 
     def device_key(self, target):
         """The key a target's device is cached under: parallel groups share one screenshot per key."""

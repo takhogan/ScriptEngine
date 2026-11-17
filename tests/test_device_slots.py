@@ -318,3 +318,105 @@ def test_log_video_splits_by_device_and_labels_the_slot():
     assert [len(frames) for _, frames in out] == [2, 1, 1]
     assert G.frame_title(frame('phone0', 'avd:A')) == 'S [phone0]'
     assert G.frame_title({'script_name': 'S'}) == 'S'
+
+
+# ---------------------------------------------------------------------------
+# slots as read-only state variables: phone0["type"] == "ios"
+
+def test_slot_info_is_read_only_and_survives_copies():
+    import copy
+    import pickle
+    info = ds.slot_info('phone0', 'phone0', 'ios:00008110-ABC')
+    assert info['type'] == 'ios' and info['driver'] == 'ios' and info['bound'] is True
+    for write in (lambda: info.__setitem__('type', 'android'), lambda: info.update(type='x'),
+                  lambda: info.pop('type'), lambda: info.clear(), lambda: info.__delitem__('type')):
+        with pytest.raises(TypeError, match='phone0 is read-only'):
+            write()
+    assert copy.deepcopy(info) is info
+    restored = pickle.loads(pickle.dumps(info))
+    assert isinstance(restored, ds.SlotInfo) and restored == info
+    assert json.loads(json.dumps({'phone0': info}))['phone0']['type'] == 'ios'
+
+
+@pytest.mark.parametrize('device_id, label, driver', [
+    ('avd:Pixel_7', 'android', 'adb'),
+    ('bluestacks:Pie64', 'android', 'adb'),
+    ('ios:00008110-ABC', 'ios', 'ios'),
+    ('pikvm:office-pc', 'kvm', 'kvm'),
+    ('file:/tmp/a.png', 'file', 'file'),
+    (None, None, None),
+])
+def test_slot_info_types(device_id, label, driver):
+    info = ds.slot_info('phone1', 'phone1', device_id)
+    assert (info['type'], info['driver'], info['bound']) == (label, driver, device_id is not None)
+
+
+def test_the_host_reports_its_operating_system():
+    assert ds.slot_info('desktop0', 'desktop0', 'host', platform='win32')['type'] == 'windows'
+    assert ds.slot_info('desktop0', 'desktop0', 'host', platform='darwin')['type'] == 'macos'
+    assert ds.slot_info('desktop0', 'desktop0', 'host', platform='linux')['type'] == 'linux'
+
+
+def test_slot_infos_cover_defaults_script_slots_and_bindings(controller):
+    from ScriptEngine.common.script_engine_utils import state_eval
+    c = controller({'phone0': 'ios:00008110-ABC', 'tablet2': 'avd:Pixel_7'})
+    rows = [{'actions': [act('detectObject', 1, targetSystem='phone3')]}]
+    infos = c.slot_infos({'devices': [{'slot': 'desktop1'}]}, rows)
+    assert list(infos) == ['device0', 'desktop0', 'desktop1', 'phone0', 'phone3', 'tablet0', 'tablet2']
+    assert infos['desktop0']['deviceId'] == 'host' and infos['desktop0']['bound'] is True
+    assert infos['phone3']['bound'] is False and infos['phone3']['type'] is None
+    assert infos['tablet2']['type'] == 'android'
+    assert state_eval('phone0["type"] == "ios"', {}, dict(infos)) is True
+    assert state_eval('phone3["type"] == "ios"', {}, dict(infos)) is False
+
+
+def test_slot_infos_follow_the_device_map(controller):
+    c = controller({'phone1': 'ios:00008110-ABC'})
+    c.push_slot_map({'phone0': 'phone1'})
+    info = c.slot_infos({}, [])['phone0']
+    assert (info['slot'], info['runSlot'], info['type']) == ('phone0', 'phone1', 'ios')
+    c.pop_slot_map()
+    assert c.slot_infos({}, [])['phone0']['bound'] is False
+
+
+def make_executor(device_controller, actions=(), props=None, state=None):
+    from types import SimpleNamespace
+    from ScriptEngine.script_executor import ScriptExecutor
+    script_obj = {'props': dict(props or {}, script_name='Cross_Platform'), 'actionRows': [{'actions': list(actions)}],
+                  'inputs': [], 'outputs': []}
+    return ScriptExecutor(script_obj, {}, None, 'Cross_Platform', 'now', 'id', device_controller,
+                          SimpleNamespace(get_script_version=lambda name: None), None, None, None,
+                          state=state, create_log_folders=False)
+
+
+def test_a_conditional_statement_branches_on_the_bound_phone(controller, monkeypatch):
+    from ScriptEngine.common.enums import ScriptExecutionState
+    from ScriptEngine.system_script_action_executor import SystemScriptActionExecutor
+    import ScriptEngine.system_script_action_executor as ssae
+    from types import SimpleNamespace
+    log = SimpleNamespace(set_summary=lambda *a: None, add_post_file=lambda *a, **k: None)
+    monkeypatch.setattr(ssae, 'script_logger', SimpleNamespace(log=lambda *a, **k: None, get_action_log=lambda: log,
+                                                               get_log_path_prefix=lambda: '/tmp/'))
+    system = SystemScriptActionExecutor(base_script_name='s', props={'dir_path': '/tmp'}, io_executor=None,
+                                        screen_plan_server_attached=False)
+
+    def condition(state, text):
+        action = {'actionName': 'conditionalStatement', 'actionGroup': 1, 'actionData': {'condition': text}}
+        return system.handle_action(action, state, {"script_counter": 1}, [])[1]
+
+    ios_run = make_executor(controller({'phone0': 'ios:00008110-ABC'}))
+    android_run = make_executor(controller({'phone0': 'avd:Pixel_7'}))
+    assert condition(ios_run.state, 'phone0["type"] == "ios"') == ScriptExecutionState.SUCCESS
+    assert condition(android_run.state, 'phone0["type"] == "ios"') == ScriptExecutionState.FAILURE
+    assert condition(android_run.state, 'phone0["type"] == "android" and desktop0["bound"]') == ScriptExecutionState.SUCCESS
+
+
+def test_a_script_variable_of_the_same_name_wins_and_children_see_their_mapped_slot(controller):
+    c = controller({'phone1': 'ios:00008110-ABC'})
+    run = make_executor(c, state={'tablet0': 'mine'})
+    assert run.state['tablet0'] == 'mine' and run.state['phone1']['type'] == 'ios'
+    child = make_executor(c)
+    assert child.state['phone0']['bound'] is False
+    c.push_slot_map({'phone0': 'phone1'})
+    child.set_device_state()
+    assert child.state['phone0']['type'] == 'ios' and child.state['phone0']['runSlot'] == 'phone1'
