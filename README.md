@@ -241,9 +241,11 @@ python -m ScriptEngine.script_manager -s my_script --device phone0=avd:Pixel_7 -
 python -m ScriptEngine.script_manager -s my_script --device 'phone0=avd:Pixel_7,desktop0=host'
 ```
 
-- A bare value binds its type's default slot: `avd:`, `bluestacks:`, `adb:`
-  and `ios:` devices `phone0`; `pikvm:` and `host` `desktop0`; `file:<png>`
-  every slot (a still image); anything else `device0`.
+- Every device names its slot. The one bare value is `--device file:<png>`,
+  a still image for every slot. Any other bare value (`--device avd:Pixel_7`)
+  is an error that names the slot to write, its type's default:
+  `phone0=` for `avd:`, `bluestacks:`, `adb:` and `ios:` devices,
+  `desktop0=` for `pikvm:` and `host`, else `device0=`.
 - `device0` and `desktop0` left unbound are the host's own desktop. Every
   other slot the script (or a child it names statically) lists in
   `props.devices` must be bound, or the run fails at start naming each one.

@@ -22,7 +22,8 @@ phone1, ...), or `host` (always this machine's screen) or `none` (no device).
 The run binds slots to devices with `--device`. This module holds the pure
 parts, kept equal to @screenplan/script-vcs (src/slots.ts, migrate.ts):
 
-- parse_device_bindings: the `--device` values, bare values included;
+- parse_device_bindings: the `--device` values, each `slot=device` (or a
+  bare `file:` still image for every slot);
 - map_v22_script: the load-time copy of migrateV22ToV23, for files a host
   still holds at v22 (a rollback, a deploy before the bulk migration);
 - required_slots / static_required_slots: the run-start check.
@@ -109,7 +110,12 @@ def device_fits_slot(slot, device_id):
 
 
 def default_slot_for_device_id(device_id):
-    """The slot a bare value binds: adb/iOS phone0, PiKVM and host desktop0, file: every slot, else device0."""
+    """A device type's default slot: adb/iOS phone0, PiKVM and host desktop0, file: every slot, else device0.
+
+    The engine no longer binds a bare --device value to it; the error for
+    one names this slot, and callers that store a bare device (the
+    controller's device_details) bind it here themselves.
+    """
     if device_id == HOST_SLOT:
         return 'desktop0'
     if device_id.startswith('file:'):
@@ -130,14 +136,31 @@ def _split_entries(value):
     return [part.strip() for part in _ENTRY_START.split(value)]
 
 
+_SLOT_LIKE_HEAD = re.compile(r'^[A-Za-z_][\w-]*$')
+
+
+def _bare_value_error(entry):
+    """The error for an entry with no `slot=`: it names the slot to write, the device type's default one."""
+    if '=' in entry:
+        head = entry.split('=', 1)[0].strip()
+        if _SLOT_LIKE_HEAD.match(head):
+            return DeviceBindingError(
+                "--device {}: '{}' is not a slot; a slot is device, desktop, phone or tablet and a number "
+                '(device0, desktop0, phone0, tablet1)'.format(entry, head))
+    return DeviceBindingError('--device {0}: name its slot, as --device {1}={0}'.format(
+        entry, default_slot_for_device_id(entry)))
+
+
 def parse_device_bindings(values):
     """The run's bindings from its --device values: (bindings, all_slots_value).
 
     `values` is a string, a list of strings (the repeated-flag form) or None.
-    Each entry is `slot=device` (split at the first `=` only) or a bare value,
-    which binds its type's default slot. A bare file: value binds every slot,
-    returned as all_slots_value. Empty values and 'null' bind nothing. Binding
-    a slot twice, or the slots host and none, is an error.
+    Each entry is `slot=device`, split at the first `=` only. The one bare
+    value allowed is `file:<path>`, a still image for every slot, returned as
+    all_slots_value. Any other bare value is an error naming the slot to
+    write (its type's default slot, default_slot_for_device_id). Empty values
+    and 'null' bind nothing. Binding a slot twice, or the slots host and
+    none, is an error.
     """
     if values is None:
         return {}, None
@@ -164,12 +187,12 @@ def parse_device_bindings(values):
             if device in ('', 'null'):
                 continue
             if slot is None:
-                slot = default_slot_for_device_id(device)
-                if slot == ALL_SLOTS:
-                    if all_slots_value is not None:
-                        raise DeviceBindingError('--device {}: a still image for every slot is given twice'.format(entry))
-                    all_slots_value = device
-                    continue
+                if not device.startswith('file:'):
+                    raise _bare_value_error(entry)
+                if all_slots_value is not None:
+                    raise DeviceBindingError('--device {}: a still image for every slot is given twice'.format(entry))
+                all_slots_value = device
+                continue
             if slot in bindings:
                 raise DeviceBindingError(
                     "--device: slot {} is bound twice ({} and {})".format(slot, bindings[slot], device))

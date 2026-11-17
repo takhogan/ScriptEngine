@@ -275,11 +275,10 @@ def _load_and_run(script_name, script_id, timeout, constants=None, start_time=No
     script_object = parse_script(script_name, system_script, workspace)
     from ScriptEngine.common.run_outputs import script_output_names
     run_record['output_names'] = script_output_names(script_object)
-    # Device slots: the --device values are a binding list, slot=device, and
-    # a bare value binds its type's default slot (an adb or iOS device
-    # phone0, a PiKVM desktop0, file: every slot), which is all an older
-    # controller or an unmigrated event sends. The run-start check below
-    # needs every slot the scripts list, except device0 and desktop0.
+    # Device slots: the --device values are a binding list, slot=device. The
+    # one bare value is file:<png>, a still image for every slot; any other
+    # bare value is an error naming the slot to write. The run-start check
+    # below needs every slot the scripts list, except device0 and desktop0.
     from ScriptEngine.common.device_slots import parse_device_bindings
     device_bindings, all_slots_value = parse_device_bindings(device_details)
     device_params = {}
@@ -464,9 +463,8 @@ def main():
         parser.add_argument('--script-id', '-id', help='Script ID (UUID)')
         parser.add_argument('--device', '-d', action='append',
                             help='A device binding, slot=device (phone0=avd:Pixel_7, desktop0=pikvm:office-pc, '
-                                 'desktop0=host, phone0=file:<png>), repeatable, or a comma-separated list. A bare '
-                                 'device binds its type\'s default slot: adb and iOS devices phone0, a PiKVM '
-                                 'desktop0, file: every slot.')
+                                 'desktop0=host, phone0=file:<png>), repeatable, or a comma-separated list. Every '
+                                 'device names its slot; the one bare value is file:<png>, a still image for every slot.')
         parser.add_argument('--system-script', '-sys', action='store_true', help='Whether this is a system script')
         parser.add_argument('--workspace', '-w', default='Default', help='Workspace name (defaults to "Default"). Only used for library scripts.')
         parser.add_argument('--screen-plan-server-attached', '-spsa', action='store_true', help='Whether a screenplan client server is attached')
