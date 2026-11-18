@@ -317,6 +317,12 @@ class StateEvaluator:
             env_globals.update(local_scope)
         env_globals.setdefault('script', cls._script_context)
 
+        # Fields the action schema types as string|number reach here as the
+        # number itself when a script was written through the API ({"x": 1},
+        # not {"x": "1"}). A number is already its own value.
+        if isinstance(statement, (int, float)):
+            return statement
+
         try:
             return builtins.eval(statement, env_globals, local_scope)
         # A variable the script never set is a KeyError when read by key and a
@@ -382,6 +388,34 @@ def state_eval(statement, globals, locals, crashonerror=True):
 
 def state_exec(code, globals, locals, crashonerror=True):
     return StateEvaluator.exec(code, globals, locals, crashonerror=crashonerror)
+
+
+def expression_text(value, default=''):
+    """A field the action schema types as string|number, as stripped expression text.
+
+    The editor writes these fields as strings ("1", "x + 1"), but a script
+    written through the API may hold the number itself (1), which the schema
+    allows. Read such a field through this before any string operation
+    (len, strip, isdigit); a number becomes its decimal text, None the default.
+    """
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip()
+    return str(value)
+
+
+def eval_number(value, state, default=None):
+    """A string|number field's value as a float: a number as is, a string evaluated against state.
+
+    Empty text or None gives the default.
+    """
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = expression_text(value)
+    if text == '':
+        return default
+    return float(state_eval(text, {}, state))
 
 
 def sanitize_statement_input(statement_input, state):

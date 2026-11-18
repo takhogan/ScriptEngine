@@ -32,7 +32,7 @@ from ScriptEngine.common.enums import ScriptExecutionState, ScriptExecutionStatu
 from ScriptEngine.common.run_outputs import outputs_json_path_beside, write_outputs_json
 from ScriptEngine.common.device_slots import SlotInfo
 from ScriptEngine.common.secret_gate import SecretApprovalRequired, NEEDS_APPROVAL
-from ScriptEngine.common.script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str, state_eval
+from ScriptEngine.common.script_engine_utils import generate_context_switch_action,get_running_scripts, is_parallelizeable, datetime_to_local_str, state_eval, expression_text
 from .script_loader import parse_zip
 from .system_script_handler import SystemScriptHandler
 from ScriptEngine.common.logging.script_logger import ScriptLogger
@@ -933,8 +933,10 @@ class ScriptExecutor:
             _, self.status, self.state, self.context, self.run_queue, update_queue = self.handle_action(action)
             # post_handle_action((self.action, self.status, self.state, self.context, self.run_queue, update_queue))
         # script_logger.log('debug state', self.state)
-        if 'postActionDelay' in action['actionData'] and len(action['actionData']['postActionDelay']) > 0:
-            RandomVariableHelper.parse_post_action_delay(action['actionData']['postActionDelay'], self.state)
+        # string|number in the schema: "1", 1, "" (none) or an expression.
+        post_action_delay = expression_text(action['actionData'].get('postActionDelay'))
+        if len(post_action_delay) > 0:
+            RandomVariableHelper.parse_post_action_delay(post_action_delay, self.state)
 
         script_logger.set_log_header(self.props['script_name'] + '-CONTROL FLOW')
         self.parse_update_queue(update_queue)

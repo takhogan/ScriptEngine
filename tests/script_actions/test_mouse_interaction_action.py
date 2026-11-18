@@ -86,6 +86,36 @@ def test_mouse_interaction_records_when_it_clicked_and_how_far_it_scrolled(devic
     assert logger.action_log.result["input_at"].endswith("Z")
 
 
+def test_mouse_interaction_scrolls_a_string_distance_as_a_number(device_executor, base_context, run_queue, monkeypatch):
+    # scrollDistance is string|number in the action schema; the device's
+    # scroll takes a whole number of wheel notches either way.
+    executor, dc, _, _ = device_executor
+    scrolled = []
+    dc.actions["scroll"] = lambda x, y, distance: scrolled.append(distance)
+    monkeypatch.setattr(
+        sae_mod.ClickActionHelper,
+        "get_point_choice",
+        lambda *args, **kwargs: ((10, 11), (10, 11), [(10, 11)], [(10, 11)]),
+    )
+    for distance in ("-3", -3, "notches * 2"):
+        action = {
+            "actionName": "mouseInteractionAction",
+            "actionData": {
+                "targetSystem": "desktop",
+                "sourceDetectTypeData": {"inputExpression": ""},
+                "sourcePointList": [],
+                "mouseActionType": "scroll",
+                "scrollDistance": distance,
+                "clickCount": 1,
+                "betweenClickDelay": False,
+                "randomVariableTypeData": {},
+                "mouseButton": "left",
+            },
+        }
+        executor.execute_action(action, {"notches": 2}, base_context, run_queue)
+    assert scrolled == [-3, -3, 4]
+
+
 def test_a_mouse_up_without_a_mouse_down_sends_nothing(device_executor, base_context, run_queue, monkeypatch):
     executor, _, _, logger = device_executor
     monkeypatch.setattr(
