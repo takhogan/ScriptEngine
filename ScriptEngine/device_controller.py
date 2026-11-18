@@ -717,6 +717,16 @@ class DeviceController:
             return {
                 "data" : "success"
             }
+        elif device_action == "scroll":
+            # `scroll <x> <y> <clicks>`: the editor's mouse wheel over the live
+            # view. Wheel notches at (x, y); positive scrolls up, as in a
+            # script's mouseAction scroll.
+            x, y = (int(float(value)) for value in inputs[3:5])
+            clicks = int(float(inputs[5]))
+            self.get_device_action(device_type, 'scroll', device_params)(x, y, clicks)
+            return {
+                "data": "success"
+            }
         elif device_action == "send_keys":
             DeviceActionInterpreter.parse_keyboard_action(
                 self, json.loads(inputs[3]), {}, {}, device_params

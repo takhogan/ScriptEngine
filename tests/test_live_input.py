@@ -92,6 +92,15 @@ def test_live_makes_it_a_live_drag_with_its_duration():
     assert dispatch('click_and_drag', '586', '962', '333', '828', 'live', '450') == [('live_drag', (586, 962, 333, 828, 450))]
 
 
+def test_scroll_is_wheel_notches_at_the_point():
+    assert dispatch('scroll', '640.7', '360', '-3') == [('scroll', (640, 360, -3))]
+    assert dispatch('scroll', '10', '20', '2') == [('scroll', (10, 20, 2))]
+
+
+def test_scroll_goes_in_the_input_lane():
+    assert device_lane('scroll') == 'input'
+
+
 def test_lanes():
     assert device_lane('screen_capture') == 'capture'
     assert device_lane('check_status') == 'capture'
