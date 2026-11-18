@@ -38,6 +38,10 @@ from .helpers.random_variable_helper import RandomVariableHelper
 from .device_controller import DeviceController
 from .custom_thread_pool import CustomThreadPool
 
+# interactDeviceAction's actionType up to script format 23, when the action
+# was interactApplicationAction, mapped to its format 24 value.
+LEGACY_INTERACT_ACTION_TYPES = {"start": "startApplication", "stop": "stopApplication"}
+
 class ScriptActionExecutor:
     def __init__(self, device_controller : DeviceController, io_executor : CustomThreadPool, props : Dict, screen_plan_server_attached : bool):
         self.device_controller = device_controller
@@ -356,15 +360,24 @@ class ScriptActionExecutor:
                 time_val = datetime.datetime.utcnow()
             state[action["actionData"]["outputVarName"]] = time_val
             status = ScriptExecutionState.SUCCESS
-        elif action["actionName"] == "interactApplicationAction":
-            actionType = action["actionData"]["actionType"].strip()
-            applicationName = action["actionData"]["applicationName"].strip()
-            actionPayload = action["actionData"].get("actionPayload", "").strip()
+        elif action["actionName"] in ("interactDeviceAction", "interactApplicationAction"):
+            # interactApplicationAction is the name up to script format 23, with
+            # actionType start/stop; a host can run a script it has not migrated
+            # to 24 (migrateV23ToV24 in @screenplan/script-vcs).
+            action_name = action["actionName"]
+            actionType = action["actionData"].get("actionType", "").strip()
+            actionType = LEGACY_INTERACT_ACTION_TYPES.get(actionType, actionType)
+            is_device_action = actionType in ("startDevice", "stopDevice")
+            applicationName = None if is_device_action else action["actionData"].get("applicationName", "").strip()
+            actionPayload = None if is_device_action else action["actionData"].get("actionPayload", "").strip()
             targetSystem = action["actionData"]["targetSystem"]
 
-            pre_log = 'InteractApplicationAction: actionType={}, applicationName={}, actionPayload={}, targetSystem={}'.format(
-                actionType, applicationName, actionPayload, targetSystem
-            )
+            if is_device_action:
+                pre_log = 'InteractDeviceAction: actionType={}, targetSystem={}'.format(actionType, targetSystem)
+            else:
+                pre_log = 'InteractDeviceAction: actionType={}, applicationName={}, actionPayload={}, targetSystem={}'.format(
+                    actionType, applicationName, actionPayload, targetSystem
+                )
             script_logger.log(pre_log)
             script_logger.get_action_log().update_result({
                 'application_action': actionType,
@@ -375,37 +388,46 @@ class ScriptActionExecutor:
             })
 
             try:
-                if actionType == "start":
-                    # Call start_application with applicationName and actionPayload
-                    # For Android, combine as package/activity format if actionPayload is provided
+                if actionType == "startApplication":
+                    # For Android, actionPayload is the activity; on a desktop, the arguments
                     start_app_func = self.device_controller.get_device_action(targetSystem, 'start_application')
                     args_list = shlex.split(actionPayload) if actionPayload else None
                     note_input_sent(script_logger.get_action_log())
                     start_app_func(applicationName, args_list)
                     post_log = 'Successfully started application: {}'.format(applicationName)
-                    script_logger.log(post_log)
-                    status = ScriptExecutionState.SUCCESS
-                elif actionType == "stop":
-                    # Call stop_application with applicationName (actionPayload not used for stop)
+                elif actionType == "stopApplication":
+                    # actionPayload is not used for stop
                     stop_app_func = self.device_controller.get_device_action(targetSystem, 'stop_application')
                     note_input_sent(script_logger.get_action_log())
                     stop_app_func(applicationName)
                     post_log = 'Successfully stopped application: {}'.format(applicationName)
-                    script_logger.log(post_log)
-                    status = ScriptExecutionState.SUCCESS
+                elif actionType == "startDevice":
+                    # An emulator is launched, a PiKVM target powered on; a desktop
+                    # cannot start itself and raises NotImplementedError.
+                    start_device_func = self.device_controller.get_device_action(targetSystem, 'start_device')
+                    note_input_sent(script_logger.get_action_log())
+                    start_device_func()
+                    post_log = 'Successfully started device: {}'.format(targetSystem)
+                elif actionType == "stopDevice":
+                    stop_device_func = self.device_controller.get_device_action(targetSystem, 'stop_device')
+                    note_input_sent(script_logger.get_action_log())
+                    stop_device_func()
+                    post_log = 'Successfully stopped device: {}'.format(targetSystem)
                 else:
                     exception_text = 'Unsupported actionType: {}'.format(actionType)
                     script_logger.log(exception_text, level='error')
                     raise Exception(exception_text)
+                script_logger.log(post_log)
+                status = ScriptExecutionState.SUCCESS
             except Exception as e:
-                error_log = 'Error in interactApplicationAction: {}'.format(str(e))
+                error_log = 'Error in {}: {}'.format(action_name, str(e) or type(e).__name__)
                 script_logger.log(error_log, level='error')
                 status = ScriptExecutionState.FAILURE
                 post_log = error_log
 
             script_logger.get_action_log().add_post_file(
                 'text',
-                'interactApplicationAction-log.txt',
+                '{}-log.txt'.format(action_name),
                 pre_log + '\n' + post_log
             )
             script_logger.get_action_log().update_result({'succeeded': status == ScriptExecutionState.SUCCESS})
