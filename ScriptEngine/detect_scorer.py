@@ -127,6 +127,9 @@ def score_one(action, image_bgr, script_mode, state=None, keep_match=None):
     log = _ResultLog()
     script_logger.set_action_log(log)
     scored = dict(action)
+    # A score is what the detect can reach on the image: always search the
+    # template's scales, learn nothing (there is no device).
+    scored['scale_learning'] = False
     searched = None
     if state is None:
         scored['input_obj'] = _input_obj(image_bgr)
@@ -155,23 +158,29 @@ def score_one(action, image_bgr, script_mode, state=None, keep_match=None):
     scene = log.result.get('scene')
     if scene is not None:
         out['scene'] = {'score': float(scene['score']), 'passed': bool(scene['passed'])}
+    template = log.result.get('template') or {}
+    if template.get('scale') is not None and log_objs.get('floatingObject') is not None:
+        out['scale'] = [round(float(v), 4) for v in template['scale']]
+        out['scaleMode'] = template.get('scale_mode')
     if matches:
         best = matches[0]
         out['score'] = float(best['score'])
-        out['location'] = _box(best['point'], w, h)
+        out['location'] = _box(best['point'], best['width'], best['height'])
         if keep_match is not None:
             keep_match.append(best)
     elif log_objs.get('floatingObject') is not None:
-        candidate = ImageMatcher.best_candidate(log_objs['floatingObject'][1])
+        match_result = log_objs['floatingObject'][1]
+        match_scale = log_objs['floatingObject'][2] if len(log_objs['floatingObject']) > 2 else (1.0, 1.0)
+        candidate = ImageMatcher.best_candidate(match_result)
         if candidate is not None:
             (x, y), score = candidate
             # A match made on the image resized to the template's screen is in that image's pixels.
-            if log.result.get('template', {}).get('resized'):
+            if template.get('resized'):
                 x *= image_bgr.shape[1] / floating['sourceScreenWidth']
                 y *= image_bgr.shape[0] / floating['sourceScreenHeight']
             # Inside an earlier match the candidate is in the match's pixels.
             out['score'] = score
-            out['location'] = _box((x + offset[0], y + offset[1]), w, h)
+            out['location'] = _box((x + offset[0], y + offset[1]), round(w * match_scale[0]), round(h * match_scale[1]))
     elif scene is not None:
         out['score'] = float(scene['score'])
         scene_xy = data['sceneLocation'][0]

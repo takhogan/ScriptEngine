@@ -28,6 +28,7 @@ from ScriptEngine.common.types import ScreenPlanImage
 from ScriptEngine.common.logging import action_result
 from ScriptEngine.common.logging.log_overlay import LOG_IMAGE_STORE, log_overlay
 from .image_matcher import ImageMatcher
+from . import scale_search
 from .detect_scene_helper import DetectSceneHelper, apply_output_mask
 script_logger = ScriptLogger()
 # print(f"detect object imports took {time.time() - start_time:.2f} seconds")
@@ -329,7 +330,7 @@ class DetectObjectHelper:
                 h, w = floating_detect_obj["img"].shape[0], floating_detect_obj["img"].shape[1]
                 match_result = np.ones((H - h + 1, W - w + 1), dtype=np.float32)
                 log_objs['floatingObject'] = (
-                    matches, match_result
+                    matches, match_result, (1.0, 1.0)
                 )
             script_logger.log('Completed handle detect object (skipDetection)')
             return action, matches, log_objs
@@ -408,7 +409,7 @@ class DetectObjectHelper:
                 (is_detect_object_first_match and len(matches) == 0):
             detect_object_result_log = 'Performing Floating Object Detection'
             script_logger.log(detect_object_result_log)
-            matches, match_result = ImageMatcher.template_match(
+            matches, match_result, match_scale = ImageMatcher.template_match(
                 action,
                 screencap_im_bgr,
                 floating_detect_obj,
@@ -425,7 +426,7 @@ class DetectObjectHelper:
             )
 
             log_objs['floatingObject'] = (
-                matches, match_result
+                matches, match_result, match_scale
             )
 
         script_logger.log('Completed handle detect object')
@@ -553,15 +554,20 @@ class DetectObjectHelper:
                 script_logger.get_action_log().add_supporting_file_reference('image', comparison_img_relative_path)
 
         if log_obj['floatingObject'] is not None:
-            (
-                matches, match_result
-            ) = log_obj['floatingObject']
+            # (matches, match result, scale); the scale is (1, 1) when left out.
+            floating_log = log_obj['floatingObject']
+            matches, match_result = floating_log[0], floating_log[1]
+            match_scale = floating_log[2] if len(floating_log) > 2 else (1.0, 1.0)
 
+            # The template as it was matched: at another scale on a screen of another size.
+            template_bgr = floating_detect_obj["img"]
+            if tuple(match_scale) != (1.0, 1.0):
+                template_bgr = scale_search.scale_template(template_bgr, match_scale)
             result_overlay = ImageMatcher.create_result_overlay(
                 action,
                 screencap_im_bgr,
                 source_match_point,
-                floating_detect_obj["img"],
+                template_bgr,
                 matches,
                 match_result
             )
