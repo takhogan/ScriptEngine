@@ -33,11 +33,23 @@ from .helpers.image_to_text_action_helper import ImageToTextActionHelper
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.types import ScreenPlanImage, is_screenplan_image_result
-from ScriptEngine.common.script_engine_utils import generate_context_switch_action, sanitize_statement_input, state_eval, state_exec, expression_text
+from ScriptEngine.common.script_engine_utils import generate_context_switch_action, sanitize_statement_input, state_eval, state_exec, expression_text, is_null
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.common.logging.log_overlay import log_image_file
 from typing import Callable, Dict, List, Tuple
 script_logger = ScriptLogger()
+
+
+def dilate_setting(action_data, dilate_key, erode_key):
+    """imageTransformationAction's dilate value, or the erode one when it is unset.
+
+    A value counts as unset when it is missing, null ("None", "null",
+    "undefined" included) or blank text. Both fields are string|number.
+    """
+    value = action_data.get(dilate_key)
+    if is_null(value) or (isinstance(value, str) and value.strip() == ''):
+        return action_data[erode_key]
+    return value
 
 
 class SystemScriptActionExecutor:
@@ -457,11 +469,16 @@ class SystemScriptActionExecutor:
                 ), np.uint8)
                 transform_im = cv2.erode(transform_im, kernel, iterations=int(action["actionData"]["erodeIterations"]))
             elif action["actionData"]["transformationType"] == "dilate":
-                kernel = np.ones((
-                    int(action["actionData"]["erodeKernelSize"]),
-                    int(action["actionData"]["erodeKernelSize"])
-                ), np.uint8)
-                transform_im = cv2.dilate(transform_im, kernel, iterations=int(action["actionData"]["erodeIterations"]))
+                # Until 2026-11 dilate read the erode fields. A script saved
+                # without dilate values (missing, null or blank) keeps doing
+                # what it did then: each dilate field falls back to its erode
+                # counterpart.
+                kernel_size = int(dilate_setting(action["actionData"], "dilateKernelSize", "erodeKernelSize"))
+                kernel = np.ones((kernel_size, kernel_size), np.uint8)
+                transform_im = cv2.dilate(
+                    transform_im, kernel,
+                    iterations=int(dilate_setting(action["actionData"], "dilateIterations", "erodeIterations"))
+                )
             elif action["actionData"]["transformationType"] == "convertColor":
                 if action["actionData"]["convertColorType"] == "BGRtoGrayScale":
                     transform_im = cv2.cvtColor(transform_im, cv2.COLOR_BGR2GRAY)
