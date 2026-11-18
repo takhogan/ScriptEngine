@@ -33,7 +33,7 @@ from .helpers.image_to_text_action_helper import ImageToTextActionHelper
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.constants.script_engine_constants import *
 from ScriptEngine.common.types import ScreenPlanImage, is_screenplan_image_result
-from ScriptEngine.common.script_engine_utils import generate_context_switch_action, sanitize_statement_input, state_eval, state_exec
+from ScriptEngine.common.script_engine_utils import generate_context_switch_action, sanitize_statement_input, state_eval, state_exec, expression_text
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.common.logging.log_overlay import log_image_file
 from typing import Callable, Dict, List, Tuple
@@ -197,8 +197,8 @@ class SystemScriptActionExecutor:
 
         elif action["actionName"] == "countToThresholdAction":
             counterVarName = action["actionData"]["counterVarName"].strip()
-            counterThreshold = action["actionData"]["counterThreshold"].strip()
-            incrementBy = action["actionData"]["incrementBy"].strip()
+            counterThreshold = expression_text(action["actionData"]["counterThreshold"])
+            incrementBy = expression_text(action["actionData"]["incrementBy"])
             thresholdType = action["actionData"].get("thresholdType", "counter").strip()
             
             # Check resetCounterAfterBreached attribute (unified for both counter and timer modes)
@@ -217,7 +217,7 @@ class SystemScriptActionExecutor:
             if thresholdType == "timer":
                 # Timer mode: check if thresholdSeconds has been breached
                 timerVarName = counterVarName + "_timer_start"
-                counterThresholdSeconds = action["actionData"].get("counterThresholdSeconds", "0").strip()
+                counterThresholdSeconds = expression_text(action["actionData"].get("counterThresholdSeconds"), default="0")
                 threshold_seconds = float(state_eval(counterThresholdSeconds, {}, state))
 
                 if timerVarName not in state:
@@ -258,7 +258,7 @@ class SystemScriptActionExecutor:
             else:
                 initialValue = '0'
                 if "initialValue" in action["actionData"]:
-                    initialValue = action["actionData"]["initialValue"].strip()
+                    initialValue = expression_text(action["actionData"]["initialValue"])
                 initial_value = state_eval(initialValue, {}, state)
                 
                 if not counterVarName in state:

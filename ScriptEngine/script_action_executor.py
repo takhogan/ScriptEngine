@@ -22,7 +22,7 @@ import shlex
 
 
 from ScriptEngine.common.logging.script_logger import ScriptLogger,thread_local_storage
-from ScriptEngine.common.script_engine_utils import state_eval
+from ScriptEngine.common.script_engine_utils import state_eval, eval_number
 from ScriptEngine.common.enums import ScriptExecutionState
 from ScriptEngine.common.screenshot_failures import ScreenshotFailedError
 from ScriptEngine.helpers.host_input import HostInputDeniedError
@@ -181,7 +181,7 @@ class ScriptActionExecutor:
                 note_input_sent(script_logger.get_action_log())
                 mouse_down_func(*point_choice)
             elif action["actionData"]["mouseActionType"] == "scroll":
-                scroll_distance = action["actionData"]["scrollDistance"]
+                scroll_distance = int(eval_number(action["actionData"]["scrollDistance"], state, default=0))
                 scroll_func = self.device_controller.get_device_action(action['actionData']['targetSystem'], 'scroll')
                 note_input_sent(script_logger.get_action_log())
                 scroll_func(*point_choice, scroll_distance)
