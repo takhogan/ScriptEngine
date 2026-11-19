@@ -45,7 +45,8 @@ including the many that miss by design (the siblings of a firstMatch group).
 
 1. **Sizes equal** (capture size == source size, or the template has no
    source size): unchanged. One match at the stored size, nothing learned.
-2. **`useImageRescaledToScreenOnly`**: unchanged. The capture is stretched to
+2. **`useImageRescaledToScreenOnly`**, or the engine started with
+   `--no-high-compatibility`: unchanged. The capture is stretched to
    the source size and matched once; nothing learned. The option exists for
    scripts that asked for exactly that.
 3. **Searching** (the pair has no learned set yet):
@@ -210,8 +211,14 @@ new observation in searching mode, a promotion, an exploration, a relearn) is
 written at once; hits on a learned scale are written at most every 30 s.
 Losing a write loses some counts, never the learned set.
 
-`SCREENPLAN_SCALE_MATCH=legacy` (environment) turns all of this off and
-restores the old behaviour, for comparison and as an escape hatch.
+**The option.** It is the engine's `--high-compatibility` option, on by
+default: `--no-high-compatibility` turns all of this off and restores the old
+behaviour (the stored size, then the capture stretched to the template's
+screen), for one run. The engine keeps it in the environment variable
+`SCREENPLAN_SCALE_MATCH` (`learned` or `legacy`), where the detect pool's
+worker processes read it too; setting `SCREENPLAN_SCALE_MATCH=legacy` without
+the option does the same, for every run started from that environment. The
+option, when given, wins.
 
 ## What it does not change
 

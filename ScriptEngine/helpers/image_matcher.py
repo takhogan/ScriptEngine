@@ -27,6 +27,8 @@ from ScriptEngine.helpers import scale_memory, scale_search
 from ScriptEngine.helpers.scale_memory import ScaleMemory
 
 MINIMUM_MATCH_PIXEL_SPACING = 15
+# Where --high-compatibility is kept (docs/multiscale-template-matching.md).
+SCALE_MATCH_ENV = 'SCREENPLAN_SCALE_MATCH'
 from ScriptEngine.common.logging.script_logger import ScriptLogger
 from ScriptEngine.common.logging.log_overlay import Overlay, bgr_to_hex, int_point
 
@@ -135,9 +137,19 @@ class ImageMatcher:
 
     @staticmethod
     def scale_match_mode():
-        """'learned' (the default) or 'legacy' (SCREENPLAN_SCALE_MATCH=legacy): the old
+        """'learned' (high compatibility, the default) or 'legacy'
+        (--no-high-compatibility, or SCREENPLAN_SCALE_MATCH=legacy): the old
         stored-size match, then the capture stretched to the source size."""
-        return 'legacy' if os.environ.get('SCREENPLAN_SCALE_MATCH', '').strip().lower() == 'legacy' else 'learned'
+        return 'legacy' if os.environ.get(SCALE_MATCH_ENV, '').strip().lower() == 'legacy' else 'learned'
+
+    @staticmethod
+    def set_high_compatibility(enabled):
+        """The engine's --high-compatibility option. It is kept in the
+        environment, where the detect pool's worker processes (spawned, so
+        they share no module state) read it too. None leaves it as it is."""
+        if enabled is None:
+            return
+        os.environ[SCALE_MATCH_ENV] = 'learned' if enabled else 'legacy'
 
     @staticmethod
     def capture_size(detectObject, screencap_im_bgr, check_image_scale):

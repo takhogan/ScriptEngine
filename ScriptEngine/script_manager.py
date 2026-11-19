@@ -483,6 +483,11 @@ def main():
                                  'start it again and retry the connection. Keeps retrying until the script end time.')
         # parser.add_argument('--write-env', action='store_true', help='Output script outputs as environment variable exports (cross-platform)')
         parser.add_argument('--log-stdout', action='store_true', default=True, help='Enable logging to stdout (default: False)')
+        parser.add_argument('--high-compatibility', action=argparse.BooleanOptionalAction, default=None,
+                            help='On a screen whose size differs from the one a template was cut on, search other '
+                                 'template sizes and learn per device which work (on by default; '
+                                 'docs/multiscale-template-matching.md). --no-high-compatibility keeps the old '
+                                 'matching: the stored size, then the capture stretched to the template\'s screen.')
         # Declared so --data-root is a documented argument and this strict
         # parser does not reject it. Its value is read straight from sys.argv by
         # script_engine_constants at import time, because the path constants
@@ -492,7 +497,10 @@ def main():
                                  'Defaults to $SCREENPLAN_DATA_ROOT, then the per-user app data folder.')
 
         args = parser.parse_args()
-        
+        # Before any detect, and in the environment, so the detect pool's workers see it too.
+        from ScriptEngine.helpers.image_matcher import ImageMatcher
+        ImageMatcher.set_high_compatibility(args.high_compatibility)
+
         script_name = args.script_name
         
         if args.start_time:
