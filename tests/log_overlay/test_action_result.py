@@ -167,6 +167,65 @@ def test_detect_outcome_and_truncation(configure_action, monkeypatch):
     assert action_result_json(prefix)['fields'] == {'matched': False}
 
 
+@pytest.mark.parametrize('size, scale_match, mode', [
+    ((320, 240), None, 'same-size'),
+    ((240, 180), None, 'searching'),
+    ((240, 180), 'legacy', 'legacy'),
+])
+def test_a_template_search_records_its_scale(configure_action, monkeypatch, tmp_path, size, scale_match, mode):
+    """A real floatingObject search, at the template's screen size and at
+    another (docs/multiscale-template-matching.md): its template fields,
+    scale ones included, are the schema's."""
+    import cv2
+    import ScriptEngine.helpers.detect_object_helper as detect_object_helper_mod
+    import ScriptEngine.helpers.image_matcher as image_matcher_mod
+    from ScriptEngine.helpers import scale_memory
+    from ScriptEngine.helpers.scale_memory import ScaleMemory
+    monkeypatch.setattr(detect_object_helper_mod, 'script_logger', configure_action.logger)
+    monkeypatch.setattr(image_matcher_mod, 'script_logger', configure_action.logger)
+    monkeypatch.setattr(scale_memory, 'engine_assets_path', lambda *parts: str(tmp_path.joinpath(*parts)))
+    if scale_match:
+        monkeypatch.setenv('SCREENPLAN_SCALE_MATCH', scale_match)
+    else:
+        monkeypatch.delenv('SCREENPLAN_SCALE_MATCH', raising=False)
+    ScaleMemory.reset()
+
+    # A texture that looks different at another scale (a gradient would not).
+    rng = np.random.default_rng(11)
+    recorded = cv2.GaussianBlur(rng.integers(0, 256, (240, 320, 3), dtype=np.uint8), (9, 9), 0)
+    template = recorded[60:108, 80:176].copy()
+    capture = recorded if size == (320, 240) else cv2.resize(recorded, size, interpolation=cv2.INTER_AREA)
+    th, tw = template.shape[:2]
+    full = np.full((th, tw), 255, np.uint8)
+    floating = {
+        'img': template, 'mask': np.full((th, tw, 3), 255, np.uint8), 'mask_single_channel': full,
+        'outputMask': cv2.cvtColor(full, cv2.COLOR_GRAY2BGR), 'outputMask_single_channel': full,
+        'sourceScreenHeight': 240, 'sourceScreenWidth': 320,
+    }
+    action = detect_action(threshold=0.9, skipDetection=False, detectorName='pixelDifference', useColor=True,
+                           useImageRescaledToScreenOnly=False, maskLocation='null', sceneLocation=[[80, 60]],
+                           positiveExamples=[{'floatingObject': floating, 'fixedObject': None}])
+    action['input_obj'] = {
+        'screencap_im_bgr': capture, 'screencap_mask': None, 'match_point': (0, 0),
+        'original_image': capture, 'original_image_blurred': capture,
+        'original_height': capture.shape[0], 'original_width': capture.shape[1], 'fixed_scale': False,
+    }
+    prefix = configure_action('info', 'detectObject', 1)
+    try:
+        DetectObjectHelper.handle_detect_object(action, script_mode='test')
+    finally:
+        ScaleMemory.reset()
+    document = action_result_json(prefix)
+    template_fields = document['fields']['template']
+    assert template_fields['scale_mode'] == mode
+    assert len(template_fields['scale']) == 2
+    if mode == 'searching':
+        # Found at the screens' size ratio, tried before any wider search.
+        assert template_fields['scale'] == pytest.approx([0.75, 0.75], abs=0.03)
+        assert template_fields['scales_tried'] >= 1 and isinstance(template_fields['searched'], bool)
+    check_against_schema(document)
+
+
 def test_color_compare_records_the_colours_and_score(configure_action, monkeypatch):
     import ScriptEngine.helpers.color_compare_helper as color_compare_helper_mod
     monkeypatch.setattr(color_compare_helper_mod, 'script_logger', configure_action.logger)
