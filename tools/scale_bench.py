@@ -19,7 +19,7 @@ Captures:
 
 Point SCREENPLAN_DATA_ROOT at a scratch folder whose scripts/ links to a
 script library: the learned scales are written to its
-systemScriptAssets/deviceScales/.
+engineAssets/deviceScales/.
 
     SCREENPLAN_DATA_ROOT=/tmp/bench python -m tools.scale_bench \\
         --templates Workspace1/ScriptA,Workspace1/ScriptB --synthetic 1280x720 --out result.json
@@ -198,12 +198,12 @@ def main(argv=None):
     tasks = build_tasks(detects, sizes, [s for s in args.captures.split(',') if s], args.others, args.seed)
     print('{} detects, {} tasks'.format(len(detects), len(tasks)), file=sys.stderr)
 
-    from ScriptEngine.helpers.data_persistence_helper import system_script_assets_path
+    from ScriptEngine.helpers.data_persistence_helper import engine_assets_path
     report = {'templates': args.templates, 'synthetic': args.synthetic, 'captures': args.captures, 'modes': {}}
     for mode in args.modes.split(','):
         # A new device: nothing learned.
         ScaleMemory.reset()
-        scales_file = system_script_assets_path('deviceScales', 'bench_device.json')
+        scales_file = engine_assets_path('deviceScales', 'bench_device.json')
         if os.path.exists(scales_file):
             os.remove(scales_file)
         rows = [run_task(task, mode) for task in tasks]

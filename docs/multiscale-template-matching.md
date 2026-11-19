@@ -182,16 +182,16 @@ score and always searches (it has no device to learn for).
 
 ## What is stored
 
-Learned scales live in `{data root}/systemScriptAssets/deviceScales/{device}.json`,
+Learned scales live in `{data root}/engineAssets/deviceScales/{device}.json`,
 one file per device (`host`, `pikvm:...`, `bluestacks:...`; a still image
 bound with `file:` learns in memory only). They persist across runs: a device
 learns once per pair of sizes, on each host machine (nothing is shared
 between hosts). Delete a device's file to make it learn again.
 
-`systemScriptAssets/` is the engine's own counterpart of `scriptAssets/`
+`engineAssets/` is the engine's own counterpart of `scriptAssets/`
 (a script's files, dataPersistenceAction): what the engine keeps between
 runs that no one script owns, a subfolder per kind, its path from
-`data_persistence_helper.system_script_assets_path`.
+`data_persistence_helper.engine_assets_path`.
 
 ```json
 {"version": 1, "pairs": {

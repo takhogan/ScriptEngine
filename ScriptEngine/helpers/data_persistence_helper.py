@@ -26,7 +26,7 @@ from ScriptEngine.common.constants.script_engine_constants import data_path
 
 WRITE_ACTION_TYPES = ('w', 'wb', 'a')
 SCRIPT_ASSETS_FOLDER_NAME = 'scriptAssets'
-SYSTEM_SCRIPT_ASSETS_FOLDER_NAME = 'systemScriptAssets'
+ENGINE_ASSETS_FOLDER_NAME = 'engineAssets'
 
 
 def script_assets_dir(workspace, script_name):
@@ -34,12 +34,12 @@ def script_assets_dir(workspace, script_name):
     return os.path.abspath(data_path(SCRIPT_ASSETS_FOLDER_NAME, workspace or 'Default', script_name))
 
 
-def system_script_assets_path(*parts):
-    """systemScriptAssets/{parts} in the data root (not created here): what the
+def engine_assets_path(*parts):
+    """engineAssets/{parts} in the data root (not created here): what the
     engine itself keeps between runs and no one script owns, one subfolder
     per kind (deviceScales/ holds the template scales learned per device,
     helpers/scale_memory.py). A script's own files go in scriptAssets/."""
-    return os.path.abspath(data_path(SYSTEM_SCRIPT_ASSETS_FOLDER_NAME, *parts))
+    return os.path.abspath(data_path(ENGINE_ASSETS_FOLDER_NAME, *parts))
 
 
 def resolve_data_path(file_path, workspace, script_name, for_write):
