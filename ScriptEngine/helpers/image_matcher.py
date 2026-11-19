@@ -15,12 +15,16 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+import os
+
 import cv2
 import numpy as np
 import random
 from ScriptEngine.common.script_engine_utils import dist
 from ScriptEngine.common.types import ScreenPlanImage, TemplateMatch
 from ScriptEngine.helpers.detect_scene_helper import crop_to_mask_location
+from ScriptEngine.helpers import scale_memory, scale_search
+from ScriptEngine.helpers.scale_memory import ScaleMemory
 
 MINIMUM_MATCH_PIXEL_SPACING = 15
 from ScriptEngine.common.logging.script_logger import ScriptLogger
@@ -38,8 +42,9 @@ class ImageMatcher:
                        check_image_scale=True,
                        output_cropping=None,
                        threshold=0.96, use_color=True, use_mask=True) -> tuple[list[ScreenPlanImage], np.ndarray]:
+        scale = (1.0, 1.0)
         if detector_name == "pixelDifference":
-            matches, match_result = ImageMatcher.produce_template_matches(
+            matches, match_result, scale = ImageMatcher.produce_scaled_template_matches(
                 detectObject,
                 screencap_im_bgr,
                 floating_detect_obj,
@@ -58,7 +63,12 @@ class ImageMatcher:
             script_logger.log("detector unimplemented! ", level='error')
             exit(0)
 
-        h, w = floating_detect_obj["outputMask_single_channel"].shape[0:2]
+        output_mask = floating_detect_obj["outputMask_single_channel"]
+        if tuple(scale) != (1.0, 1.0):
+            # A match at another scale is as if the template had been cut on
+            # this screen: its mask (the click area) at the matched size.
+            output_mask = scale_search.scale_template(output_mask, scale, cv2.INTER_NEAREST)
+        h, w = output_mask.shape[0:2]
 
         n_matches = len(matches)
         return [
@@ -69,7 +79,7 @@ class ImageMatcher:
                     if match_point is not None
                     else m.point
                 ),
-                output_mask=floating_detect_obj["outputMask_single_channel"],
+                output_mask=output_mask,
                 matched_area=m.matched_area,
                 height=h,
                 width=w,
@@ -82,7 +92,7 @@ class ImageMatcher:
                 detect_object_result=True,
             )
             for m in matches
-        ], match_result
+        ], match_result, scale
 
 
     @staticmethod
@@ -110,6 +120,205 @@ class ImageMatcher:
 
     @staticmethod
     def produce_template_matches(
+            detectObject,
+            screencap_im_bgr,
+            floating_detect_obj,
+            check_image_scale,
+            output_cropping=None,
+            threshold=0.96, use_color=True, use_mask=True, script_mode='test') -> tuple[list[TemplateMatch], np.ndarray]:
+        matches, match_result, _ = ImageMatcher.produce_scaled_template_matches(
+            detectObject, screencap_im_bgr, floating_detect_obj, check_image_scale,
+            output_cropping=output_cropping, threshold=threshold, use_color=use_color,
+            use_mask=use_mask, script_mode=script_mode
+        )
+        return matches, match_result
+
+    @staticmethod
+    def scale_match_mode():
+        """'learned' (the default) or 'legacy' (SCREENPLAN_SCALE_MATCH=legacy): the old
+        stored-size match, then the capture stretched to the source size."""
+        return 'legacy' if os.environ.get('SCREENPLAN_SCALE_MATCH', '').strip().lower() == 'legacy' else 'learned'
+
+    @staticmethod
+    def capture_size(detectObject, screencap_im_bgr, check_image_scale):
+        """(width, height) of the screenshot the detect searches: the input's own
+        size, or for an input that is an earlier match, the screenshot it came from."""
+        if not check_image_scale:
+            input_obj = detectObject.get('input_obj') or {}
+            width, height = input_obj.get('original_width') or 0, input_obj.get('original_height') or 0
+            if width and height:
+                return int(width), int(height)
+        return int(screencap_im_bgr.shape[1]), int(screencap_im_bgr.shape[0])
+
+    @staticmethod
+    def produce_scaled_template_matches(
+            detectObject,
+            screencap_im_bgr,
+            floating_detect_obj,
+            check_image_scale,
+            output_cropping=None,
+            threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
+        """The template's matches, the match result they came from, and the
+        (sx, sy) the template was resized by (docs/multiscale-template-matching.md).
+
+        A capture the size of the template's source screen, the
+        useImageRescaledToScreenOnly option and SCREENPLAN_SCALE_MATCH=legacy
+        match as before (produce_legacy_template_matches)."""
+        action_data = detectObject["actionData"]
+        use_resized_im_only = action_data.get("useImageRescaledToScreenOnly") == "true" or action_data.get("useImageRescaledToScreenOnly") is True
+        source_size = (floating_detect_obj.get("sourceScreenWidth"), floating_detect_obj.get("sourceScreenHeight"))
+        try:
+            source_size = (int(source_size[0]), int(source_size[1]))
+        except (TypeError, ValueError):
+            source_size = None
+        capture_size = ImageMatcher.capture_size(detectObject, screencap_im_bgr, check_image_scale)
+        sizes_differ = source_size is not None and min(source_size) > 0 and source_size != capture_size
+        if use_resized_im_only or not sizes_differ or ImageMatcher.scale_match_mode() == 'legacy':
+            mode = 'legacy' if sizes_differ else 'same-size'
+            script_logger.get_action_log().update_result({'template': {'scale_mode': mode, 'scale': [1.0, 1.0]}})
+            matches, match_result = ImageMatcher.produce_legacy_template_matches(
+                detectObject, screencap_im_bgr, floating_detect_obj, check_image_scale,
+                output_cropping=output_cropping, threshold=threshold, use_color=use_color,
+                use_mask=use_mask, script_mode=script_mode
+            )
+            return matches, match_result, (1.0, 1.0)
+        return ImageMatcher.produce_multiscale_template_matches(
+            detectObject, screencap_im_bgr, floating_detect_obj, source_size, capture_size,
+            output_cropping=output_cropping, threshold=threshold, use_color=use_color,
+            use_mask=use_mask, script_mode=script_mode
+        )
+
+    @staticmethod
+    def produce_multiscale_template_matches(
+            detectObject, screencap_im_bgr, floating_detect_obj, source_size, capture_size,
+            output_cropping=None, threshold=0.96, use_color=True, use_mask=True, script_mode='test'):
+        """A capture whose size differs from the template's source screen: the
+        scales learned for this device and pair, or a search while there are none."""
+        template_bgr = floating_detect_obj["img"]
+        mask_gray = floating_detect_obj["mask_single_channel"]
+        try:
+            search_template = template_bgr if use_color else cv2.cvtColor(template_bgr, cv2.COLOR_BGR2GRAY)
+            match_mask = ImageMatcher.template_match_mask(search_template, mask_gray) if use_mask else None
+        except cv2.error:
+            script_logger.log('error converting the template for matching', level='error')
+            exit(1)
+        matcher = scale_search.ScaleMatcher(screencap_im_bgr, template_bgr, match_mask, use_color)
+        rx = capture_size[0] / source_size[0]
+        ry = capture_size[1] / source_size[1]
+        key = scale_memory.pair_key(source_size, capture_size)
+        # Learning is per device: a detect with no device (a scorer, a library
+        # call) searches every time.
+        device = detectObject.get('scale_device')
+        learning = detectObject.get('scale_learning', True) and device is not None
+        memory = ScaleMemory.for_device(device) if learning else None
+        learned = memory.learned(key) if memory is not None else []
+        learn_score = max(threshold, scale_memory.LEARN_MIN_SCORE)
+        meets = lambda score: score >= threshold
+
+        tried = []
+
+        def try_scale(scale):
+            entry, made = matcher.best_near(scale, threshold)
+            tried.extend(made)
+            return entry
+
+        chosen = None
+        searched = False
+        if learned:
+            mode = 'learned'
+            for scale in learned:
+                entry = try_scale(scale)
+                if meets(entry.score):
+                    chosen = entry
+                    memory.note_hit(key)
+                    if entry.score >= learn_score:
+                        # Counted for the learned scale, not its whole-pixel neighbour.
+                        memory.record('learned_hit', key, scale[0], scale[1], urgent=False)
+                    break
+            if chosen is None and memory.note_miss(key):
+                mode = 'exploring'
+                searched = True
+                # The likely scales only: a device that changed changed to one of those.
+                found = scale_search.search(matcher, rx, ry, threshold, seeds=tried, grid=False)
+                tried = found.tried
+                if found.scale is not None and meets(found.score):
+                    chosen = scale_search.Tried(found.scale, found.score, found.match_result)
+                    if found.score >= learn_score and not found.ambiguous:
+                        if scale_memory.in_set(found.learn_scale, learned):
+                            # A learned scale after all (its neighbourhood, past the pixel neighbours).
+                            memory.record('learned_hit', key, found.learn_scale[0], found.learn_scale[1])
+                        else:
+                            memory.record('outside_found', key, found.learn_scale[0], found.learn_scale[1])
+        else:
+            mode = 'searching'
+            learn_as = None   # the scale a confident hit teaches
+            result = matcher.match((1.0, 1.0))
+            entry = scale_search.Tried((1.0, 1.0), scale_search.best_score(result), result)
+            tried.append(entry)
+            if meets(entry.score):
+                chosen, learn_as = entry, (1.0, 1.0)
+            else:
+                # The scales observed so far, then the stretch to the capture
+                # (what the old matching tried), before any search.
+                cheap = memory.observed(key) if memory is not None else []
+                if not any(scale_memory.same_scale(s, (rx, ry)) for s in cheap):
+                    cheap.append((rx, ry))
+                for scale in cheap:
+                    if scale_memory.same_scale(scale, (1.0, 1.0)):
+                        continue
+                    entry = try_scale(scale)
+                    if meets(entry.score):
+                        chosen, learn_as = entry, scale
+                        break
+            if chosen is None and (memory is None or memory.note_search_miss(key)):
+                searched = True
+                found = scale_search.search(matcher, rx, ry, threshold, seeds=tried)
+                tried = found.tried
+                if found.scale is not None and meets(found.score):
+                    chosen = scale_search.Tried(found.scale, found.score, found.match_result)
+                    learn_as = None if found.ambiguous else found.learn_scale
+            if chosen is not None and memory is not None:
+                memory.note_hit(key)
+                if learn_as is not None and chosen.score >= learn_score:
+                    memory.record('observe', key, learn_as[0], learn_as[1])
+
+        full_tried = [t for t in tried if t.match_result is not None]
+        if chosen is None:
+            # A miss: the best score anywhere, for the overlay and the scorer.
+            chosen = max(full_tried, key=lambda t: t.score) if full_tried else scale_search.Tried((1.0, 1.0), -1.0, None)
+        scale = tuple(round(v, 4) for v in chosen.scale)
+        script_logger.log('Template matched in mode {} at scale {} (score {:.3f}) after {} full-size matches, pair {}'.format(
+            mode, scale, chosen.score, len(full_tried), key), level='debug')
+        script_logger.get_action_log().update_result({'template': {
+            'use_color': bool(use_color),
+            'use_mask': bool(use_mask),
+            'resized': False,
+            'scale_mode': mode,
+            'scale': [scale[0], scale[1]],
+            'scales_tried': len(full_tried),
+            'searched': searched,
+        }})
+        match_result = chosen.match_result
+        if match_result is None:
+            match_result = np.full((1, 1), -1.0, dtype=np.float32)
+        thresholded = np.where(~np.isnan(match_result) & (np.inf > match_result) & (match_result >= threshold))
+        scaled_template = scale_search.scale_template(template_bgr, chosen.scale)
+        scaled_output_mask = scale_search.scale_template(floating_detect_obj["outputMask"], chosen.scale, cv2.INTER_NEAREST)
+        matches, match_result = ImageMatcher.filter_matches(
+            detectObject,
+            match_result,
+            thresholded,
+            screencap_im_bgr,
+            scaled_template,
+            scaled_output_mask,
+            script_mode=script_mode,
+            output_cropping=scale_search.scale_mask_location(output_cropping, chosen.scale) if output_cropping is not None else None,
+            scale=chosen.scale
+        )
+        return matches, match_result, chosen.scale
+
+    @staticmethod
+    def produce_legacy_template_matches(
             detectObject,
             screencap_im_bgr,
             floating_detect_obj,
@@ -251,7 +460,7 @@ class ImageMatcher:
             screencap_outputmask_bgr,
             height_translation=1,
             width_translation=1,
-            script_mode='test', output_cropping=None) -> tuple[list[TemplateMatch], np.ndarray]:
+            script_mode='test', output_cropping=None, scale=(1.0, 1.0)) -> tuple[list[TemplateMatch], np.ndarray]:
 
         h, w = screencap_search_bgr.shape[0:2]
         dist_threshold = max(min(h, w) * 0.2, MINIMUM_MATCH_PIXEL_SPACING)
@@ -290,7 +499,8 @@ class ImageMatcher:
                         matches[match_index] = TemplateMatch(
                             point=(adjusted_pt_x, adjusted_pt_y),
                             score=match_score,
-                            matched_area=match_img_bgr
+                            matched_area=match_img_bgr,
+                            scale=tuple(scale)
                         )
                     redundant = True
                     break
@@ -301,7 +511,8 @@ class ImageMatcher:
                     TemplateMatch(
                         point=(adjusted_pt_x, adjusted_pt_y),
                         score=match_score,
-                        matched_area=match_img_bgr
+                        matched_area=match_img_bgr,
+                        scale=tuple(scale)
                     )
                 )
                 match_img_index += 1

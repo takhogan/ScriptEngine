@@ -26,10 +26,12 @@ from ScriptEngine.common.constants.script_engine_constants import DETECT_OBJECT_
 
 
 class TemplateMatch(NamedTuple):
-    """A single template match: (x, y) point, correlation score, and matched image region (BGR)."""
+    """A single template match: (x, y) point, correlation score, matched image
+    region (BGR), and the (sx, sy) the template was resized by to match."""
     point: tuple[float, float]
     score: float
     matched_area: np.ndarray
+    scale: tuple[float, float] = (1.0, 1.0)
 
 
 _STR_KEYS = frozenset({

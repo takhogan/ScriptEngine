@@ -85,6 +85,11 @@ class ScriptActionExecutor:
             return self.system_host_controller.handle_action(action, state, context, run_queue)
         update_queue = []
         if action["actionName"] == "detectObject":
+            # Which device's learned template scales the detect uses (helpers/scale_memory.py).
+            try:
+                action['scale_device'] = self.device_controller.resolve(action['actionData']['targetSystem']).device_id
+            except Exception:
+                action['scale_device'] = None
             if not lazy_eval:
                 input_obj = DetectObjectHelper.get_detect_area(action, state)
                 if input_obj['screencap_im_bgr'] is None:
