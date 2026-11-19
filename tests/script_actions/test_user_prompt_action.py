@@ -6,7 +6,7 @@ from dateutil import tz
 from ScriptEngine.common.enums import ScriptExecutionState
 import ScriptEngine.helpers.user_prompt_helper as user_prompt_helper_mod
 from ScriptEngine.helpers.user_prompt_helper import UserPromptHelper
-from tests.script_actions.conftest import FakeLogger
+from conftest import FakeLogger
 
 
 class FakeControllerAPI:
