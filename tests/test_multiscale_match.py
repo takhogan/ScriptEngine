@@ -355,3 +355,27 @@ def test_a_searching_pair_tries_its_observed_scale_before_searching(action_log):
     matches, _ = _detect(_action(_screen((320, 240))))
     assert matches and action_log.result['template']['scale_mode'] == 'searching'
     assert not action_log.result['template']['searched']
+
+
+def test_high_compatibility_option_reaches_the_matcher(action_log, monkeypatch):
+    from ScriptEngine.helpers.image_matcher import ImageMatcher, SCALE_MATCH_ENV
+    monkeypatch.delenv(SCALE_MATCH_ENV, raising=False)
+    assert ImageMatcher.scale_match_mode() == 'learned'          # on by default
+    ImageMatcher.set_high_compatibility(False)
+    assert os.environ[SCALE_MATCH_ENV] == 'legacy'               # spawned workers inherit it
+    _detect(_action(_screen((320, 240))))
+    assert action_log.result['template']['scale_mode'] == 'legacy'
+    ImageMatcher.set_high_compatibility(None)                    # not given: left as it is
+    assert ImageMatcher.scale_match_mode() == 'legacy'
+    ImageMatcher.set_high_compatibility(True)
+    _detect(_action(_screen((320, 240))))
+    assert action_log.result['template']['scale_mode'] == 'searching'
+
+
+def test_the_engine_accepts_the_option(tmp_path):
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ, SCREENPLAN_DATA_ROOT=str(tmp_path))
+    out = subprocess.run([sys.executable, '-m', 'ScriptEngine.script_manager', '--help'],
+                         cwd=root, env=env, capture_output=True, text=True, timeout=120).stdout
+    assert '--high-compatibility, --no-high-compatibility' in out
