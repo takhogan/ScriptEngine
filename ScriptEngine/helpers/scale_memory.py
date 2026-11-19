@@ -1,5 +1,5 @@
 """Which template scales work on a device: learned per (device, source size,
-capture size) pair, kept in {data root}/deviceScales/{device}.json.
+capture size) pair, kept in {data root}/systemScriptAssets/deviceScales/{device}.json.
 
 docs/multiscale-template-matching.md is the design. In short: a pair starts
 out *searching*; each confident match is an observation of the scale it was
@@ -20,7 +20,7 @@ import re
 import threading
 import time
 
-from ScriptEngine.common.constants.script_engine_constants import data_path
+from ScriptEngine.helpers.data_persistence_helper import system_script_assets_path
 
 DEVICE_SCALES_FOLDER_NAME = 'deviceScales'
 FILE_VERSION = 1
@@ -156,7 +156,7 @@ class ScaleMemory:
         with cls._lock:
             memory = cls._by_device.get(key)
             if memory is None:
-                path = data_path(DEVICE_SCALES_FOLDER_NAME, device_file_name(device_id)) if persistent else None
+                path = system_script_assets_path(DEVICE_SCALES_FOLDER_NAME, device_file_name(device_id)) if persistent else None
                 memory = cls(path)
                 cls._by_device[key] = memory
             return memory

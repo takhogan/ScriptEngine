@@ -43,7 +43,7 @@ def action_log(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def scratch_data_root(tmp_path, monkeypatch):
-    monkeypatch.setattr(scale_memory, 'data_path', lambda *parts: str(tmp_path.joinpath(*parts)))
+    monkeypatch.setattr(scale_memory, 'system_script_assets_path', lambda *parts: str(tmp_path.joinpath(*parts)))
     monkeypatch.delenv('SCREENPLAN_SCALE_MATCH', raising=False)
     ScaleMemory.reset()
     yield
@@ -189,7 +189,14 @@ def test_hits_on_a_learned_scale_are_written_in_batches(tmp_path):
 def test_a_still_image_learns_in_memory_only():
     assert ScaleMemory.for_device('file:/tmp/x.png').path is None
     assert ScaleMemory.for_device('file').path is None
-    assert ScaleMemory.for_device('pikvm:02-host').path.endswith('pikvm_02-host.json')
+    assert ScaleMemory.for_device('pikvm:02-host').path.endswith(os.path.join('deviceScales', 'pikvm_02-host.json'))
+
+
+def test_learned_scales_live_under_system_script_assets(monkeypatch, tmp_path):
+    from ScriptEngine.helpers import data_persistence_helper
+    monkeypatch.setattr(data_persistence_helper, 'data_path', lambda *parts: str(tmp_path.joinpath(*parts)))
+    path = data_persistence_helper.system_script_assets_path('deviceScales', 'host.json')
+    assert path == str(tmp_path / 'systemScriptAssets' / 'deviceScales' / 'host.json')
 
 
 # -- detection ---------------------------------------------------------------
