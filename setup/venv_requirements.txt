@@ -21,6 +21,7 @@ networkx
 numpy
 opencv-python
 packaging
+pikvm_lib @ https://github.com/takhogan/pikvm-lib/archive/b74e1dfac76dc0fad6148bb8c76fd317432173c2.zip
 pillow
 psutil
 PyAutoGUI
