@@ -219,3 +219,73 @@ def test_sim_device_params_from_a_pack_folder_or_a_configured_sim(pack, monkeypa
 def test_no_pack_is_a_clear_error(tmp_path):
     with pytest.raises(SimulatedDeviceError, match='no sim pack'):
         SimulatedDeviceManager({}, {'path': str(tmp_path)})
+
+
+PIN_COLOURS = {'pin_a': 20, 'ok_a': 120, 'pin_b': 25, 'err_b': 200, 'pin_c': 30, 'ok_c': 130}
+
+
+def typed(t, keys, masked=False, state='pin', group=4):
+    return {'t': t, 'kind': 'key', 'x': None, 'y': None, 'box': None, 'to': None,
+            'keys': None if masked else list(keys), 'masked': masked, 'script': 'Login', 'group': group, 'state': state}
+
+
+@pytest.fixture
+def pin_pack(tmp_path):
+    """Three runs on a pin screen: run-a typed 1234 and got in, run-b typed
+    9999 and got an error, run-c typed a secret and got in."""
+    frames = tmp_path / 'frames'
+    frames.mkdir()
+    for name, v in PIN_COLOURS.items():
+        cv2.imwrite(str(frames / (name + '.png')), np.full((H, W, 3), v, np.uint8))
+    runs = [
+        {'id': 'HOST/run-a', 'root': 'Login', 'host': 'HOST', 'return_code': 0,
+         'frames': [[0.0, 'pin_a', 'pin'], [3.0, 'ok_a', 'ok']], 'inputs': [typed(1.0, '1234')]},
+        {'id': 'HOST/run-b', 'root': 'Login', 'host': 'HOST', 'return_code': 0,
+         'frames': [[0.0, 'pin_b', 'pin'], [3.0, 'err_b', 'error']], 'inputs': [typed(1.0, '9999')]},
+        {'id': 'HOST/run-c', 'root': 'Login', 'host': 'HOST', 'return_code': 0,
+         'frames': [[0.0, 'pin_c', 'pin'], [3.0, 'ok_c', 'ok']], 'inputs': [typed(1.0, '', masked=True)]},
+    ]
+    doc = {'format': 'screenplan-ui-sim-pack', 'version': 0, 'width': W, 'height': H, 'screenshot_s': 0.5,
+           'frames_dir': 'frames', 'runs': runs}
+    (tmp_path / 'sim-pack.json').write_text(json.dumps(doc))
+    return tmp_path
+
+
+def type_text(d, text, secret=False):
+    """As the engine's keyboard action does: the whole text first, then key by key."""
+    keys, flags = d.prepare_typed_keys(list(text), [secret] * len(text))
+    for k in keys:
+        d.key_press(k)
+
+
+def pin_shown(d):
+    v = int(d.screenshot()[0, 0, 0])
+    return next(k for k, c in PIN_COLOURS.items() if c == v)
+
+
+def test_a_typed_code_leads_where_that_code_led(pin_pack):
+    # on run-b, which typed 9999; typing 1234 goes on as run-a did
+    d = SimulatedDeviceManager({}, {'path': str(pin_pack), 'start': 'HOST/run-b', 'log_folder': str(pin_pack)})
+    type_text(d, '1234')
+    sim_clock.sleep(3)
+    assert pin_shown(d) == 'ok_a' and d.counts['low evidence'] == 0 and d.counts['switched'] == 1
+    e = SimulatedDeviceManager({}, {'path': str(pin_pack), 'start': 'HOST/run-a', 'log_folder': str(pin_pack)})
+    type_text(e, '9999')
+    sim_clock.sleep(3)
+    assert pin_shown(e) == 'err_b'
+
+
+def test_a_code_no_run_typed_is_low_evidence_not_another_codes_outcome(pin_pack):
+    d = SimulatedDeviceManager({}, {'path': str(pin_pack), 'start': 'HOST/run-a', 'log_folder': str(pin_pack)})
+    type_text(d, '5555')
+    sim_clock.sleep(3)
+    assert d.counts['low evidence'] == 1 and pin_shown(d) == 'pin_a'
+
+
+def test_a_secret_matches_a_recorded_secret_and_is_never_logged(pin_pack):
+    d = SimulatedDeviceManager({}, {'path': str(pin_pack), 'start': 'HOST/run-b', 'log_folder': str(pin_pack)})
+    type_text(d, '8642', secret=True)
+    sim_clock.sleep(3)
+    assert pin_shown(d) == 'ok_c'
+    text = (pin_pack / 'sim-log.jsonl').read_text()
+    assert '8642' not in text and '"8"' not in text and '(a secret)' in text

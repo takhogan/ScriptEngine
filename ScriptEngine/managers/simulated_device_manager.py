@@ -32,6 +32,12 @@ sent. The device is always at a moment of one recorded run:
   logger); it takes one, the run's own next input when that is one of them,
   and goes on from that moment of that run, so latency, transitions and
   what the input led to are the recorded ones;
+- a key input matches only recorded inputs that typed the same keys (the
+  whole text of the keyboard action, which the engine hands the device first,
+  prepare_typed_keys), or, for a secret, recorded inputs that typed a secret;
+  a recording whose keys were not recorded (result version 1) is used only
+  when none typed the same: what follows a code depends on the code, and a
+  value no run typed is not given another value's outcome;
 - with no such input it is a low-evidence input: by the default policy
   ('stay') nothing happens, as for most dead clicks; 'fail' ends the run;
 - held at an input the script does not make, for more than `hold_s` of run
@@ -40,7 +46,8 @@ sent. The device is always at a moment of one recorded run:
 
 Detects, OCR and colour compares run for real on the recorded frames. Every
 decision goes to `sim-log.jsonl` in the run folder, with the seed, so a run
-replays exactly. Not yet: hit models for points the logs never clicked,
+replays exactly; a secret's keys are never written there, only that one was
+typed. Not yet: hit models for points the logs never clicked,
 fault injection, experiences (§4).
 """
 import bisect
@@ -115,6 +122,8 @@ class SimulatedDeviceManager(DeviceManager):
         self._images = OrderedDict()
         self._mouse_down_at = None
         self._last_caller = None
+        self._typed = None  # (action log id, keys or None for a secret): the text the current keyboard action types
+        self._swallow = 0   # keys still to come of a keyboard action already matched as a whole
         self.counts = defaultdict(int)
 
         self.runs = self.pack['runs']
@@ -298,11 +307,21 @@ class SimulatedDeviceManager(DeviceManager):
     def _input(self, kind, x=None, y=None, to=None, keys=None):
         with self._lock:
             script, group, log_id = self._caller()
+            if kind == 'key' and self._swallow > 0:
+                self._swallow -= 1
+                return  # the rest of a keyboard action matched by its whole text
             if kind == 'key' and log_id is not None and self._last_caller == (log_id, kind):
                 return  # the rest of one keyboard action's keys
             self._last_caller = (log_id, kind)
             ri, t, held = self._now()
             fi, (_, frame, state) = self._frame(ri, t)
+            typed = self._typed if kind == 'key' and self._typed is not None and self._typed[0] == log_id else None
+            if kind == 'key' and typed is None and keys is not None:
+                typed = (log_id, [str(k) for k in keys])  # a hotkey, or an engine without prepare_typed_keys
+            if kind == 'key':
+                if self._typed is not None and typed is self._typed:
+                    self._swallow = max(0, self._typed_n - 1)
+                self._typed = None  # used once: the next keyboard action hands its own
             cands = []
             for rj, ij in self.by_state.get((kind, state), []):
                 inp = self.runs[rj]['inputs'][ij]
@@ -311,10 +330,18 @@ class SimulatedDeviceManager(DeviceManager):
                 if kind == 'drag' and to is not None and inp.get('to') is not None:
                     if (inp['to']['x'] - to[0]) ** 2 + (inp['to']['y'] - to[1]) ** 2 > (2 * self.radius) ** 2:
                         continue
+                value = self._value_match(inp, typed) if kind == 'key' else 'same'
+                if value == 'other':
+                    continue
                 same = script is not None and inp.get('script') == script and inp.get('group') == group
-                cands.append((rj, ij, same))
+                cands.append((rj, ij, same, value == 'same'))
+            # Same value first (a recording whose keys are unknown only when none
+            # typed the same), then the same action first.
+            cands = [c for c in cands if c[3]] or cands
             tier = [c for c in cands if c[2]] or cands
-            entry = {'kind': kind, 'x': x, 'y': y, 'to': to, 'keys': keys, 'caller': '{}:{}'.format(script, group),
+            shown_keys = None if kind != 'key' else ('(a secret)' if typed is not None and typed[1] is None
+                                                     else typed[1] if typed is not None else keys)
+            entry = {'kind': kind, 'x': x, 'y': y, 'to': to, 'keys': shown_keys, 'caller': '{}:{}'.format(script, group),
                      'run': self.runs[ri]['id'], 'frame': frame, 'state': state, 'held_s': round(held, 3)}
             if not tier:
                 self.counts['low evidence'] += 1
@@ -325,17 +352,43 @@ class SimulatedDeviceManager(DeviceManager):
                             kind, state, x, y))
                 return
             own = self._held_input()
-            pick = next(((rj, ij) for rj, ij, _ in tier if rj == ri and ij == own), None)
+            pick = next(((rj, ij) for rj, ij, _, _ in tier if rj == ri and ij == own), None)
             how = 'continued'
             if pick is None:
-                rj, ij, _ = tier[self._draw(len(tier), 'input', kind, state, script, group)]
+                rj, ij, _, _ = tier[self._draw(len(tier), 'input', kind, state, script, group)]
                 pick, how = (rj, ij), 'switched'
             rj, ij = pick
             inp = self.runs[rj]['inputs'][ij]
             self._at(rj, inp['t'], ij)
             self.counts[how] += 1
             self._log('input', **entry, how=how, matched=len(tier), by_action=tier[0][2],
+                      by_value=(tier[0][3] if kind == 'key' else None),
                       to_run=self.runs[rj]['id'], to_t=round(inp['t'], 3), recorded='{}:{}'.format(inp.get('script'), inp.get('group')))
+
+    @staticmethod
+    def _value_match(inp, typed):
+        """'same', 'other' or 'unknown': whether a recorded key input typed
+        what the current keyboard action types. typed is (log id, keys), keys
+        None for a secret; None when the text is not known."""
+        if typed is None:
+            return 'unknown'
+        if inp.get('masked'):
+            return 'same' if typed[1] is None else 'other'
+        if inp.get('keys') is None:
+            return 'unknown'
+        if typed[1] is None:
+            return 'other'
+        return 'same' if [str(k) for k in inp['keys']] == list(typed[1]) else 'other'
+
+    def prepare_typed_keys(self, keys, secret_flags):
+        """Called by the engine with a keyboard action's whole text before its
+        keys are sent one by one: kept for matching recorded inputs on what
+        they typed. A secret's keys are not kept, only that it was one. The
+        keys go on unchanged."""
+        _, _, log_id = self._caller()
+        self._typed = (log_id, None if any(secret_flags) else [str(k) for k in keys])
+        self._typed_n = len(keys)
+        return keys, secret_flags
 
     def _unhold(self):
         """Held at an input the script does not make (or at the end of a
