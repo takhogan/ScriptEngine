@@ -45,6 +45,11 @@ import sys
 TOOLS = {
     # Scores a script's detectObject actions on saved screens (the controller's score_detects).
     'score-detects': ('ScriptEngine.detect_scorer', 'score_detects'),
+    # The UI mapper's host jobs (the controller's run check, check_run): its code is
+    # ScreenPlanUIMapper's, bundled at build time (ScriptEngine/ui_graph_tools.py).
+    'ui-graph-ingest': ('ScriptEngine.ui_graph_tools', 'ingest_tool'),
+    'ui-graph-check': ('ScriptEngine.ui_graph_tools', 'check_tool'),
+    'ui-graph-gc': ('ScriptEngine.ui_graph_tools', 'gc_tool'),
 }
 
 EXIT_UNKNOWN_TOOL = 2

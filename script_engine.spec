@@ -204,14 +204,39 @@ if not any(dest.startswith(_torchvision_ops) for dest in _bundled):
         "script_manager's binaries, so every easyOCR action would fail to import easyocr."
     )
 
+# The UI mapper (ScreenPlanUIMapper, its own repository) runs inside agent_tools
+# as its ui-graph-* tools (ScriptEngine/ui_graph_tools.py), so a packaged
+# controller needs no executable, and no signature, of its own for it. Its
+# `ui_mapper` package is bundled from a checkout: $SCREENPLAN_MAPPER_DIR, else
+# ScreenPlanUIMapper beside this one. It needs only numpy and opencv, which
+# the engine has. Without a checkout the engine still builds, and those tools
+# answer "no-mapper" (the controller's run check then says SKIPPED).
+mapper_dir = os.path.abspath(
+    os.environ.get('SCREENPLAN_MAPPER_DIR') or os.path.join(os.getcwd(), '..', 'ScreenPlanUIMapper'))
+if os.path.isdir(os.path.join(mapper_dir, 'ui_mapper')):
+    sys.path.insert(0, mapper_dir)
+    mapper_pathex = [mapper_dir]
+    # Its modules import each other inside functions too (ui_mapper.jobs is
+    # imported only by the tools), so name them all.
+    mapper_hiddenimports = collect_submodules('ui_mapper')
+    if 'ui_mapper.jobs' not in mapper_hiddenimports:
+        raise SystemExit("script_engine.spec: found %s but could not list ui_mapper's modules" % mapper_dir)
+    print("script_engine.spec: bundling the UI mapper from %s" % mapper_dir)
+else:
+    mapper_pathex = []
+    mapper_hiddenimports = []
+    print("script_engine.spec: WARNING: no UI mapper checkout at %s (set SCREENPLAN_MAPPER_DIR); "
+          "agent_tools is built without it and its ui-graph-* tools answer no-mapper" % mapper_dir)
+
 # Agent tools: the controller's MCP tools that need the engine's own code
-# without running a script (ScriptEngine/agent_tools.py; score_detects today).
-# Its own executable so script_manager stays the one that runs scripts. It
-# loads scripts and runs detection, so it needs the vision stack that
-# detection uses, but not OCR's torch/easyocr, which MERGE shares anyway.
+# without running a script (ScriptEngine/agent_tools.py: score_detects, and
+# the run check's ui-graph-* jobs). Its own executable so script_manager
+# stays the one that runs scripts. It loads scripts and runs detection, so it
+# needs the vision stack that detection uses, but not OCR's torch/easyocr,
+# which MERGE shares anyway.
 agent_tools_a = Analysis(
     ['ScriptEngine/agent_tools.py'],
-    pathex=[],
+    pathex=mapper_pathex,
     binaries=[],
     datas=[overlay_renderer_data],
     hiddenimports=[
@@ -219,7 +244,8 @@ agent_tools_a = Analysis(
         # Each tool's module is imported by name at run time (agent_tools.TOOLS),
         # which static analysis does not follow.
         'ScriptEngine.detect_scorer',
-    ],
+        'ScriptEngine.ui_graph_tools',
+    ] + mapper_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
