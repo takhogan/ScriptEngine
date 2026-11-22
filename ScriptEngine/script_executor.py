@@ -49,6 +49,7 @@ script_logger = ScriptLogger()
 
 import os
 import time
+from ScriptEngine.common import sim_clock
 
 # A parallel batch's result wait is normally sub-second. Anything above this is a
 # stall worth one info line: nothing logs around parallel_process.result(), so a
@@ -132,7 +133,7 @@ class ScriptExecutor:
             'child_actions': None,
             'script_attributes': set(),
             'script_counter': 0,
-            'script_timer': datetime.datetime.now(),
+            'script_timer': sim_clock.now(),
             'run_depth': 0,
             'branching_behavior': 'firstMatch',
             'run_type': 'run',
@@ -223,7 +224,7 @@ class ScriptExecutor:
 
 
     def refresh_start_time(self):
-        self.props["script_start_time"] = datetime.datetime.now().astimezone(tz=tz.tzutc())
+        self.props["script_start_time"] = sim_clock.now().astimezone(tz=tz.tzutc())
 
     def create_log_folders(self, parent_folder='', refresh_start_time=False):
         if refresh_start_time:
@@ -346,7 +347,8 @@ class ScriptExecutor:
             absolute_path=True
         )
     def log_action_details(self, action):
-        now = datetime.datetime.now()
+        sim_clock.tick()
+        now = sim_clock.now()
         elapsed = now - self.context['script_timer']
         self.context['script_timer'] = now
 
@@ -607,7 +609,7 @@ class ScriptExecutor:
         end_branch = False
         script_logger.log('-----' + self.props['script_name'] + ' CONTROL FLOW: Checking if done.', len(self.actions), " remaining action in branch. ", len(self.run_queue), " remaining branches" + '-----', level='info')
         raise_if_low_disk()
-        if datetime.datetime.now().astimezone(tz=tz.tzutc()) > self.timeout:
+        if sim_clock.now().astimezone(tz=tz.tzutc()) > self.timeout:
             script_logger.log(self.props['script_name'] + ' CONTROL FLOW: script has timed out - script timeout - ', datetime.datetime.now(), level='error')
             self.status_detail = ScriptExecutionStatusDetail.TIMED_OUT
             return end_branch,True

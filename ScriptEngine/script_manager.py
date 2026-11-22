@@ -46,6 +46,38 @@ script_logger = ScriptLogger()
 
 
 
+
+def _devices_config():
+    """host_devices_config.json, or {} when it cannot be read."""
+    try:
+        with open(DEVICES_CONFIG_PATH, 'r') as devices_config_file:
+            return json.load(devices_config_file)
+    except (OSError, ValueError):
+        return {}
+
+
+def sim_device_params(value, script_name, run_folder):
+    """The params of a bare --device sim: value (UI_MAPPER.md §4).
+
+    A host_devices_config.json entry of that id (sim:{workspace}/{appKey}) is
+    used as it is; any other sim: value names the sim pack folder, with options
+    after '?': sim:/path/to/pack?seed=3&start=HOST/run-folder.
+    """
+    config = _devices_config()
+    if value in config:
+        params = dict(config[value])
+        params.setdefault('deviceId', value)
+    else:
+        from urllib.parse import parse_qsl
+        pack_path, _, query = value[len('sim:'):].partition('?')
+        params = dict(parse_qsl(query))
+        params.update({'deviceId': 'sim:' + pack_path, 'path': pack_path})
+    params['script-engine-device-type'] = 'sim'
+    params.setdefault('script', script_name)
+    params['log_folder'] = run_folder
+    return params
+
+
 def hot_swap(current_action_group, current_script, include_scripts, recovery_script=None):
     if recovery_script is not None:
         pass
@@ -276,9 +308,11 @@ def _load_and_run(script_name, script_id, timeout, constants=None, start_time=No
     from ScriptEngine.common.run_outputs import script_output_names
     run_record['output_names'] = script_output_names(script_object)
     # Device slots: the --device values are a binding list, slot=device. The
-    # one bare value is file:<png>, a still image for every slot; any other
-    # bare value is an error naming the slot to write. The run-start check
-    # below needs every slot the scripts list, except device0 and desktop0.
+    # bare values are the whole-run devices: file:<png>, a still image for
+    # every slot, and sim:<pack>, a simulated device for every slot (alone);
+    # any other bare value is an error naming the slot to write. The
+    # run-start check below needs every slot the scripts list, except device0
+    # and desktop0.
     from ScriptEngine.common.device_slots import parse_device_bindings
     device_bindings, all_slots_value = parse_device_bindings(device_details)
     device_params = {}
@@ -294,6 +328,12 @@ def _load_and_run(script_name, script_id, timeout, constants=None, start_time=No
             json.dump({'bindings': device_bindings, 'allSlots': all_slots_value}, bindings_file)
     except Exception as write_error:
         script_logger.log('SCRIPT MANAGER: could not write device_bindings.json', write_error, level='error')
+    if all_slots_value is not None and all_slots_value.startswith('sim:'):
+        # The sim backs every slot, the host included (DeviceController.resolve).
+        device_params = sim_device_params(all_slots_value, script_name, run_folder)
+        script_logger.log('SCRIPT MANAGER: simulated device', device_params, level='info')
+        from ScriptEngine.managers.simulated_device_manager import seed_engine
+        seed_engine(device_params.get('seed', 0))
     errored = False
     needs_approval = False
     root_action_log = None
@@ -464,7 +504,9 @@ def main():
         parser.add_argument('--device', '-d', action='append',
                             help='A device binding, slot=device (phone0=avd:Pixel_7, desktop0=pikvm:office-pc, '
                                  'desktop0=host, phone0=file:<png>), repeatable, or a comma-separated list. Every '
-                                 'device names its slot; the one bare value is file:<png>, a still image for every slot.')
+                                 'device names its slot; the bare values are file:<png>, a still image for every slot, '
+                                 'and sim:<pack folder>?seed=N&start=HOST/folder (or a sim: id in '
+                                 'host_devices_config.json), a simulated device for every slot, given alone.')
         parser.add_argument('--system-script', '-sys', action='store_true', help='Whether this is a system script')
         parser.add_argument('--workspace', '-w', default='Default', help='Workspace name (defaults to "Default"). Only used for library scripts.')
         parser.add_argument('--screen-plan-server-attached', '-spsa', action='store_true', help='Whether a screenplan client server is attached')

@@ -241,11 +241,21 @@ python -m ScriptEngine.script_manager -s my_script --device phone0=avd:Pixel_7 -
 python -m ScriptEngine.script_manager -s my_script --device 'phone0=avd:Pixel_7,desktop0=host'
 ```
 
-- Every device names its slot. The one bare value is `--device file:<png>`,
-  a still image for every slot. Any other bare value (`--device avd:Pixel_7`)
-  is an error that names the slot to write, its type's default:
-  `phone0=` for `avd:`, `bluestacks:`, `adb:` and `ios:` devices,
-  `desktop0=` for `pikvm:` and `host`, else `device0=`.
+- Every device names its slot. The bare values are the whole-run devices,
+  which stand in for every slot:
+  - `--device file:<png>`, a still image;
+  - `--device "sim:{pack folder}?seed=N&start=HOST/folder"`, or the `sim:`
+    id of a `host_devices_config.json` entry of type `sim`: a simulated
+    device that replays recorded runs on a virtual clock
+    (`ScriptEngine/managers/simulated_device_manager.py`). It drives every
+    slot, the host included, so nothing on a sim run touches a real screen,
+    and it is given alone: `phone0=sim:…`, or a sim beside another
+    `--device`, is an error.
+
+  Any other bare value (`--device avd:Pixel_7`) is an error that names the
+  slot to write, its type's default: `phone0=` for `avd:`, `bluestacks:`,
+  `adb:` and `ios:` devices, `desktop0=` for `pikvm:` and `host`, else
+  `device0=`.
 - `device0` and `desktop0` left unbound are the host's own desktop. Every
   other slot the script (or a child it names statically) lists in
   `props.devices` must be bound, or the run fails at start naming each one.
