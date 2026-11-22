@@ -110,9 +110,11 @@ def _check(jobs, extract, root, folder, host):
         if 'skipped' in skipped:
             return skipped
         done = jobs.find_report(root, folder)
-    ws, app, rep = done
-    return {'run': folder, 'workspace': ws, 'app': app, 'report': jobs.report_path(root, ws, app, folder),
-            'verdict': rep.get('verdict')}
+    ws, app, rep = done[:3]
+    # The report's path comes with it: the workspace's folder may differ from
+    # its name. A mapper from before that answers three values.
+    path = done[3] if len(done) > 3 else jobs.report_path(root, ws, app, folder)
+    return {'run': folder, 'workspace': ws, 'app': app, 'report': path, 'verdict': rep.get('verdict')}
 
 
 def _gc(jobs, extract, root, folder, host):
