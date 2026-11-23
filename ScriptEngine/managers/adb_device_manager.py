@@ -1307,10 +1307,12 @@ class ADBDeviceManager(DeviceManager):
             queue.put(line)
         out.close()
 
-    def set_commands(self, timeout=3):
+    def set_commands(self, timeout=3, reader_join_timeout=5):
         script_logger = ScriptLogger.get_logger()
-        # Run the adb getevent command
-        process = subprocess.Popen([self.adb_path, '-s', self.full_ip ,'shell' ,'getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        # Run the adb getevent command. Its stderr is never read, so it goes nowhere:
+        # a pipe nobody drains blocks getevent once the pipe's buffer fills, and a
+        # getevent that never exits keeps its stdout open.
+        process = subprocess.Popen([self.adb_path, '-s', self.full_ip ,'shell' ,'getevent', '-p'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
                                    bufsize=1)
         self.stop_command_gather = False
         # Use a selector to wait for I/O readiness without blocking
@@ -1348,11 +1350,23 @@ class ADBDeviceManager(DeviceManager):
                         device_path = output[-2].split()[3].strip(':')
                     device_line = False  # Reset for the next device
 
-        # Ensure the subprocess is terminated
+        # End getevent before waiting for the reader: the reader sits in readline()
+        # until getevent closes its stdout, so joining first waits for as long as
+        # getevent runs. On a BlueStacks instance that had just started, getevent -p
+        # did not exit for 37 minutes (2026-11-22), and the run's timeout could not
+        # cut in because it is only checked between actions.
         self.stop_command_gather = True
-        t.join()
-        process.terminate()
-        process.wait()
+        process.kill()
+        try:
+            process.wait(timeout=reader_join_timeout)
+        except subprocess.TimeoutExpired:
+            script_logger.log('ADB CONTROLLER: getevent process', process.pid, 'did not exit after kill', level='error')
+        # The reader is a daemon thread: if something else still holds the pipe
+        # open, leave it behind rather than wait on it.
+        t.join(timeout=reader_join_timeout)
+        if t.is_alive():
+            script_logger.log('ADB CONTROLLER: getevent output reader still blocked after',
+                              reader_join_timeout, 's, leaving it', level='error')
         if device_path:
             # Newer BlueStacks touch devices use the multitouch slot protocol (type B) and report
             # BTN_TOUCH. On those, SYN_MT_REPORT is not a valid "finger up": Android advances its
